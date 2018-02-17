@@ -6,3 +6,6 @@
 
 node/node
 wallet/wallet
+
+node/*/
+wallet/*/
