@@ -259,7 +259,10 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 * Send transaction to all known nodes. This wil send only hash and node hash to check if hash exists or no
  */
 func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
+	n.Logger.Trace.Printf("Send transaction to %d nodes", len(n.NodeNet.Nodes))
+
 	for _, node := range n.NodeNet.Nodes {
+		n.Logger.Trace.Printf("Send TX %x to %s", tx.ID, node.NodeAddrToString())
 		n.NodeClient.SendInv(node, "tx", [][]byte{tx.ID})
 	}
 }

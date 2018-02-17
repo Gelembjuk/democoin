@@ -336,7 +336,12 @@ func (s *NodeServer) BlockBuilder() {
 			tx, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(txID)
 
 			if err == nil && tx != nil {
+				s.Logger.Trace.Printf("Sending...")
 				s.Node.SendTransactionToAll(tx)
+			} else if err != nil {
+				s.Logger.Trace.Printf("Error: %s", err.Error())
+			} else if tx == nil {
+				s.Logger.Trace.Printf("Error: TX %x is not found", txID)
 			}
 		}
 	}

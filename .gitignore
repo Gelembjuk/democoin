@@ -3,3 +3,6 @@
 
 *.json
 *.txt
+
+node/node
+wallet/wallet

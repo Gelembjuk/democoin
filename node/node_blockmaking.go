@@ -30,8 +30,11 @@ func (n *NodeBlockMaker) CheckUnapprovedCache() bool {
 	count, err := n.UnapprovedTXs.GetCount()
 
 	if err != nil {
+		n.Logger.Trace.Printf("Error when check unapproved cache: %s", err.Error())
 		return false
 	}
+
+	n.Logger.Trace.Printf("Transaction in cache - %d", count)
 
 	if count >= minNumberTransactionInBlock {
 		if count > maxNumberTransactionInBlock {
