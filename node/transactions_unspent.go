@@ -470,7 +470,6 @@ func (u UnspentTransactions) NewTransaction(PubKey []byte, to string, amount flo
 	}
 
 	tx := transaction.Transaction{nil, inputs, outputs}
-	tx.ID = tx.Hash()
 
 	// get list of previous transactions
 	prevTXs := make(map[string]transaction.Transaction)

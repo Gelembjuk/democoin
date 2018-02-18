@@ -14,9 +14,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-)
 
-const subsidy = 10
+	"github.com/gelembjuk/democoin/lib"
+)
 
 // Transaction represents a Bitcoin transaction
 type Transaction struct {
@@ -52,7 +52,8 @@ func (tx *Transaction) Hash() []byte {
 
 	hash = sha256.Sum256(txCopy.Serialize())
 
-	return hash[:]
+	tx.ID = hash[:]
+	return tx.ID
 }
 
 // Sign signs each input of a Transaction
@@ -252,11 +253,11 @@ func (tx *Transaction) MakeCoinbaseTX(to, data string) error {
 	}
 
 	txin := TXInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTXOutput(subsidy, to)
+	txout := NewTXOutput(lib.PaymentForBlockMade, to)
 	tx.Vin = []TXInput{txin}
 	tx.Vout = []TXOutput{*txout}
 
-	tx.ID = tx.Hash()
+	tx.Hash()
 
 	return nil
 }

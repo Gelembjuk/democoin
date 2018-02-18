@@ -4,6 +4,8 @@
 *.json
 *.txt
 
+*.pyc
+
 node/node
 wallet/wallet
 
