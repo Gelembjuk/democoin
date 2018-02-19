@@ -2,6 +2,7 @@ import inspect, os, sys
 import shutil
 import subprocess
 import random, string
+import re
 
 NODE_BIN = '../node/node'
 WALLET_BIN = '../wallet/wallet'
@@ -127,3 +128,7 @@ def FatalAssertPIDNotRunning(pid, comment):
         print "\t\tFAIL: "+comment
         Exit()
         
+def FatalRegex(expr,text,comment):
+    if not re.search(expr,text):
+        print "\t\tFAIL: "+comment
+        Exit()

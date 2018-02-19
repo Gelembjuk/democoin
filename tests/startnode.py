@@ -2,6 +2,20 @@ import _lib
 import re
 import time
 
+def test(testfilter):
+    _lib.StartTestGroup("Start/Stop node")
+
+    _lib.CleanTestFolders()
+    datadir = _lib.CreateTestFolder()
+
+    StartNodeWithoutBlockchain(datadir)
+    address = InitBockchain(datadir)
+    StartNode(datadir, address, '30000')
+    StopNode(datadir)
+
+    #_lib.RemoveTestFolder(datadir)
+    _lib.EndTestGroupSuccess()
+
 def StartNodeWithoutBlockchain(datadir):
     _lib.StartTest("Try to start without blockchain")
     res = _lib.ExecuteNode(['startnode','-datadir',datadir])
@@ -28,11 +42,11 @@ def InitBockchain(datadir):
     
     return address
 
-def StartNode(datadir, address):
+def StartNode(datadir, address, port):
     _lib.StartTestGroup("Start node")
     
     _lib.StartTest("Start normal")
-    res = _lib.ExecuteNode(['startnode','-datadir',datadir,'-port','30000','-minter',address])
+    res = _lib.ExecuteNode(['startnode','-datadir',datadir,'-port',port,'-minter',address])
     _lib.FatalAssertStr(res,"","Should not be any output on succes start")
 
     # get process of the node. find this process exists
@@ -82,15 +96,3 @@ def StopNode(datadir):
     res = _lib.ExecuteNode(['stopnode','-datadir',datadir])
     _lib.FatalAssert(res=="","Should not be any output on succes stop")
 
-_lib.StartTestGroup("Start/Stop node")
-
-_lib.CleanTestFolders()
-datadir = _lib.CreateTestFolder()
-
-StartNodeWithoutBlockchain(datadir)
-address = InitBockchain(datadir)
-StartNode(datadir, address)
-StopNode(datadir)
-
-#_lib.RemoveTestFolder(datadir)
-_lib.EndTestGroupSuccess()
