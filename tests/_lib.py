@@ -22,6 +22,11 @@ def CleanTestFolders():
     
     return True
 
+def RemoveTestFolder(path):
+    curdir = getCurrentDir()
+    
+    shutil.rmtree(path)
+
 def CreateTestFolder():
     curdir = getCurrentDir()
     
@@ -57,17 +62,20 @@ def StartTestGroup(title):
     print "==================="+title+"======================"
 
 def StartTest(title):
-    print "\t----------------"+title+"-----------------------"
+    print "\t----------------"+title
 def EndTestSuccess():
     print "\tPASS"
     
 def EndTestGroupSuccess():
     print "PASS ==="
+    
+def Exit():
+    sys.exit(0)
 #=============================================================================================================
 # Assert functions
 def Fatal(comment):
     print "\t\tFAIL: "+comment
-    sys.exit(0)
+    Exit()
 
 def AssertStr(s1,s2,comment):
     if s1 != s2:
@@ -77,8 +85,8 @@ def AssertStr(s1,s2,comment):
     return True
 
 def FatalAssertStr(s1,s2,comment):
-    if not Assert(s1,s2,comment):
-        sys.exit(0)
+    if not AssertStr(s1,s2,comment):
+        Exit()
 
 def AssertSubstr(s1,s2,comment):
     if s2 not in s1:
@@ -89,7 +97,7 @@ def AssertSubstr(s1,s2,comment):
 
 def FatalAssertSubstr(s1,s2,comment):
     if not AssertSubstr(s1,s2,comment):
-        sys.exit(0)
+        Exit()
         
 def Assert(cond,comment):
     if not cond:
@@ -98,5 +106,24 @@ def Assert(cond,comment):
     return True
 
 def FatalAssert(cond,comment):
-    if not Assert(s1,s2,comment):
-        sys.exit(0)
+    if not Assert(cond,comment):
+        Exit()
+        
+def FatalAssertPIDRunning(pid,comment):
+    """ Check For the existence of a unix pid. """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        print "\t\tFAIL: "+comment
+        Exit()
+        
+def FatalAssertPIDNotRunning(pid, comment):
+    """ Check For the existence of a unix pid. """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return True
+    else:
+        print "\t\tFAIL: "+comment
+        Exit()
+        

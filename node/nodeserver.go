@@ -230,6 +230,8 @@ func (s *NodeServer) StartServer() error {
 	ln, err := net.Listen(lib.Protocol, ":"+strconv.Itoa(s.NodeAddress.Port))
 
 	if err != nil {
+		close(s.StopMainConfirmChan)
+		s.Logger.Trace.Println("Fail to start port listening ", err.Error())
 		return err
 	}
 	defer ln.Close()
