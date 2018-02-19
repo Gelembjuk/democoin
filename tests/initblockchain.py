@@ -17,16 +17,16 @@ def test(testfilter):
     startnode.StartNodeWithoutBlockchain(datadir1)
     address = startnode.InitBockchain(datadir1)
     #this starts on a port 30000
-    startnode.StartNode(datadir1, address,'30000')
+    startnode.StartNode(datadir1, address,'30000',"Server 1")
     
     #start second node. should fail
     startnode.StartNodeWithoutBlockchain(datadir2)
     
-    IportBockchain(datadir2,"localhost",'30000')
-    startnode.StartNode(datadir1, address,'30001')
+    address = IportBockchain(datadir2,"localhost",'30000')
+    startnode.StartNode(datadir2, address,'30001', "Server 2")
     
-    startnode.StopNode(datadir1)
-    startnode.StopNode(datadir2)
+    startnode.StopNode(datadir1,"Server 1")
+    startnode.StopNode(datadir2, "Server 2")
 
     _lib.RemoveTestFolder(datadir1)
     _lib.RemoveTestFolder(datadir2)
@@ -41,9 +41,17 @@ def IportBockchain(datadir,host,port):
 
     _lib.FatalRegex(r'.+: (.+)', res, "Address can not be found in "+res);
     
+    # get address from this response 
+    match = re.match( r'.+: (.+)', res)
+
+    if not match:
+        _lib.Fatal("Address can not be found in "+res)
+        
+    address = match.group(1)
+    
     _lib.StartTest("Import blockchain from node 1")
     res = _lib.ExecuteNode(['initblockchain','-datadir',datadir, '-nodehost', host, '-nodeport', port])
-    print res
+
     _lib.FatalAssertSubstr(res,"Done!","Blockchain init failed")
     
     return address

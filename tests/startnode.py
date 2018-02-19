@@ -42,8 +42,8 @@ def InitBockchain(datadir):
     
     return address
 
-def StartNode(datadir, address, port):
-    _lib.StartTestGroup("Start node")
+def StartNode(datadir, address, port,comment = ""):
+    _lib.StartTestGroup("Start node "+comment)
     
     _lib.StartTest("Start normal")
     res = _lib.ExecuteNode(['startnode','-datadir',datadir,'-port',port,'-minter',address])
@@ -68,8 +68,8 @@ def StartNode(datadir, address, port):
     res = _lib.ExecuteNode(['startnode','-datadir',datadir])
     _lib.FatalAssertSubstr(res,"Already running or PID file exists","Second attempt to run should fail")
 
-def StopNode(datadir):
-    _lib.StartTestGroup("Stop node")
+def StopNode(datadir, comment = ""):
+    _lib.StartTestGroup("Stop node "+comment)
     # get process of the node. find this process exists
     _lib.StartTest("Check node state")
     res = _lib.ExecuteNode(['nodestate','-datadir',datadir])

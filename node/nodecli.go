@@ -712,7 +712,7 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 		return err
 	}
 
-	fmt.Printf("  Number of blocks - %d\n", bh)
+	fmt.Printf("  Number of blocks - %d\n", bh+1)
 
 	unappr, err := c.Node.NodeTX.UnapprovedTXs.GetCount()
 
