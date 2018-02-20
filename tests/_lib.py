@@ -99,7 +99,13 @@ def AssertSubstr(s1,s2,comment):
 def FatalAssertSubstr(s1,s2,comment):
     if not AssertSubstr(s1,s2,comment):
         Exit()
-        
+
+def FatalAssertFloat(f1,f2,comment):
+    if float(f1) != float(f2):
+        print "\t\tFAIL: "+comment
+        print "Expected: "+str(f1)+" got: "+str(f2)
+        Exit()
+
 def Assert(cond,comment):
     if not cond:
         print "\t\tFAIL: "+comment

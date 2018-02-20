@@ -146,22 +146,38 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) e
 // String returns a human-readable representation of a transaction
 func (tx Transaction) String() string {
 	var lines []string
+	from, _ := lib.PubKeyToAddres(tx.Vin[0].PubKey)
+	fromhash, _ := lib.HashPubKey(tx.Vin[0].PubKey)
+	to := ""
+	amount := 0.0
+
+	for _, output := range tx.Vout {
+		if bytes.Compare(fromhash, output.PubKeyHash) != 0 {
+			to, _ = lib.PubKeyHashToAddres(output.PubKeyHash)
+			amount = output.Value
+			break
+		}
+	}
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
+	lines = append(lines, fmt.Sprintf("    FROM %s TO %s VALUE %f", from, to, amount))
 
 	for i, input := range tx.Vin {
-
+		address, _ := lib.PubKeyToAddres(input.PubKey)
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
 		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.Txid))
 		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Vout))
 		lines = append(lines, fmt.Sprintf("       Signature: %x", input.Signature))
 		lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PubKey))
+		lines = append(lines, fmt.Sprintf("       Address:   %s", address))
 	}
 
 	for i, output := range tx.Vout {
+		address, _ := lib.PubKeyHashToAddres(output.PubKeyHash)
 		lines = append(lines, fmt.Sprintf("     Output %d:", i))
 		lines = append(lines, fmt.Sprintf("       Value:  %f", output.Value))
 		lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
+		lines = append(lines, fmt.Sprintf("       Address: %s", address))
 	}
 
 	return strings.Join(lines, "\n")

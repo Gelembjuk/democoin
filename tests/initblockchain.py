@@ -22,7 +22,7 @@ def test(testfilter):
     #start second node. should fail
     startnode.StartNodeWithoutBlockchain(datadir2)
     
-    address = IportBockchain(datadir2,"localhost",'30000')
+    address = ImportBockchain(datadir2,"localhost",'30000')
     startnode.StartNode(datadir2, address,'30001', "Server 2")
     
     startnode.StopNode(datadir1,"Server 1")
@@ -32,7 +32,7 @@ def test(testfilter):
     _lib.RemoveTestFolder(datadir2)
     _lib.EndTestGroupSuccess()
     
-def IportBockchain(datadir,host,port):
+def ImportBockchain(datadir,host,port):
     _lib.StartTestGroup("Import blockchain")
     
     _lib.StartTest("Create first address before importing blockchain")

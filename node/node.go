@@ -314,7 +314,7 @@ func (n *Node) CheckAddressKnown(addr lib.NodeAddr) {
 
 /*
 * Send money .
-* This adds a transaction directly to the DB. Ca eb executed when a node server is not running
+* This adds a transaction directly to the DB. Can be executed when a node server is not running
  */
 func (n *Node) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) ([]byte, error) {
 	// get pubkey of the wallet with "from" address

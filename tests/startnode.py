@@ -13,7 +13,7 @@ def test(testfilter):
     StartNode(datadir, address, '30000')
     StopNode(datadir)
 
-    #_lib.RemoveTestFolder(datadir)
+    _lib.RemoveTestFolder(datadir)
     _lib.EndTestGroupSuccess()
 
 def StartNodeWithoutBlockchain(datadir):

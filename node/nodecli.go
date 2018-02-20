@@ -567,7 +567,7 @@ func (c *NodeCLI) commandSend() error {
 		return err
 	}
 
-	fmt.Printf("Success. New transaction: %x\n", hex.EncodeToString(txid))
+	fmt.Printf("Success. New transaction: %x\n", txid)
 
 	return nil
 }
