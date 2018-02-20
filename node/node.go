@@ -25,7 +25,6 @@ type Node struct {
 	MinterAddress string
 	NodeClient    *nodeclient.NodeClient
 	OtherNodes    []lib.NodeAddr
-	bcopened      bool // we keep state of last call of the function OpenBCIfNotOpened. this wil be true if was opened
 }
 
 /*
@@ -123,32 +122,6 @@ func (n *Node) CloseBlockchain() {
 	n.NodeTX.UnspentTXs.SetBlockchain(nil)
 	n.NodeTX.UnapprovedTXs.SetBlockchain(nil)
 
-	n.bcopened = false // BC is closed. no need to call extra close
-}
-
-/*
-* Open Blockchain If it is closed. After this function it is needed to call CloseBlockchainIfWasOpen
- */
-func (n *Node) OpenBlockchainIfClosed() {
-	if n.NodeBC.BC == nil {
-		n.bcopened = true
-		n.OpenBlockchain()
-	} else {
-		n.bcopened = false
-	}
-}
-
-/*
-* Closes Blockchain DB if it was opened on last call of OpenBlockchainIfClosed()
-* we created these 2 function to use "defer" in other functions.
-* in somecases we don't know if blockchain was opened or not when function is called
-* we need to ensure
- */
-func (n *Node) CloseBlockchainIfWasOpen() {
-	if n.bcopened {
-		n.CloseBlockchain()
-		n.bcopened = false
-	}
 }
 
 /*
@@ -341,9 +314,14 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return nil, errors.New("Minter address is not provided")
 	}
 
-	n.OpenBlockchainIfClosed()
+	err := n.OpenBlockchain()
 
-	defer n.CloseBlockchainIfWasOpen()
+	if err != nil {
+		return nil, err
+	}
+
+	defer n.CloseBlockchain()
+
 	n.Logger.Trace.Println("Create block maker")
 	// check how many transactions are ready to be added to a block
 	Minter, _ := n.initBlockMaker()
@@ -356,9 +334,10 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	}
 
 	if !Minter.CheckGoodTimeToMakeBlock() {
-
+		n.Logger.Trace.Println("Not good time to do a block")
 		return nil, nil
 	}
+	n.Logger.Trace.Println("Prepare new bock making")
 	// makes a block transactions list. This will not yet have a block hash
 	// can return nil if no enough transactions to make a block
 	blockorig, err := Minter.PrepareNewBlock()
@@ -367,17 +346,21 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return []byte{}, err
 	}
 
+	var block *Block
+	block = nil
+
 	if blockorig != nil {
 		n.Logger.Trace.Printf("Prepared new block with %d transactions", len(blockorig.Transactions))
+		// do copy of a block. as original can contains some references to the DB and it will be closed
+		block = blockorig.Copy()
 	}
-	// do copy of a block. as original can contains some references to the DB and it will be closed
-	block := blockorig.Copy()
 
 	// close it while doing the proof of work
 	n.CloseBlockchain()
 
 	// complete the block. add proof of work
 	if block != nil {
+
 		n.Logger.Trace.Printf("Prepared new block with %d transactions", len(block.Transactions))
 
 		// this will do MINING of a block
@@ -391,7 +374,6 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 		// open BC DB again
 		n.OpenBlockchain()
-		defer n.CloseBlockchain()
 
 		// add new block to local blockchain
 		err = n.AddBlock(block)

@@ -123,7 +123,12 @@ func (s *NodeServer) handleTxFull(request []byte) ([]byte, error) {
 
 	s.TryToMakeNewBlock(payload.TX.ID)
 
-	return []byte{1}, nil
+	encresponse, err := lib.GobEncode(payload.TX)
+
+	if err != nil {
+		return nil, err
+	}
+	return encresponse, nil
 }
 
 /*

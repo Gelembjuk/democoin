@@ -256,7 +256,7 @@ func (wc *WalletCLI) commandSend() error {
 		return errors.New("The amount of transaction must be more 0")
 	}
 
-	wc.Logger.Trace.Printf("Prepare wallet to send data")
+	wc.Logger.Trace.Printf("Prepare wallet to send data to node " + wc.Node.NodeAddrToString())
 
 	// load wallet object for this address
 	walletobj, err := wc.WalletsObj.GetWallet(wc.Input.Address)
@@ -276,13 +276,13 @@ func (wc *WalletCLI) commandSend() error {
 	TX.SignData(walletobj.GetPrivateKey(), DataToSign)
 
 	// Sends final complete transaction
-	err = wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TX)
+	txID, err := wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TX)
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Success. The transaction was sent!")
+	fmt.Printf("Success. New transaction: %x", txID)
 
 	return nil
 }

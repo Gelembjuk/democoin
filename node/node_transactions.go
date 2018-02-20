@@ -137,7 +137,6 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	if err != nil {
 		return nil, err
 	}
-	NewTX.Hash()
 
 	// final verification of the transaction
 	// but it is not required here.

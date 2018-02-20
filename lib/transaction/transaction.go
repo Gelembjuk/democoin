@@ -139,6 +139,8 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) e
 
 		tx.Vin[inID].Signature = signature
 	}
+	// when transaction i complete, we can add ID to it
+	tx.Hash()
 
 	return nil
 }

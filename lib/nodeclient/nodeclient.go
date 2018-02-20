@@ -299,23 +299,26 @@ func (c *NodeClient) SendGetHistory(addr lib.NodeAddr, address string) ([]ComHis
 }
 
 // Send new transaction from a wallet to a node
-func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx *transaction.Transaction) error {
+func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx *transaction.Transaction) ([]byte, error) {
 	data := ComNewTransaction{}
 	data.Address = from
 	data.TX = tx
 
 	request, err := c.BuildCommandData("txfull", &data)
 
-	if err != nil {
-		return nil
-	}
-	err = c.SendDataWaitResponse(addr, request, nil)
+	NewTX := transaction.Transaction{}
 
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	err = c.SendDataWaitResponse(addr, request, &NewTX)
+
+	if err != nil {
+		return nil, err
 	}
 	// no data are returned. only success or not
-	return err
+	return NewTX.ID, nil
 }
 
 // Request to prepare new transaction by wallet.
@@ -430,6 +433,7 @@ func (c *NodeClient) SendDataWaitResponse(addr lib.NodeAddr, data []byte, datapa
 	err := c.CheckNodeAddress(addr)
 
 	if err != nil {
+		c.Logger.Trace.Println("Wrong address " + addr.NodeAddrToString() + ": " + err.Error())
 		return err
 	}
 

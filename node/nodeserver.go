@@ -44,7 +44,7 @@ func (s *NodeServer) parseRequestData(request []byte, payload interface{}) error
 	err := dec.Decode(payload)
 
 	if err != nil {
-		return errors.New("1. " + err.Error())
+		return errors.New("Parse request: " + err.Error())
 	}
 
 	return nil
@@ -183,6 +183,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 
 	if rerr != nil {
 		s.Logger.Error.Println("Network Command Handle Error: ", rerr.Error())
+		s.Logger.Trace.Println("Network Command Handle Error: ", rerr.Error())
 
 		if expectsresponse {
 			// return error to the client
@@ -304,6 +305,10 @@ func (s *NodeServer) TryToMakeNewBlock(tx []byte) {
 * and it can be empty slice . it means to exit from teh routibe
  */
 func (s *NodeServer) BlockBuilder() {
+	// we create separate node object for this thread
+	// pointers are used everywhere. so, it can be some sort of conflict with main thread
+	NodeClone := s.CloneNode()
+
 	for {
 		txID := <-s.BlockBilderChan
 
@@ -318,7 +323,7 @@ func (s *NodeServer) BlockBuilder() {
 
 		s.Logger.Trace.Printf("Go to make new block attempt")
 		// try to buid new block
-		newBlockHash, err := s.Node.TryToMakeBlock()
+		newBlockHash, err := NodeClone.TryToMakeBlock()
 
 		if err != nil {
 			s.Logger.Trace.Printf("Block building error %s\n", err.Error())
@@ -331,20 +336,39 @@ func (s *NodeServer) BlockBuilder() {
 			// block was not created and txID is real transaction ID
 			// send this transaction to all other nodes.
 			// blockchain should be closed in this place
-			s.Node.OpenBlockchainIfClosed()
+			NodeClone.OpenBlockchain()
 
-			defer s.Node.CloseBlockchainIfWasOpen()
-
-			tx, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(txID)
+			tx, err := NodeClone.NodeTX.UnapprovedTXs.GetIfExists(txID)
 
 			if err == nil && tx != nil {
 				s.Logger.Trace.Printf("Sending...")
-				s.Node.SendTransactionToAll(tx)
+				NodeClone.SendTransactionToAll(tx)
 			} else if err != nil {
 				s.Logger.Trace.Printf("Error: %s", err.Error())
 			} else if tx == nil {
 				s.Logger.Trace.Printf("Error: TX %x is not found", txID)
 			}
+
+			NodeClone.CloseBlockchain()
 		}
 	}
+}
+
+/*
+* Creates clone of a node object. We use this in case if we need separate object
+* for a routine. This prevents conflicts of pointers in different routines
+ */
+func (s *NodeServer) CloneNode() *Node {
+	orignode := s.Node
+
+	node := Node{}
+
+	node.DataDir = s.DataDir
+	node.Logger = s.Logger
+	node.MinterAddress = orignode.MinterAddress
+
+	node.Init()
+	node.InitNodes(orignode.NodeNet.Nodes)
+
+	return &node
 }

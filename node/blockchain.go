@@ -102,6 +102,7 @@ func (bc *Blockchain) Init(datadir string) error {
 	var tip []byte
 	db, err := bolt.Open(dbFile, 0600, nil)
 	if err != nil {
+		bc.Logger.Trace.Println("Error opening BC " + err.Error())
 		return err
 	}
 
@@ -112,6 +113,7 @@ func (bc *Blockchain) Init(datadir string) error {
 		return nil
 	})
 	if err != nil {
+		bc.Logger.Trace.Println("BC read error: " + err.Error())
 		return err
 	}
 	bc.tip = tip

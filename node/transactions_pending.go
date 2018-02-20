@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib"
@@ -134,7 +135,7 @@ func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
 		err := b.Put(txadd.ID, txadd.Serialize())
 
 		if err != nil {
-			return err
+			return errors.New("Adding new transaction to unapproved cache: " + err.Error())
 		}
 
 		return nil

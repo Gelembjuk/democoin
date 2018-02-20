@@ -46,6 +46,8 @@ func getNodeCLI(input AppInput) NodeCLI {
 		cli.AlreadyRunningPort = 0
 	}
 
+	cli.Logger.Trace.Println("Node CLI inited")
+
 	return cli
 }
 
@@ -246,17 +248,18 @@ func (c *NodeCLI) getWalletsCLI() (*wallet.WalletCLI, error) {
 	if c.Input.Args.From != "" {
 		winput.Address = c.Input.Args.From
 	}
+	c.Logger.Trace.Println("Running port ", c.AlreadyRunningPort)
 
 	walletscli := wallet.WalletCLI{}
+
+	if c.AlreadyRunningPort > 0 {
+		winput.NodePort = c.AlreadyRunningPort
+		winput.NodeHost = "localhost"
+	}
 
 	walletscli.Init(c.Logger, winput)
 
 	walletscli.NodeMode = true
-
-	if c.AlreadyRunningPort > 0 {
-		walletscli.Input.NodePort = c.AlreadyRunningPort
-		walletscli.Input.NodeHost = "localhost"
-	}
 
 	return &walletscli, nil
 }
@@ -597,14 +600,6 @@ func (c *NodeCLI) commandReindexUTXO() error {
 * Try to mine a block if there is anough unapproved transactions
  */
 func (c *NodeCLI) commandMineBlock() error {
-	err := c.Node.OpenBlockchain()
-
-	if err != nil {
-		return err
-	}
-
-	defer c.Node.CloseBlockchain()
-
 	block, err := c.Node.TryToMakeBlock()
 
 	if err != nil {
