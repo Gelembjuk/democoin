@@ -1,33 +1,64 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
+	"errors"
+
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/transaction"
 )
 
-/*
-* Find and return the list of unspent transactions
- */
-func (s *NodeServer) handleGetUnspent(request []byte) ([]byte, error) {
+type NodeServerRequest struct {
+	Node        *Node
+	S           *NodeServer
+	Request     []byte
+	Logger      *lib.LoggerMan
+	HasResponse bool
+	Response    []byte
+}
+
+func (s *NodeServerRequest) Init() {
+	s.HasResponse = false
+	s.Response = nil
+}
+
+// Reads and parses request from network data
+func (s *NodeServerRequest) parseRequestData(payload interface{}) error {
+	var buff bytes.Buffer
+
+	buff.Write(s.Request)
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(payload)
+
+	if err != nil {
+		return errors.New("Parse request: " + err.Error())
+	}
+
+	return nil
+}
+
+// Find and return the list of unspent transactions
+func (s *NodeServerRequest) handleGetUnspent() error {
+	s.HasResponse = true
 
 	var payload nodeclient.ComGetUnspentTransactions
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	result := nodeclient.ComUnspentTransactions{}
-	result.AddrFrom = s.NodeAddress
 
 	result.LastBlock = s.Node.NodeBC.BC.tip
 
 	UST, err := s.Node.NodeTX.UnspentTXs.GetUnspentTransactionsOutputs(payload.Address)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, t := range UST {
@@ -45,26 +76,28 @@ func (s *NodeServer) handleGetUnspent(request []byte) ([]byte, error) {
 		result.Transactions = append(result.Transactions, ut)
 	}
 
-	encresponse, err := lib.GobEncode(result)
+	s.Response, err = lib.GobEncode(result)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.Logger.Trace.Printf("Return %d unspent transactions for %s\n", len(result.Transactions), payload.Address)
-	return encresponse, nil
+	return nil
 }
 
 /*
 * Find and return  history of transactions for wallet address
 *
  */
-func (s *NodeServer) handleGetHistory(request []byte) ([]byte, error) {
+func (s *NodeServerRequest) handleGetHistory() error {
+	s.HasResponse = true
+
 	var payload nodeclient.ComGetHistoryTransactions
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	result := []nodeclient.ComHistoryTransaction{}
@@ -72,7 +105,7 @@ func (s *NodeServer) handleGetHistory(request []byte) ([]byte, error) {
 	history, err := s.Node.NodeBC.GetAddressHistory(payload.Address)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, t := range history {
@@ -89,59 +122,63 @@ func (s *NodeServer) handleGetHistory(request []byte) ([]byte, error) {
 		result = append(result, ut)
 	}
 
-	encresponse, err := lib.GobEncode(result)
+	s.Response, err = lib.GobEncode(result)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.Logger.Trace.Printf("Return %d history records for %s\n", len(result), payload.Address)
-	return encresponse, nil
+	return nil
 }
 
 /*
 * Accepts new transaction. Adds to the list of unapproved. then try to build a block
 * This is the request from wallet. Not from other node.
  */
-func (s *NodeServer) handleTxFull(request []byte) ([]byte, error) {
+func (s *NodeServerRequest) handleTxFull() error {
+	s.HasResponse = true
+
 	var payload nodeclient.ComNewTransaction
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = s.Node.NodeTX.NewTransaction(payload.TX)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.Logger.Trace.Printf("Acceppted new transaction from %s\n", payload.Address)
 
 	// send internal command to try to mine new block
 
-	s.TryToMakeNewBlock(payload.TX.ID)
+	s.S.TryToMakeNewBlock(payload.TX.ID)
 
-	encresponse, err := lib.GobEncode(payload.TX)
+	s.Response, err = lib.GobEncode(payload.TX)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return encresponse, nil
+	return nil
 }
 
 /*
 * Request for new transaction from light client. Builds a transaction without sign.
 * Returns also list of previous transactions selected for input. it is used for signature on client side
  */
-func (s *NodeServer) handleTxRequest(request []byte) ([]byte, error) {
+func (s *NodeServerRequest) handleTxRequest() error {
+	s.HasResponse = true
+
 	var payload nodeclient.ComRequestTransaction
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	result := nodeclient.ComRequestTransactionData{}
@@ -150,34 +187,35 @@ func (s *NodeServer) handleTxRequest(request []byte) ([]byte, error) {
 		NewTransaction(payload.PubKey, payload.To, payload.Amount)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	result.DataToSign = DataToSign
 	result.TX = *TX
 
-	encresponse, err := lib.GobEncode(result)
+	s.Response, err = lib.GobEncode(result)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 	address, _ := lib.PubKeyToAddres(payload.PubKey)
 	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", result.TX.ID, address)
-	return encresponse, nil
+	return nil
 }
 
 /*
 * Handle request from a new node where a blockchain is not yet inted.
 * This s ed to get the first part of blocks to init local blockchain DB
  */
-func (s *NodeServer) handleGetFirstBlocks() ([]byte, error) {
+func (s *NodeServerRequest) handleGetFirstBlocks() error {
+	s.HasResponse = true
 
 	result := nodeclient.ComGetFirstBlocksData{}
 
 	blocks, height, err := s.Node.NodeBC.BC.GetFirstBlocks(100)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	result.Blocks = [][]byte{}
@@ -187,27 +225,27 @@ func (s *NodeServer) handleGetFirstBlocks() ([]byte, error) {
 		blockdata, err := block.Serialize()
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 		result.Blocks = append(result.Blocks, blockdata)
 	}
 
-	encresponse, err := lib.GobEncode(result)
+	s.Response, err = lib.GobEncode(result)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.Logger.Trace.Printf("Return first %d blocks\n", len(blocks))
-	return encresponse, nil
+	return nil
 }
 
 /*
 * Received the lst of nodes from some other node. add missed nodes to own nodes list
  */
-func (s *NodeServer) handleAddr(request []byte) error {
+func (s *NodeServerRequest) handleAddr() error {
 	var payload []lib.NodeAddr
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -235,9 +273,9 @@ func (s *NodeServer) handleAddr(request []byte) error {
 /*
 * Block received from other node
  */
-func (s *NodeServer) handleBlock(request []byte) error {
+func (s *NodeServerRequest) handleBlock() error {
 	var payload nodeclient.ComBlock
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -249,12 +287,12 @@ func (s *NodeServer) handleBlock(request []byte) error {
 	}
 	// this is the list of hashes some node posted before. If there are yes some data then try to get that blocks.
 	// TODO this list must be made as map per node address. we can not have mised list for all other nodes
-	if len(s.BlocksInTransit) > 0 {
+	if len(s.S.BlocksInTransit) > 0 {
 		// get next block. continue to get next block if nothing is sent
 		for {
-			blockdata := s.BlocksInTransit[0][:]
+			blockdata := s.S.BlocksInTransit[0][:]
 
-			s.BlocksInTransit = s.BlocksInTransit[1:]
+			s.S.BlocksInTransit = s.S.BlocksInTransit[1:]
 
 			blockstate, err := s.Node.ReceivedBlockFromOtherNode(payload.AddrFrom, blockdata)
 
@@ -269,7 +307,7 @@ func (s *NodeServer) handleBlock(request []byte) error {
 
 			if blockstate == 2 {
 				// previous block is not in the blockchain. no sense to check next blocks in this list
-				s.BlocksInTransit = [][]byte{}
+				s.S.BlocksInTransit = [][]byte{}
 				// request from a node blocks down to this first block
 				bs := &BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
@@ -281,7 +319,7 @@ func (s *NodeServer) handleBlock(request []byte) error {
 				s.Node.NodeClient.SendGetBlocks(payload.AddrFrom, bs.PrevBlockHash)
 			}
 
-			if len(s.BlocksInTransit) == 0 {
+			if len(s.S.BlocksInTransit) == 0 {
 				break
 			}
 		}
@@ -296,10 +334,10 @@ func (s *NodeServer) handleBlock(request []byte) error {
 * This contains only a hash of a block or ID of a transaction
 * If such block or transaction is not yet present , then request for full info about it
  */
-func (s *NodeServer) handleInv(request []byte) error {
+func (s *NodeServerRequest) handleInv() error {
 	var payload nodeclient.ComInv
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -308,15 +346,15 @@ func (s *NodeServer) handleInv(request []byte) error {
 	s.Logger.Trace.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
 
 	if payload.Type == "block" {
-		s.BlocksInTransit = payload.Items
+		s.S.BlocksInTransit = payload.Items
 		for {
-			blockdata := s.BlocksInTransit[0][:]
+			blockdata := s.S.BlocksInTransit[0][:]
 
-			if len(s.BlocksInTransit) > 1 {
+			if len(s.S.BlocksInTransit) > 1 {
 				// remember other blocks to get them later
-				s.BlocksInTransit = s.BlocksInTransit[1:]
+				s.S.BlocksInTransit = s.S.BlocksInTransit[1:]
 			} else {
-				s.BlocksInTransit = [][]byte{}
+				s.S.BlocksInTransit = [][]byte{}
 			}
 
 			blockstate, err := s.Node.ReceivedBlockFromOtherNode(payload.AddrFrom, blockdata)
@@ -332,7 +370,7 @@ func (s *NodeServer) handleInv(request []byte) error {
 
 			if blockstate == 2 {
 				// previous block is not in the blockchain. no sense to check next blocks in this list
-				s.BlocksInTransit = [][]byte{}
+				s.S.BlocksInTransit = [][]byte{}
 				// request from a node blocks down to this first block
 				bs := &BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
@@ -344,7 +382,7 @@ func (s *NodeServer) handleInv(request []byte) error {
 				s.Node.NodeClient.SendGetBlocks(payload.AddrFrom, bs.PrevBlockHash)
 			}
 
-			if len(s.BlocksInTransit) == 0 {
+			if len(s.S.BlocksInTransit) == 0 {
 				break
 			}
 		}
@@ -374,10 +412,10 @@ func (s *NodeServer) handleInv(request []byte) error {
 * It can contain a starting block hash to return data from it
 * If no that starting hash, then data from a top are returned
  */
-func (s *NodeServer) handleGetBlocks(request []byte) error {
+func (s *NodeServerRequest) handleGetBlocks() error {
 	var payload nodeclient.ComGetBlocks
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -403,10 +441,10 @@ func (s *NodeServer) handleGetBlocks(request []byte) error {
 * Nodes use it to load missed blocks from other node.
 * If requested bock is not found in BC then TOP blocks are returned
  */
-func (s *NodeServer) handleGetBlocksUpper(request []byte) error {
+func (s *NodeServerRequest) handleGetBlocksUpper() error {
 	var payload nodeclient.ComGetBlocks
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -444,10 +482,10 @@ func (s *NodeServer) handleGetBlocksUpper(request []byte) error {
 /*
 * Response on request to get full body of a block or transaction
  */
-func (s *NodeServer) handleGetData(request []byte) error {
+func (s *NodeServerRequest) handleGetData() error {
 	var payload nodeclient.ComGetData
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -493,10 +531,10 @@ func (s *NodeServer) handleGetData(request []byte) error {
 * Here we have a choice. Or we also send it to all other or not.
 * For now we don't send it to all other
  */
-func (s *NodeServer) handleTx(request []byte) error {
+func (s *NodeServerRequest) handleTx() error {
 	var payload nodeclient.ComTx
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
@@ -522,7 +560,7 @@ func (s *NodeServer) handleTx(request []byte) error {
 	// this node should try to make a block first.
 
 	// try to mine new block. don't send the transaction to other nodes after block make attempt
-	s.TryToMakeNewBlock([]byte{0})
+	s.S.TryToMakeNewBlock([]byte{0})
 
 	return nil
 }
@@ -532,10 +570,10 @@ func (s *NodeServer) handleTx(request []byte) error {
 * This node checks if index is bogger then request for a rest of blocks. If index is less
 * then sends own version command and that node will request for blocks
  */
-func (s *NodeServer) handleVersion(request []byte) error {
+func (s *NodeServerRequest) handleVersion() error {
 	var payload nodeclient.ComVersion
 
-	err := s.parseRequestData(request, &payload)
+	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err

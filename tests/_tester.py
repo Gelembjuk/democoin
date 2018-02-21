@@ -19,14 +19,25 @@ testfiles = [f for f in listdir(curdir) if isfile(join(curdir, f)) and re.search
 
 for testscript in testfiles:
     if test == "all" or test+'.py' == testscript:
-        test_module = __import__(test)
+        
+        m = re.search(r'^([a-z].+)\.py$',testscript)
+        
+        if not m:
+            continue
+        
+        testname = m.group(1)
+        
+        if test == "all":
+            print "######## ",testname
+        
+        test_module = __import__(testname)
         methods = dir(test_module)
         
         if "beforetest" in methods:
-            test_module.beforetest(test)
+            test_module.beforetest(testname)
             
-        test_module.test(test)
+        test_module.test(testname)
         
         if "aftertest" in methods:
-            test_module.aftertest(test)
+            test_module.aftertest(testname)
         

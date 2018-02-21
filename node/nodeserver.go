@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"net"
@@ -31,23 +30,6 @@ type NodeServer struct {
 func (s *NodeServer) GetClient() *nodeclient.NodeClient {
 
 	return s.Node.NodeClient
-}
-
-/*
-* Reads and parses request from network data
- */
-func (s *NodeServer) parseRequestData(request []byte, payload interface{}) error {
-	var buff bytes.Buffer
-
-	buff.Write(request)
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(payload)
-
-	if err != nil {
-		return errors.New("Parse request: " + err.Error())
-	}
-
-	return nil
 }
 
 /*
@@ -117,66 +99,65 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 
 	s.Logger.Trace.Printf("Received %s command\n", command)
 
-	expectsresponse := false
+	requestobj := NodeServerRequest{}
+	requestobj.Node = s.CloneNode()
+	requestobj.Logger = s.Logger
+	requestobj.Request = request[:]
+	requestobj.S = s
+
+	request = nil
 
 	// open blockchain. and close in the end ofthis function
-	err = s.Node.OpenBlockchain()
+	err = requestobj.Node.OpenBlockchain()
 
 	if err != nil {
 		s.Logger.Error.Println("Can not open blockchain: ", err.Error())
 		return
 	}
 
-	defer s.Node.CloseBlockchain() // blockchain is opened while this function is runnning
+	defer requestobj.Node.CloseBlockchain() // blockchain is opened while this function is runnning
 
 	var rerr error
-	var response []byte
-	response = nil
 
 	switch command {
 	case "addr":
-		rerr = s.handleAddr(request)
+		rerr = requestobj.handleAddr()
 	case "viod":
 		// do nothing
 		s.Logger.Trace.Println("Void command reveived")
 	case "block":
-		rerr = s.handleBlock(request)
+		rerr = requestobj.handleBlock()
 	case "inv":
-		rerr = s.handleInv(request)
+		rerr = requestobj.handleInv()
 	case "getblocks":
-		rerr = s.handleGetBlocks(request)
+		rerr = requestobj.handleGetBlocks()
 
 	case "getblocksup":
-		rerr = s.handleGetBlocksUpper(request)
+		rerr = requestobj.handleGetBlocksUpper()
 
 	case "getdata":
-		rerr = s.handleGetData(request)
+		rerr = requestobj.handleGetData()
 
 	case "getunspent":
-		expectsresponse = true
-		response, rerr = s.handleGetUnspent(request)
+		rerr = requestobj.handleGetUnspent()
 
 	case "gethistory":
-		expectsresponse = true
-		response, rerr = s.handleGetHistory(request)
+		rerr = requestobj.handleGetHistory()
 
 	case "getfblocks":
-		expectsresponse = true
-		response, rerr = s.handleGetFirstBlocks()
+		rerr = requestobj.handleGetFirstBlocks()
 
 	case "tx":
-		rerr = s.handleTx(request)
+		rerr = requestobj.handleTx()
 
 	case "txfull":
-		expectsresponse = true
-		response, rerr = s.handleTxFull(request)
+		rerr = requestobj.handleTxFull()
 
 	case "txrequest":
-		expectsresponse = true
-		response, rerr = s.handleTxRequest(request)
+		rerr = requestobj.handleTxRequest()
 
 	case "version":
-		rerr = s.handleVersion(request)
+		rerr = requestobj.handleVersion()
 	default:
 		rerr = errors.New("Unknown command!")
 	}
@@ -185,7 +166,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		s.Logger.Error.Println("Network Command Handle Error: ", rerr.Error())
 		s.Logger.Trace.Println("Network Command Handle Error: ", rerr.Error())
 
-		if expectsresponse {
+		if requestobj.HasResponse {
 			// return error to the client
 			// first byte is bool false to indicate there was error
 			payload, err := lib.GobEncode(rerr.Error())
@@ -205,10 +186,10 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		}
 	}
 
-	if response != nil && rerr == nil {
+	if requestobj.HasResponse && requestobj.Response != nil && rerr == nil {
 		// send this response back
 		// first byte is bool true to indicate request was success
-		dataresponse := append([]byte{1}, response...)
+		dataresponse := append([]byte{1}, requestobj.Response...)
 
 		s.Logger.Trace.Printf("Responding %d bytes\n", len(dataresponse))
 

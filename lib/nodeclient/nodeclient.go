@@ -90,7 +90,6 @@ type ComUnspentTransaction struct {
 
 // Lit of unspent transactions returned on request
 type ComUnspentTransactions struct {
-	AddrFrom     lib.NodeAddr
 	Transactions []ComUnspentTransaction
 	LastBlock    []byte
 }
