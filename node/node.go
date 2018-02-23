@@ -45,6 +45,8 @@ func (n *Node) Init() {
 	// load list of nodes from config
 	n.NodeNet.LoadNodes([]lib.NodeAddr{}, true)
 
+	n.NodeBC.NodeTX = &n.NodeTX
+
 	n.InitClient()
 
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -92,8 +94,7 @@ func (n *Node) initBlockMaker() (*NodeBlockMaker, error) {
 	Minter.MinterAddress = n.MinterAddress
 	Minter.BC = n.NodeBC.BC
 	Minter.Logger = n.Logger
-	Minter.UnapprovedTXs = &n.NodeTX.UnapprovedTXs
-	Minter.UnspentTXs = &n.NodeTX.UnspentTXs
+	Minter.NodeTX = &n.NodeTX
 
 	return Minter, nil
 }
@@ -106,7 +107,7 @@ func (n *Node) OpenBlockchain() error {
 	if err != nil {
 		return err
 	}
-
+	n.NodeTX.BC = n.NodeBC.BC
 	n.NodeTX.UnspentTXs.SetBlockchain(n.NodeBC.BC)
 	n.NodeTX.UnapprovedTXs.SetBlockchain(n.NodeBC.BC)
 
@@ -121,7 +122,7 @@ func (n *Node) CloseBlockchain() {
 
 	n.NodeTX.UnspentTXs.SetBlockchain(nil)
 	n.NodeTX.UnapprovedTXs.SetBlockchain(nil)
-
+	n.NodeTX.BC = nil
 }
 
 /*
@@ -375,7 +376,8 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		// open BC DB again
 		n.OpenBlockchain()
 
-		// add new block to local blockchain
+		// add new block to local blockchain. this will check a block again
+		// TODO we need to skip checking. no sense, we did it right
 		err = n.AddBlock(block)
 
 		if err != nil {
@@ -392,11 +394,9 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	return nil, nil
 }
 
-/*
-* Add new block to blockchain.
+// Add new block to blockchain.
+// It can be executed when new block was created locally or received from other node
 
-* It can be executed when new block was created locally or received from other node
- */
 func (n *Node) AddBlock(block *Block) error {
 	curLastHash, _, err := n.NodeBC.BC.GetState()
 
@@ -456,11 +456,9 @@ func (n *Node) DropBlock() error {
 	return nil
 }
 
-/*
-* New block info received from oher node. It is only Hash and PrevHash, not full block
-* Check if this is new block and if previous block is fine
-* returns state of processing. if a block data was requested or exists or prev doesn't exist
- */
+// New block info received from oher node. It is only Hash and PrevHash, not full block
+// Check if this is new block and if previous block is fine
+// returns state of processing. if a block data was requested or exists or prev doesn't exist
 func (n *Node) ReceivedBlockFromOtherNode(addrfrom lib.NodeAddr, bsdata []byte) (int, error) {
 
 	bs := &BlockShort{}

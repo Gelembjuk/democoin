@@ -3,7 +3,9 @@ package transaction
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/gelembjuk/democoin/lib"
 )
@@ -24,6 +26,7 @@ type TXOutputIndependent struct {
 	TXID           []byte
 	OIndex         int
 	IsBase         bool
+	BlockHash      []byte
 }
 
 // Lock signs the output
@@ -44,13 +47,14 @@ func (out *TXOutputIndependent) IsLockedWithKey(pubKeyHash []byte) bool {
 }
 
 // build independed transaction from normal output
-func (out *TXOutputIndependent) LoadFromSimple(sout TXOutput, txid []byte, ind int, sender []byte, iscoinbase bool) {
+func (out *TXOutputIndependent) LoadFromSimple(sout TXOutput, txid []byte, ind int, sender []byte, iscoinbase bool, blockHash []byte) {
 	out.OIndex = ind
 	out.DestPubKeyHash = sout.PubKeyHash
 	out.SendPubKeyHash = sender
 	out.Value = sout.Value
 	out.TXID = txid
 	out.IsBase = iscoinbase
+	out.BlockHash = blockHash
 }
 
 // NewTXOutput create a new TXOutput
@@ -90,4 +94,13 @@ func DeserializeOutputs(data []byte) TXOutputs {
 	}
 
 	return outputs
+}
+
+func (output TXOutput) String() string {
+	lines := []string{}
+
+	lines = append(lines, fmt.Sprintf("       Value:  %f", output.Value))
+	lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
+
+	return strings.Join(lines, "\n")
 }

@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
-	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
@@ -64,23 +63,59 @@ func (n *NodeTransactions) CancelTransaction(txidstr string) error {
 	return nil
 }
 
-/*
-* Verify if transaction is correct.
-* If it is build on correct outputs.
-* NOTE Traaction can have outputs of other transactions that are not yet approved.
-* This must be considered as correct case
- */
-func (n *NodeTransactions) VerifyTransaction(tx *transaction.Transaction) error {
+// Verify if transaction is correct.
+// If it is build on correct outputs.It checks only cache of unspent transactions
+// This function doesn't do full alidation with blockchain
+// NOTE Transaction can have outputs of other transactions that are not yet approved.
+// This must be considered as correct case
+func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (bool, error) {
 	notFoundInputs, err := n.UnspentTXs.VerifyTransactionsOutputsAreNotSpent(tx.Vin)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if len(notFoundInputs) > 0 {
-		return errors.New(fmt.Sprintf("%d input trsnactions are already spent!", len(notFoundInputs)))
+		// some inputs are not existent
+		// we need to try to find them in list of unapproved transactions
+		// if not found then it is bad transaction
+		err := n.UnapprovedTXs.CheckInputsArePrepared(notFoundInputs)
+
+		if err != nil {
+			return false, err
+		}
 	}
-	return nil
+	return true, nil
+}
+
+// Verify if transaction is correct.
+// If it is build on correct outputs.This does checks agains blockchain. Needs more time
+// NOTE Transaction can have outputs of other transactions that are not yet approved.
+// This must be considered as correct case
+func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction) (bool, error) {
+	inputTXs, notFoundInputs, err := n.BC.GetInputTransactionsState(tx)
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(notFoundInputs) > 0 {
+		// some of inputs can be from other transactions in this pool
+		inputTXs, err = n.UnapprovedTXs.CheckInputsWereBefore(notFoundInputs, prevtxs, inputTXs)
+
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// do final check against inputs
+	err = tx.Verify(inputTXs)
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 /*
@@ -90,28 +125,94 @@ func (n *NodeTransactions) IterateUnapprovedTransactions(callback UnApprovedTran
 	return n.UnapprovedTXs.IterateTransactions(callback)
 }
 
-/*
-* New transaction reveived from other node. We need to verify and add to cache of unapproved
- */
-func (n *NodeTransactions) NewTransaction(tx *transaction.Transaction) error {
+// New transaction reveived from other node. We need to verify and add to cache of unapproved
+func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) error {
 	// verify this transaction
-	err := n.VerifyTransaction(tx)
+	good, err := n.VerifyTransactionQuick(tx)
 
 	if err != nil {
 		return nil
+	}
+	if !good {
+		return errors.New("Transaction verification failed")
 	}
 	// if all is ok, add it to the list of unapproved
 	return n.UnapprovedTXs.Add(tx)
 }
 
-/*
-* Send amount of money if a node is not running.
-* This function only adds a transaction to queue
-* Attempt to send the transaction to other nodes will be done in other place
-*
-* Returns new transaction hash. This return can be used to try to send transaction
-* to other nodes or to try mining
- */
+// Request to make new transaction and prepare data to sign
+// This function should find good input transactions for this amount
+// Including inputs from unapproved transactions if no good approved transactions yet
+func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amount float64) (*transaction.Transaction, [][]byte, error) {
+	// get from pending transactions. find outputs used by this pubkey
+	pendinginputs, pendingoutputs, err := n.UnapprovedTXs.GetPreparedBy(PubKey)
+	n.Logger.Trace.Printf("Pending transactions state: %d- inputs, %d - unspent outputs", len(pendinginputs), len(pendingoutputs))
+
+	inputs, prevTXs, totalamount, err := n.UnspentTXs.GetNewTransactionInputs(PubKey, to, amount, pendinginputs)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	n.Logger.Trace.Printf("First step prepared amount %f of %f", totalamount, amount)
+
+	if totalamount < amount {
+		// no anough funds in confirmed transactions
+		// pending must be used
+
+		if len(pendingoutputs) == 0 {
+			// nothing to add
+			return nil, nil, errors.New("No enough funds for requested transaction")
+		}
+		inputs, prevTXs, totalamount, err =
+			n.UnspentTXs.ExtendNewTransactionInputs(PubKey, amount, totalamount,
+				inputs, prevTXs, pendingoutputs)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	n.Logger.Trace.Printf("Second step prepared amount %f of %f", totalamount, amount)
+
+	if totalamount < amount {
+		return nil, nil, errors.New("No anough funds to make new transaction")
+	}
+
+	return n.PrepareNewTransactionComplete(PubKey, to, amount, inputs, totalamount, prevTXs)
+}
+
+//
+func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to string, amount float64,
+	inputs []transaction.TXInput, totalamount float64, prevTXs map[string]transaction.Transaction) (*transaction.Transaction, [][]byte, error) {
+
+	var outputs []transaction.TXOutput
+
+	// Build a list of outputs
+	from, _ := lib.PubKeyToAddres(PubKey)
+	outputs = append(outputs, *transaction.NewTXOutput(amount, to))
+
+	if totalamount > amount {
+		outputs = append(outputs, *transaction.NewTXOutput(totalamount-amount, from)) // a change
+	}
+
+	tx := transaction.Transaction{nil, inputs, outputs, 0}
+
+	signdata, err := tx.PrepareSignData(prevTXs)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &tx, signdata, nil
+}
+
+// Send amount of money if a node is not running.
+// This function only adds a transaction to queue
+// Attempt to send the transaction to other nodes will be done in other place
+//
+// Returns new transaction hash. This return can be used to try to send transaction
+// to other nodes or to try mining
 func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) (*transaction.Transaction, error) {
 
 	if amount <= 0 {
@@ -126,7 +227,7 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 		return nil, errors.New("Recipient address is not valid")
 	}
 
-	NewTX, DataToSign, err := n.UnspentTXs.NewTransaction(PubKey, to, amount)
+	NewTX, DataToSign, err := n.PrepareNewTransaction(PubKey, to, amount)
 
 	if err != nil {
 		return nil, err
@@ -137,13 +238,11 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	if err != nil {
 		return nil, err
 	}
+	err = n.ReceivedNewTransaction(NewTX)
 
-	// final verification of the transaction
-	// but it is not required here.
-	err = n.VerifyTransaction(NewTX)
-
-	// add transactions to queue of unapproved
-	err = n.UnapprovedTXs.Add(NewTX)
+	if err != nil {
+		return nil, err
+	}
 
 	return NewTX, nil
 }

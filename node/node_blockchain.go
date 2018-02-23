@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
@@ -13,6 +14,7 @@ type NodeBlockchain struct {
 	DataDir       string
 	MinterAddress string
 	BC            *Blockchain
+	NodeTX        *NodeTransactions
 }
 
 // this are structures with methods to organize blockchain iterator
@@ -321,8 +323,33 @@ func (n *NodeBlockchain) DropBlock() (*Block, error) {
 }
 
 // Add block to blockchain
+// Block is already verified
 func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 	// do some checks of the block
+	// check if block exists
+	blockstate, err := n.CheckBlockState(block.Hash, block.PrevBlockHash)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if blockstate == 1 {
+		// block exists. no sese to continue
+		return BCBAddState_notAddedExists, nil
+	}
+
+	if blockstate == 2 {
+		// previous bock is not found. can not add
+		return BCBAddState_notAddedNoPrev, nil
+	}
+
+	// verify this block against rules
+	err = n.VerifyBlock(block)
+
+	if err != nil {
+		return 0, err
+	}
+
 	return n.BC.AddBlock(block)
 }
 
@@ -379,4 +406,35 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 	blocks := n.BC.GetNextBlocks(hash)
 
 	return blocks, nil
+}
+
+// Verify a block against blockchain
+// RULES
+// 1. There can be only 1 block make reward transaction
+// 2. amount of block reward transaction must be correct
+// 3. number of transactions must be in correct ranges (reward transaction is not calculated)
+// 4. transactions can have as input other transaction from this block and it must be listed BEFORE
+//   (output must be before input in same block)
+// 5. all inputs must be in blockchain (correct unspent inputs)
+// 6. Additionally verify each transaction agains signatures, total amount, balance etc
+func (n *NodeBlockchain) VerifyBlock(block *Block) error {
+	//TODO
+
+	prevTXs := []*transaction.Transaction{}
+
+	for _, tx := range block.Transactions {
+		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs)
+
+		if err != nil {
+			return err
+		}
+
+		if !vtx {
+			return errors.New(fmt.Sprintf("Transaction in a block is not valid: %x", tx.ID))
+		}
+
+		prevTXs = append(prevTXs, tx)
+	}
+
+	return nil
 }

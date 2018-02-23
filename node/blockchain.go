@@ -264,11 +264,12 @@ func (bc *Blockchain) DeleteBlock() (*Block, error) {
 	return block, nil
 }
 
-/*
-* FindTransaction finds a transaction by its ID
-* returns also spending status, if it was already spent or not
- */
-func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, map[int][]byte, error) {
+// FindTransaction finds a transaction by its ID
+// returns also spending status, if it was already spent or not
+// and block hash where transaction is stored
+// If block is unknown
+func (bc *Blockchain) FindTransaction(ID []byte) (*transaction.Transaction, map[int][]byte, []byte, error) {
+
 	bci := bc.Iterator()
 
 	txo := map[int][]byte{}
@@ -278,7 +279,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, map[i
 
 		for _, tx := range block.Transactions {
 			if bytes.Compare(tx.ID, ID) == 0 {
-				return *tx, txo, nil
+				return tx, txo, block.Hash, nil
 			}
 
 			for _, txi := range tx.Vin {
@@ -296,7 +297,26 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, map[i
 		}
 	}
 
-	return transaction.Transaction{}, txo, errors.New("Transaction is not found")
+	return nil, txo, nil, nil
+}
+
+// FindTransactionByBlock finds a transaction by its ID in given block
+// If block is known . It worsk much faster then FindTransaction
+func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*transaction.Transaction, error) {
+	block, err := bc.GetBlock(blockHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// get transaction from a block
+	for _, tx := range block.Transactions {
+		if bytes.Compare(tx.ID, ID) == 0 {
+			return tx, nil
+		}
+	}
+
+	return nil, errors.New("Transaction is not found")
 }
 
 /*
@@ -345,7 +365,7 @@ func (bc *Blockchain) FindUnspentTransactions() map[string][]transaction.TXOutpu
 				outs := UTXO[txID]
 
 				oute := transaction.TXOutputIndependent{}
-				oute.LoadFromSimple(out, tx.ID, outIdx, sender, tx.IsCoinbase())
+				oute.LoadFromSimple(out, tx.ID, outIdx, sender, tx.IsCoinbase(), block.Hash)
 
 				outs = append(outs, oute)
 				UTXO[txID] = outs
@@ -655,51 +675,58 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	return lastHash, lastHeight, nil
 }
 
-// VerifyTransaction verifies transaction input signatures
-// Finds if all input transactions are confirmed with blocks
-// It also checks if transaction was already spent after the block which contains it
+// Verifies transaction inputs and their signatures
+// Is some transaction is not in blockchain, returns nil pointer in map and this input in separate map
+// Missed inputs can be some unconfirmed transactions
+// Returns: map of previous transactions (full info about input TX). map by input index
+// next map is wrong input, where a TX is not found.
 // TODO this function is not really good. it iterates over blockchain
-// better to have some cache here
-func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) (bool, error) {
+func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
+	prevTXs := make(map[int]*transaction.Transaction)
+	badinputs := make(map[int]transaction.TXInput)
+
 	if tx.IsCoinbase() {
-		return true, nil
+		return prevTXs, badinputs, nil
 	}
 
-	prevTXs := make(map[string]transaction.Transaction)
-
-	for _, vin := range tx.Vin {
-		prevTX, spentouts, err := bc.FindTransaction(vin.Txid)
+	for vind, vin := range tx.Vin {
+		prevTX, spentouts, _, err := bc.FindTransaction(vin.Txid)
 
 		if err != nil {
-			return false, err
+			return prevTXs, badinputs, err
 		}
 
-		if len(spentouts) > 0 {
-			// someone already spent this transaction
-			// check if it was this pubkey or some other
-			for vout, _ := range spentouts {
-				if vout == vin.Vout {
-					// this out was already spent before!!!
-					// TODO should we check also pub key here? or vout is enough to check?
-					return false, nil
+		if prevTX == nil {
+			// transaction not found
+			badinputs[vind] = vin
+			prevTXs[vind] = nil
+		} else {
+			if len(spentouts) > 0 {
+				// someone already spent this transaction
+				// check if it was this pubkey or some other
+				for vout, _ := range spentouts {
+					if vout == vin.Vout {
+						// this out was already spent before!!!
+						// TODO should we check also pub key here? or vout is enough to check?
+						return prevTXs, badinputs, errors.New("Transaction input was already spent before")
+					}
 				}
 			}
+			// the transaction out was not yet spent
+			prevTXs[vind] = prevTX
 		}
-		// the transaction out was not yet spent
-		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
-	return tx.Verify(prevTXs), nil
+	return prevTXs, badinputs, nil
 }
 
-/*
-* Returns a chain of blocks starting fron a hash and till
-* end of blockchain or block from main chain found
-* if already in main chain then returns empty list
-* Returns also a block from main chain which is the base of the side branch
-*
-* The function load all hashes to the memory from "main" chain
- */
+// Returns a chain of blocks starting fron a hash and till
+// end of blockchain or block from main chain found
+// if already in main chain then returns empty list
+// Returns also a block from main chain which is the base of the side branch
+//
+// The function load all hashes to the memory from "main" chain
+
 func (bc *Blockchain) GetSideBranch(hash []byte) ([]*Block, *Block, error) {
 	return nil, nil, nil
 }

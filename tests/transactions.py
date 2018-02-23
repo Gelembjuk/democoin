@@ -148,7 +148,7 @@ def SendTooMuch(datadir,fromaddr,to,amount):
     
     res = _lib.ExecuteNode(['send','-datadir',datadir,'-from',fromaddr,'-to',to,'-amount',str(amount)])
     
-    _lib.FatalAssertSubstr(res,"Not enough funds","Sending of money didn't gail as expected")
+    _lib.FatalAssertSubstr(res,"No anough funds","Sending of money didn't gail as expected")
     
 
 def GetUnapprovedTransactionsEmpty(datadir):

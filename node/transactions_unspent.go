@@ -87,11 +87,11 @@ func (u UnspentTransactions) GetAddressBalance(address string) (float64, error) 
 	return balance, nil
 }
 
-/*
-* Choose inputs for new transaction
- */
-func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount float64) (float64, map[string][]int, error) {
-	unspentOutputs := make(map[string][]int)
+// Choose inputs for new transaction
+func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount float64,
+	pendinguse []transaction.TXInput) (float64, []transaction.TXOutputIndependent, error) {
+
+	unspentOutputs := []transaction.TXOutputIndependent{}
 	accumulated := float64(0)
 
 	db := u.Blockchain.db
@@ -101,13 +101,24 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			txID := hex.EncodeToString(k)
 			outs := u.DeserializeOutputs(v)
 
-			for outIdx, out := range outs {
+			for _, out := range outs {
 				if out.IsLockedWithKey(pubKeyHash) {
+					// check if this output is not used in some pending transaction
+					used := false
+					for _, pin := range pendinguse {
+						if bytes.Compare(pin.Txid, out.TXID) == 0 &&
+							pin.Vout == out.OIndex {
+							used = true
+							break
+						}
+					}
+					if used {
+						continue
+					}
 					accumulated += out.Value
-					unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
+					unspentOutputs = append(unspentOutputs, out)
 
 					if accumulated >= amount {
 						// found enough transactions. stop the process and return
@@ -343,7 +354,7 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *Block) error {
 
 			for outInd, out := range tx.Vout {
 				no := transaction.TXOutputIndependent{}
-				no.LoadFromSimple(out, tx.ID, outInd, sender, tx.IsCoinbase())
+				no.LoadFromSimple(out, tx.ID, outInd, sender, tx.IsCoinbase(), block.Hash)
 				newOutputs = append(newOutputs, no)
 			}
 
@@ -395,7 +406,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 
 				// all input outputs must be added back to unspent
 				for _, vin := range tx.Vin {
-					txi, spending, err := u.Blockchain.FindTransaction(vin.Txid)
+					txi, spending, blockHash, err := u.Blockchain.FindTransaction(vin.Txid)
 
 					sender, _ := lib.HashPubKey(txi.Vin[0].PubKey)
 
@@ -404,7 +415,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 					for outInd, out := range txi.Vout {
 						if _, ok := spending[outInd]; !ok {
 							no := transaction.TXOutputIndependent{}
-							no.LoadFromSimple(out, txi.ID, outInd, sender, tx.IsCoinbase())
+							no.LoadFromSimple(out, txi.ID, outInd, sender, tx.IsCoinbase(), blockHash)
 							UnspentOuts = append(UnspentOuts, no)
 						}
 					}
@@ -430,72 +441,68 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 	return nil
 }
 
-/*
-* Create New Transaction Object with empty signature and returns also data to sign
- */
-func (u UnspentTransactions) NewTransaction(PubKey []byte, to string, amount float64) (*transaction.Transaction, [][]byte, error) {
-	var inputs []transaction.TXInput
-	var outputs []transaction.TXOutput
+// Find inputs for new transaction. Receives list of pending inputs used in other
+// not yet confirmed transactions
+// Returns list of inputs prepared. Even if less then requested
+// Returns previous transactions. It later will be used to prepare data to sign
+func (u UnspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, amount float64,
+	pendinguse []transaction.TXInput) ([]transaction.TXInput, map[string]transaction.Transaction, float64, error) {
+
+	inputs := []transaction.TXInput{}
 
 	pubKeyHash, _ := lib.HashPubKey(PubKey)
-	acc, validOutputs, err := u.ChooseSpendableOutputs(pubKeyHash, amount)
+	totalamount, validOutputs, err := u.ChooseSpendableOutputs(pubKeyHash, amount, pendinguse)
 
 	if err != nil {
-		return nil, nil, err
+		return inputs, nil, 0, err
 	}
 
-	if acc < amount {
-		return nil, nil, errors.New("Not enough funds")
-	}
+	// here we don't calculate is total amount is good or no.
+	// later we will add unconfirmed transactions if no enough funds
 
-	// Build a list of inputs
-	for txid, outs := range validOutputs {
-		txID, err := hex.DecodeString(txid)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for _, out := range outs {
-			input := transaction.TXInput{txID, out, nil, PubKey}
-			inputs = append(inputs, input)
-		}
-	}
-
-	// Build a list of outputs
-	from, _ := lib.PubKeyToAddres(PubKey)
-	outputs = append(outputs, *transaction.NewTXOutput(amount, to))
-
-	if acc > amount {
-		outputs = append(outputs, *transaction.NewTXOutput(acc-amount, from)) // a change
-	}
-
-	tx := transaction.Transaction{nil, inputs, outputs}
-
-	// get list of previous transactions
+	// build list of previous transactions
 	prevTXs := make(map[string]transaction.Transaction)
 
-	for _, vin := range tx.Vin {
-		prevTX, _, err := u.Blockchain.FindTransaction(vin.Txid)
+	// Build a list of inputs
+	for _, out := range validOutputs {
+		input := transaction.TXInput{out.TXID, out.OIndex, nil, PubKey}
+		inputs = append(inputs, input)
+
+		prevTX, err := u.Blockchain.FindTransactionByBlock(out.TXID, out.BlockHash)
 
 		if err != nil {
-			return nil, nil, err
+			return inputs, nil, 0, err
 		}
-		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+		prevTXs[hex.EncodeToString(prevTX.ID)] = *prevTX
 	}
-
-	signdata, err := tx.PrepareSignData(prevTXs)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &tx, signdata, nil
+	return inputs, prevTXs, totalamount, nil
 }
 
-/*
-* Verifies which transactions outputs are not yet spent.
-* Returns list of inputs that are not found in list of unspent outputs
- */
+// Returns previous transactions. It later will be used to prepare data to sign
+func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, totalamount float64,
+	inputs []transaction.TXInput, prevTXs map[string]transaction.Transaction,
+	pendingoutputs []*transaction.TXOutputIndependent) ([]transaction.TXInput, map[string]transaction.Transaction, float64, error) {
+
+	// Build a list of inputs
+	for _, out := range pendingoutputs {
+		input := transaction.TXInput{out.TXID, out.OIndex, nil, PubKey}
+		inputs = append(inputs, input)
+
+		prevTX := transaction.DeserializeTransaction(out.BlockHash) // here we have transaction serialised, not block hash
+
+		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
+
+		totalamount += out.Value
+
+		if totalamount > amount {
+			break
+		}
+	}
+	return inputs, prevTXs, totalamount, nil
+}
+
+// Verifies which transactions outputs are not yet spent.
+// Returns list of inputs that are not found in list of unspent outputs
 func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) ([]*transaction.TXInput, error) {
 	notFoundInputs := []*transaction.TXInput{}
 

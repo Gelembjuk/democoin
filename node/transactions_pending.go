@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"sort"
 
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib"
@@ -41,9 +44,157 @@ func (u *UnApprovedTransactions) InitDB() {
 	})
 }
 
-/*
-* Check if transaction exists in a cache of unapproved
- */
+// Check if transaction inputs are pointed to some prepared transactions.
+// Check conflicts too. Same output can not be repeated twice
+
+func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []*transaction.TXInput) error {
+	checked := map[string][]int{}
+
+	for _, vin := range inputs {
+		// look if not yet checked
+
+		txstr := hex.EncodeToString(vin.Txid)
+
+		if outs, ok := checked[txstr]; ok {
+			// tx was checked
+			for _, out := range outs {
+				if out == vin.Vout {
+					// this output was already used in outher input
+					return errors.New("Duplicate usage of transaction output")
+				}
+			}
+		}
+
+		// check if this transaction exists
+		tx, err := u.GetIfExists(vin.Txid)
+
+		if err != nil {
+			return err
+		}
+
+		if tx == nil {
+			return errors.New("Input transaction is not found in prepared to approve")
+		}
+
+		checked[txstr] = append(checked[txstr], vin.Vout)
+	}
+	return nil
+}
+
+// Check if transaction inputs are pointed to some non approved transactions.
+// That are listed in a block before this transactions
+// Receives list of inputs and previous transactions
+// and input transactions for this tx
+// Check conflicts too. Same output can not be repeated twice
+
+func (u *UnApprovedTransactions) CheckInputsWereBefore(
+	inputs map[int]transaction.TXInput, prevTXs []*transaction.Transaction,
+	inputTXs map[int]*transaction.Transaction) (map[int]*transaction.Transaction, error) {
+
+	checked := map[string][]int{}
+
+	for vind, vin := range inputs {
+		// look if not yet checked
+
+		txstr := hex.EncodeToString(vin.Txid)
+
+		if outs, ok := checked[txstr]; ok {
+			// tx was checked
+			for _, out := range outs {
+				if out == vin.Vout {
+					// this output was already used in outher input
+					return inputTXs, errors.New("Duplicate usage of transaction output")
+				}
+			}
+		}
+
+		// check if this transaction exists in the list
+		exists := false
+
+		for _, tx := range prevTXs {
+			if bytes.Compare(vin.Txid, tx.ID) == 0 {
+				inputTXs[vind] = tx
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			return inputTXs, errors.New("Input transaction is not found in prepared to approve")
+		}
+
+		checked[txstr] = append(checked[txstr], vin.Vout)
+	}
+	return inputTXs, nil
+}
+
+// Returns pending transations info prepared by address
+// Return contains:
+// List of all inputs used by this PubKey
+// List of Outputs that were not yet used in any input returns in the first list
+func (u *UnApprovedTransactions) GetPreparedBy(PubKey []byte) ([]transaction.TXInput, []*transaction.TXOutputIndependent, error) {
+	PubKeyHash, _ := lib.HashPubKey(PubKey)
+
+	inputs := []transaction.TXInput{}
+	outputs := []*transaction.TXOutputIndependent{}
+
+	db := u.Blockchain.db
+
+	err := db.View(func(tx *bolt.Tx) error {
+		b := u.getBucket(tx)
+		c := b.Cursor()
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			tx := transaction.DeserializeTransaction(v)
+
+			sender := []byte{}
+
+			if !tx.IsCoinbase() {
+				sender = tx.Vin[0].PubKey
+
+				for _, vin := range tx.Vin {
+					if vin.UsesKey(PubKeyHash) {
+						inputs = append(inputs, vin)
+					}
+				}
+			}
+			for indV, vout := range tx.Vout {
+				if vout.IsLockedWithKey(PubKeyHash) {
+					voutind := transaction.TXOutputIndependent{}
+					// we are settings serialised transaction in place of block hash
+					// we don't have a block for such ransaction , but we need full transaction later
+					voutind.LoadFromSimple(vout, tx.ID, indV, sender, tx.IsCoinbase(), v)
+					outputs = append(outputs, &voutind)
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	realoutputs := []*transaction.TXOutputIndependent{}
+
+	for _, vout := range outputs {
+		used := false
+		for _, vin := range inputs {
+			if bytes.Compare(vin.Txid, vout.TXID) == 0 && vin.Vout == vout.OIndex {
+				// this output is already used in other pending transaction
+				used = true
+				break
+			}
+		}
+		if !used {
+			realoutputs = append(realoutputs, vout)
+		}
+	}
+
+	return inputs, realoutputs, nil
+}
+
+// Check if transaction exists in a cache of unapproved
 func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*transaction.Transaction, error) {
 	db := u.Blockchain.db
 
@@ -94,7 +245,8 @@ func (u *UnApprovedTransactions) GetTransactions(number int) ([]*transaction.Tra
 	if err != nil {
 		return nil, err
 	}
-
+	// we need to sort transactions. oldest should be first
+	sort.Sort(transaction.Transactions(txset))
 	return txset, nil
 }
 
@@ -123,13 +275,23 @@ func (u *UnApprovedTransactions) GetCount() (int, error) {
 	return counter, nil
 }
 
-/*
-* Add new transaction for the list of unapproved
- */
+// Add new transaction for the list of unapproved
+// Before to call this function we checked that transaction is valid
+// Now we need to check if there are no conflicts with other transactions in the cache
 func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
+	conflicts, err := u.DetectConflictsForNew(txadd)
+
+	if err != nil {
+		return err
+	}
+
+	if conflicts != nil {
+		return errors.New(fmt.Sprintf("The transaction conflicts with other prepared transaction: %x", conflicts.ID))
+	}
+
 	db := u.Blockchain.db
 
-	err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := u.getBucket(tx)
 
 		err := b.Put(txadd.ID, txadd.Serialize())
@@ -234,6 +396,51 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 	}
 
 	return total, nil
+}
+
+// Check if this new transaction conflicts with any other transaction in the cache
+// It is not allowed 2 prepared transactions have same inputs
+// we return first found transaction taht conflicts
+func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Transaction) (*transaction.Transaction, error) {
+	// it i needed to go over all tranactions in cache and check each of them if input is same as in this tx
+	db := u.Blockchain.db
+
+	var txconflicts *transaction.Transaction
+
+	err := db.View(func(tx *bolt.Tx) error {
+		b := u.getBucket(tx)
+		c := b.Cursor()
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			txexi := transaction.DeserializeTransaction(v)
+
+			conflicts := false
+
+			for _, vin := range txcheck.Vin {
+				for _, vine := range txexi.Vin {
+					if bytes.Compare(vin.Txid, vine.Txid) == 0 && vin.Vout == vine.Vout {
+						// this is same input transaction. it is conflict
+						txconflicts = &txexi
+						conflicts = true
+						break
+					}
+				}
+				if conflicts {
+					break
+				}
+			}
+			if conflicts {
+				break
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return txconflicts, nil
 }
 
 /*

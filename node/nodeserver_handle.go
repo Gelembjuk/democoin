@@ -146,7 +146,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 		return err
 	}
 
-	err = s.Node.NodeTX.NewTransaction(payload.TX)
+	err = s.Node.NodeTX.ReceivedNewTransaction(payload.TX)
 
 	if err != nil {
 		return err
@@ -183,8 +183,8 @@ func (s *NodeServerRequest) handleTxRequest() error {
 
 	result := nodeclient.ComRequestTransactionData{}
 
-	TX, DataToSign, err := s.Node.NodeTX.UnspentTXs.
-		NewTransaction(payload.PubKey, payload.To, payload.Amount)
+	TX, DataToSign, err := s.Node.NodeTX.
+		PrepareNewTransaction(payload.PubKey, payload.To, payload.Amount)
 
 	if err != nil {
 		return err
@@ -240,9 +240,8 @@ func (s *NodeServerRequest) handleGetFirstBlocks() error {
 	return nil
 }
 
-/*
-* Received the lst of nodes from some other node. add missed nodes to own nodes list
- */
+// Received the lst of nodes from some other node. add missed nodes to own nodes list
+
 func (s *NodeServerRequest) handleAddr() error {
 	var payload []lib.NodeAddr
 	err := s.parseRequestData(&payload)
@@ -548,7 +547,7 @@ func (s *NodeServerRequest) handleTx() error {
 		return nil
 	}
 	// this will also verify a transaction
-	err = s.Node.NodeTX.NewTransaction(&tx)
+	err = s.Node.NodeTX.ReceivedNewTransaction(&tx)
 
 	if err != nil {
 		return err
