@@ -21,7 +21,9 @@ func NewMerkleTree(data [][]byte) *MerkleTree {
 	var nodes []MerkleNode
 
 	if len(data)%2 != 0 {
+
 		data = append(data, data[len(data)-1])
+
 	}
 
 	for _, datum := range data {
@@ -35,6 +37,9 @@ func NewMerkleTree(data [][]byte) *MerkleTree {
 		for j := 0; j < len(nodes); j += 2 {
 			node := NewMerkleNode(&nodes[j], &nodes[j+1], nil)
 			newLevel = append(newLevel, *node)
+		}
+		if len(newLevel)%2 != 0 {
+			newLevel = append(newLevel, newLevel[len(newLevel)-1])
 		}
 
 		nodes = newLevel
