@@ -6,8 +6,8 @@ package main
 const applicationtitle = "DemoCoin"
 const applicationversion = "0.1 alpha"
 
-// this defines how strong miming is needed. 16 is simple mining 10 sec in simple desktop
-// 24 will need 3-4 minutes
+// this defines how strong miming is needed. 16 is simple mining less 5 sec in simple desktop
+// 24 will need 30 seconds in average
 const targetBits = 16
 
 // MAx and Min number of transactions per block
@@ -28,3 +28,8 @@ const utxoBucket = "chainstate"
 
 // other internal constant
 const daemonprocesscommandline = "daemonnode"
+
+// ==========================================================
+// Testing mode constants
+// we need this for testing purposes. can be set to 0 on production system
+const MinimumBlockBuildingTime = 3 // seconds

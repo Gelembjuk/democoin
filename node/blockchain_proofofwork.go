@@ -32,17 +32,22 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 
 // Prepares data for next iteration of PoW
 // this will be hashed
-func (pow *ProofOfWork) prepareData(nonce int) []byte {
+func (pow *ProofOfWork) prepareData() []byte {
 	data := bytes.Join(
 		[][]byte{
 			pow.block.PrevBlockHash,
 			pow.block.HashTransactions(),
 			lib.IntToHex(pow.block.Timestamp),
 			lib.IntToHex(int64(targetBits)),
-			lib.IntToHex(int64(nonce)),
 		},
 		[]byte{},
 	)
+
+	return data
+}
+
+func (pow *ProofOfWork) addNonceToPrepared(data []byte, nonce int) []byte {
+	data = append(data, lib.IntToHex(int64(nonce))...)
 
 	return data
 }
@@ -53,9 +58,11 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var hash [32]byte
 	nonce := 0
 
+	predata := pow.prepareData()
+
 	for nonce < maxNonce {
 		// prepare data for next nonce
-		data := pow.prepareData(nonce)
+		data := pow.addNonceToPrepared(predata, nonce)
 		// hash
 		hash = sha256.Sum256(data)
 
@@ -77,7 +84,8 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 func (pow *ProofOfWork) Validate() bool {
 	var hashInt big.Int
 
-	data := pow.prepareData(pow.block.Nonce)
+	predata := pow.prepareData()
+	data := pow.addNonceToPrepared(predata, pow.block.Nonce)
 	hash := sha256.Sum256(data)
 	hashInt.SetBytes(hash[:])
 

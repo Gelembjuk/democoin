@@ -49,7 +49,7 @@ func (tx Transaction) Serialize() []byte {
 func (tx *Transaction) Hash() []byte {
 	var hash [32]byte
 
-	tx.Time = time.Now().UTC().Unix()
+	tx.Time = time.Now().UTC().UnixNano()
 
 	txCopy := *tx
 	txCopy.ID = []byte{}
@@ -167,7 +167,7 @@ func (tx Transaction) String() string {
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
 	lines = append(lines, fmt.Sprintf("    FROM %s TO %s VALUE %f", from, to, amount))
-	lines = append(lines, fmt.Sprintf("    Time %d (%s)", tx.Time, time.Unix(tx.Time, 0)))
+	lines = append(lines, fmt.Sprintf("    Time %d (%s)", tx.Time, time.Unix(0, tx.Time)))
 
 	for i, input := range tx.Vin {
 		address, _ := lib.PubKeyToAddres(input.PubKey)

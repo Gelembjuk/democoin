@@ -83,7 +83,66 @@ def test(testfilter):
     blockchash = MintBlock(datadir,address)
     
     transactions.GetUnapprovedTransactionsEmpty(datadir)
+
+    _lib.StartTestGroup("Send 30 transactions")
     
+    microamount = 0.01
+    # send many transactions 
+    for i in range(1,10):
+        _lib.StartTest("Iteration "+str(i))
+        txid1 = transactions.Send(datadir,address,address2,microamount)
+        txid2 = transactions.Send(datadir,address2,address3,microamount)
+        txid3 = transactions.Send(datadir,address3,address,microamount)
+        
+        txlist = transactions.GetUnapprovedTransactions(datadir)
+        
+        _lib.FatalAssert(len(txlist) == i * 3,"Should be "+str(i*3)+" unapproved transaction")
+        
+        if txid1 not in txlist.keys():
+            _lib.Fatal("Transaction 1 is not in the list of transactions after iteration "+str(i))
+    
+        if txid2 not in txlist.keys():
+            _lib.Fatal("Transaction 2 is not in the list of transactions after iteration "+str(i))
+    
+        if txid3 not in txlist.keys():
+            _lib.Fatal("Transaction 3 is not in the list of transactions after iteration "+str(i))
+            
+        time.sleep(1)
+    
+    blockchash = MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    _lib.StartTestGroup("Send 30 transactions. Random value")
+    
+    microamountmax = 0.01
+    microamountmin = 0.0095
+    # send many transactions 
+    for i in range(1,10):
+        _lib.StartTest("Iteration "+str(i))
+        a1 = random.uniform(microamountmin, microamountmax)
+        a2 = random.uniform(microamountmin, microamountmax)
+        a3 = random.uniform(microamountmin, microamountmax)
+        txid1 = transactions.Send(datadir,address,address2,a1)
+        txid2 = transactions.Send(datadir,address2,address3,a2)
+        txid3 = transactions.Send(datadir,address3,address,a3)
+        
+        txlist = transactions.GetUnapprovedTransactions(datadir)
+        
+        _lib.FatalAssert(len(txlist) == i * 3,"Should be "+str(i*3)+" unapproved transaction")
+        
+        if txid1 not in txlist.keys():
+            _lib.Fatal("Transaction 1 is not in the list of transactions after iteration "+str(i))
+    
+        if txid2 not in txlist.keys():
+            _lib.Fatal("Transaction 2 is not in the list of transactions after iteration "+str(i))
+    
+        if txid3 not in txlist.keys():
+            _lib.Fatal("Transaction 3 is not in the list of transactions after iteration "+str(i))
+            
+        time.sleep(1)
+    
+    blockchash = MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
     
     #_lib.RemoveTestFolder(datadir)
     _lib.EndTestGroupSuccess()
@@ -101,3 +160,4 @@ def MintBlock(datadir,minter):
     blockhash = match.group(1)
     
     return blockhash
+

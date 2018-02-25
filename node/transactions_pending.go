@@ -60,7 +60,7 @@ func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []*transaction.TX
 			for _, out := range outs {
 				if out == vin.Vout {
 					// this output was already used in outher input
-					return errors.New("Duplicate usage of transaction output")
+					return errors.New(fmt.Sprintf("Duplicate usage of transaction output: %s - %d", txstr, out))
 				}
 			}
 		}
@@ -293,13 +293,13 @@ func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := u.getBucket(tx)
-
+		u.Logger.Trace.Printf("adding TX to unappr %x", txadd.ID)
 		err := b.Put(txadd.ID, txadd.Serialize())
 
 		if err != nil {
 			return errors.New("Adding new transaction to unapproved cache: " + err.Error())
 		}
-
+		u.Logger.Trace.Printf("Added %x", txadd.ID)
 		return nil
 	})
 	if err != nil {
@@ -385,10 +385,11 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			tx := transaction.DeserializeTransaction(v)
+			u.Logger.Trace.Printf("Iterate over. Next %x", tx.ID)
 			callback(hex.EncodeToString(k), tx.String())
 			total++
 		}
-
+		u.Logger.Trace.Printf("Total %d", total)
 		return nil
 	})
 	if err != nil {

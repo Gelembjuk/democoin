@@ -45,7 +45,7 @@ def test(testfilter):
     
     _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
     
-    txid3 = transactions.Send(datadir,address,address3,amount2)
+    txid3 = transactions.Send(datadir,address,address3,amount3)
     
     # node needs some time to make a block, so transaction still will be in list of unapproved
     txlist = transactions.GetUnapprovedTransactions(datadir)

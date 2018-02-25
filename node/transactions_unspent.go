@@ -494,7 +494,7 @@ func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, t
 
 		totalamount += out.Value
 
-		if totalamount > amount {
+		if totalamount >= amount {
 			break
 		}
 	}

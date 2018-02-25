@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
@@ -84,7 +85,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			if err != nil {
 				// this can be case when a transaction is based on other unapproved transaction
 				// and that transaction was created in same second
-				n.Logger.Trace.Printf("Minting: Ifnore transaction %x. Verify failed with error: %s\n", tx.ID, err.Error())
+				n.Logger.Trace.Printf("Minting: Ignore transaction %x. Verify failed with error: %s\n", tx.ID, err.Error())
 				continue
 				//return nil, err
 			}
@@ -162,11 +163,20 @@ func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
 
 	n.Logger.Trace.Printf("Minting: Start proof of work for the block\n")
 
+	starttime := time.Now()
+
 	pow := NewProofOfWork(b)
 	nonce, hash := pow.Run()
 
 	b.Hash = hash[:]
 	b.Nonce = nonce
+
+	if MinimumBlockBuildingTime > 0 {
+		for t := time.Since(starttime).Seconds(); t < float64(MinimumBlockBuildingTime); t = time.Since(starttime).Seconds() {
+			time.Sleep(1 * time.Second)
+			n.Logger.Trace.Printf("Sleep")
+		}
+	}
 
 	n.Logger.Trace.Printf("Minting: New hash is %x\n", b.Hash)
 

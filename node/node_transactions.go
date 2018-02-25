@@ -74,7 +74,7 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 	if err != nil {
 		return false, err
 	}
-
+	n.Logger.Trace.Println(tx)
 	if len(notFoundInputs) > 0 {
 		// some inputs are not existent
 		// we need to try to find them in list of unapproved transactions
@@ -131,7 +131,7 @@ func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) e
 	good, err := n.VerifyTransactionQuick(tx)
 
 	if err != nil {
-		return nil
+		return err
 	}
 	if !good {
 		return errors.New("Transaction verification failed")
@@ -241,6 +241,7 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	err = n.ReceivedNewTransaction(NewTX)
 
 	if err != nil {
+		n.Logger.Trace.Printf("Sending Error for %x: %s", NewTX.ID, err.Error())
 		return nil, err
 	}
 
