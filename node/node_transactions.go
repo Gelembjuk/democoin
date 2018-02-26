@@ -74,7 +74,7 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 	if err != nil {
 		return false, err
 	}
-	n.Logger.Trace.Println(tx)
+
 	if len(notFoundInputs) > 0 {
 		// some inputs are not existent
 		// we need to try to find them in list of unapproved transactions

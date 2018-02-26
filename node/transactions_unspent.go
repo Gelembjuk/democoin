@@ -503,9 +503,8 @@ func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, t
 
 // Verifies which transactions outputs are not yet spent.
 // Returns list of inputs that are not found in list of unspent outputs
-func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) ([]*transaction.TXInput, error) {
-	notFoundInputs := []*transaction.TXInput{}
-
+func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) ([]transaction.TXInput, error) {
+	notFoundInputs := []transaction.TXInput{}
 	db := u.Blockchain.db
 
 	err := db.View(func(tx *bolt.Tx) error {
@@ -516,7 +515,7 @@ func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []tran
 
 			if txdata == nil {
 				// not found
-				notFoundInputs = append(notFoundInputs, &txi)
+				notFoundInputs = append(notFoundInputs, txi)
 				continue
 			}
 			exists := false
@@ -531,16 +530,13 @@ func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []tran
 			}
 
 			if !exists {
-				notFoundInputs = append(notFoundInputs, &txi)
+				notFoundInputs = append(notFoundInputs, txi)
 			}
-
 		}
-
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return notFoundInputs, nil
 }

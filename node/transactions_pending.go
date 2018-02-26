@@ -47,7 +47,7 @@ func (u *UnApprovedTransactions) InitDB() {
 // Check if transaction inputs are pointed to some prepared transactions.
 // Check conflicts too. Same output can not be repeated twice
 
-func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []*transaction.TXInput) error {
+func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []transaction.TXInput) error {
 	checked := map[string][]int{}
 
 	for _, vin := range inputs {
