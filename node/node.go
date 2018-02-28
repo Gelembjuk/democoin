@@ -73,8 +73,8 @@ func (n *Node) InitClient() error {
 /*
 * Load list of other nodes addresses
  */
-func (n *Node) InitNodes(list []lib.NodeAddr) error {
-	if len(list) == 0 {
+func (n *Node) InitNodes(list []lib.NodeAddr, force bool) error {
+	if len(list) == 0 && !force {
 		if n.NodeNet.GetCountOfKnownNodes() == 0 {
 			// there are no any known nodes.
 			// load them from some external resource
@@ -280,6 +280,7 @@ func (n *Node) SendVersionToNodes(nodes []lib.NodeAddr) {
 func (n *Node) CheckAddressKnown(addr lib.NodeAddr) {
 	if !n.NodeNet.CheckIsKnown(addr) {
 		// send him all addresses
+		n.Logger.Trace.Printf("sending list of address to %s , %s", addr.NodeAddrToString(), n.NodeNet.Nodes)
 		n.NodeClient.SendAddrList(addr, n.NodeNet.Nodes)
 
 		n.NodeNet.AddNodeToKnown(addr)

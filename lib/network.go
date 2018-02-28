@@ -5,11 +5,13 @@ import (
 	"encoding/gob"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 const Protocol = "tcp"
 const NodeVersion = 1
 const CommandLength = 12
+const AuthStringLength = 20
 
 // Represents a node address
 type NodeAddr struct {
@@ -24,7 +26,7 @@ func (n NodeAddr) NodeAddrToString() string {
 
 // Compare to other node address if is same
 func (n NodeAddr) CompareToAddress(addr NodeAddr) bool {
-	return addr.Host == n.Host && addr.Port == n.Port
+	return (strings.Trim(addr.Host, " ") == strings.Trim(n.Host, " ") && addr.Port == n.Port)
 }
 
 // Converts a command to bytes in fixed length

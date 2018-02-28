@@ -25,6 +25,8 @@ type NodeServer struct {
 	StopMainChan        chan struct{}
 	StopMainConfirmChan chan struct{}
 	BlockBilderChan     chan []byte
+
+	NodeAuthStr string
 }
 
 func (s *NodeServer) GetClient() *nodeclient.NodeClient {
@@ -32,20 +34,18 @@ func (s *NodeServer) GetClient() *nodeclient.NodeClient {
 	return s.Node.NodeClient
 }
 
-/*
-* Reads and parses request from network data
- */
-func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, error) {
+// Reads and parses request from network data
+func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) {
 	// 1. Read command
 	commandbuffer := make([]byte, lib.CommandLength)
 	read, err := conn.Read(commandbuffer)
 
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 
 	if read != lib.CommandLength {
-		return "", nil, errors.New("Wrong number of bytes received for a request")
+		return "", nil, "", errors.New("Wrong number of bytes received for a request")
 	}
 
 	command := lib.BytesToCommand(commandbuffer)
@@ -57,31 +57,67 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, error) {
 	read, err = conn.Read(lengthbuffer)
 
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 
 	if read != 4 {
-		return "", nil, errors.New("Wrong number of bytes received for a request")
+		return "", nil, "", errors.New("Wrong number of bytes received for a request")
 	}
 	var datalength uint32
 	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &datalength)
 
-	// 3. read command data by length
+	// TODO 3 and 4 are similar. can be new func made
+	// 3. Get length of extra data
+
+	lengthbuffer = make([]byte, 4)
+
+	read, err = conn.Read(lengthbuffer)
+
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	if read != 4 {
+		return "", nil, "", errors.New("Wrong number of bytes received for a request")
+	}
+	var extradatalength uint32
+	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &extradatalength)
+
+	// 4. read command data by length
 	databuffer := make([]byte, datalength)
 
 	if datalength > 0 {
 		read, err = conn.Read(databuffer)
 
 		if err != nil {
-			return "", nil, err
+			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of request: %s", datalength, err.Error()))
 		}
 
 		if uint32(read) != datalength {
-			return "", nil, errors.New(fmt.Sprintf("Expected %d bytes, but received %d", datalength, read))
+			return "", nil, "", errors.New(fmt.Sprintf("Expected %d bytes, but received %d", datalength, read))
 		}
 	}
 
-	return command, databuffer, nil
+	// 5. read extra data by length
+
+	authstr := ""
+
+	if extradatalength > 0 {
+		extradatabuffer := make([]byte, extradatalength)
+
+		read, err = conn.Read(extradatabuffer)
+
+		if err != nil {
+			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of extra data: %s", extradatalength, err.Error()))
+		}
+
+		if uint32(read) != extradatalength {
+			return "", nil, "", errors.New(fmt.Sprintf("Expected %d bytes, but received %d", extradatalength, read))
+		}
+		authstr = lib.BytesToCommand(extradatabuffer)
+	}
+
+	return command, databuffer, authstr, nil
 }
 
 /*
@@ -90,19 +126,20 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, error) {
 func (s *NodeServer) handleConnection(conn net.Conn) {
 	s.Logger.Trace.Printf("New command. Start reading\n")
 
-	command, request, err := s.readRequest(conn)
+	command, request, authstring, err := s.readRequest(conn)
 
 	if err != nil {
 		s.Logger.Error.Println("Network Data Reading Error: ", err.Error())
 		return
 	}
 
-	s.Logger.Trace.Printf("Received %s command\n", command)
+	s.Logger.Trace.Printf("Received %s command", command)
 
 	requestobj := NodeServerRequest{}
 	requestobj.Node = s.CloneNode()
 	requestobj.Logger = s.Logger
 	requestobj.Request = request[:]
+	requestobj.NodeAuthStrIsGood = (s.NodeAuthStr == authstring && len(authstring) > 0)
 	requestobj.S = s
 
 	request = nil
@@ -116,6 +153,8 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	}
 
 	defer requestobj.Node.CloseBlockchain() // blockchain is opened while this function is runnning
+
+	//s.Logger.Trace.Printf("Nodes Network State: %d , %s", len(requestobj.Node.NodeNet.Nodes), requestobj.Node.NodeNet.Nodes)
 
 	var rerr error
 
@@ -155,6 +194,15 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 
 	case "txrequest":
 		rerr = requestobj.handleTxRequest()
+
+	case "getnodes":
+		rerr = requestobj.handleGetNodes()
+
+	case "addnode":
+		rerr = requestobj.handleAddNode()
+
+	case "removenode":
+		rerr = requestobj.handleRemoveNode()
 
 	case "version":
 		rerr = requestobj.handleVersion()
@@ -323,7 +371,9 @@ func (s *NodeServer) BlockBuilder() {
 
 			if err == nil && tx != nil {
 				s.Logger.Trace.Printf("Sending...")
-				NodeClone.SendTransactionToAll(tx)
+				// we send from main node object, not from a clone. because nodes list
+				// can be updated
+				s.Node.SendTransactionToAll(tx)
 			} else if err != nil {
 				s.Logger.Trace.Printf("Error: %s", err.Error())
 			} else if tx == nil {
@@ -349,7 +399,10 @@ func (s *NodeServer) CloneNode() *Node {
 	node.MinterAddress = orignode.MinterAddress
 
 	node.Init()
-	node.InitNodes(orignode.NodeNet.Nodes)
+
+	node.NodeClient.SetNodeAddress(s.NodeAddress)
+
+	node.InitNodes(orignode.NodeNet.Nodes, true) // set list of nodes and skip loading default if this is empty list
 
 	return &node
 }

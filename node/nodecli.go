@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
@@ -15,6 +16,7 @@ type NodeCLI struct {
 	DataDir            string
 	Command            string
 	AlreadyRunningPort int
+	NodeAuthStr        string
 	Node               *Node
 }
 
@@ -37,13 +39,16 @@ func getNodeCLI(input AppInput) NodeCLI {
 	// check if Daemon is already running
 	nd := NodeDaemon{}
 	nd.DataDir = cli.DataDir
+	nd.Logger = cli.Logger
 
-	_, port, err := nd.loadPIDFile()
+	_, port, authstr, err := nd.loadPIDFile()
 
 	if err == nil && port > 0 {
 		cli.AlreadyRunningPort = port
+		cli.NodeAuthStr = authstr
 	} else {
 		cli.AlreadyRunningPort = 0
+		cli.NodeAuthStr = ""
 	}
 
 	cli.Logger.Trace.Println("Node CLI inited")
@@ -66,7 +71,9 @@ func (c *NodeCLI) CreateNode() {
 	node.MinterAddress = c.Input.MinterAddress
 
 	node.Init()
-	node.InitNodes(c.Input.Nodes)
+	node.InitNodes(c.Input.Nodes, false)
+
+	node.NodeClient.SetAuthStr(c.NodeAuthStr)
 
 	c.Node = &node
 }
@@ -82,7 +89,7 @@ func (c NodeCLI) isInteractiveMode() bool {
 		"reindexutxo",
 		"send",
 		"getbalance",
-		"listaddressesext",
+		"getbalances",
 		"createwallet",
 		"listaddresses",
 		"unapprovedtransactions",
@@ -90,7 +97,10 @@ func (c NodeCLI) isInteractiveMode() bool {
 		"canceltransaction",
 		"dropblock",
 		"addrhistory",
-		"showunspent"}
+		"showunspent",
+		"shownodes",
+		"addnode",
+		"removenode"}
 
 	for _, cm := range commands {
 		if cm == c.Command {
@@ -140,13 +150,13 @@ func (c NodeCLI) ExecuteCommand() error {
 	} else if c.Command == "printchain" {
 		return c.commandPrintChain()
 
-	} else if c.Command == "reindexutxo" {
+	} else if c.Command == "reindexunspent" {
 		return c.commandReindexUTXO()
 
 	} else if c.Command == "getbalance" {
 		return c.commandGetBalance()
 
-	} else if c.Command == "listaddressesext" {
+	} else if c.Command == "getbalances" {
 		return c.commandAddressesBalance()
 
 	} else if c.Command == "listaddresses" {
@@ -161,8 +171,8 @@ func (c NodeCLI) ExecuteCommand() error {
 	} else if c.Command == "unapprovedtransactions" {
 		return c.commandUnapprovedTransactions()
 
-	} else if c.Command == "mineblock" {
-		return c.commandMineBlock()
+	} else if c.Command == "makeblock" {
+		return c.commandMakeBlock()
 
 	} else if c.Command == "dropblock" {
 		return c.commandDropBlock()
@@ -175,6 +185,15 @@ func (c NodeCLI) ExecuteCommand() error {
 
 	} else if c.Command == "showunspent" {
 		return c.commandShowUnspent()
+
+	} else if c.Command == "shownodes" {
+		return c.commandShowNodes()
+
+	} else if c.Command == "addnode" {
+		return c.commandAddNode()
+
+	} else if c.Command == "removenode" {
+		return c.commandRemoveNode()
 	}
 
 	return errors.New("Unknown management command")
@@ -276,6 +295,17 @@ func (c *NodeCLI) forwardCommandToWallet() error {
 	}
 	c.Logger.Trace.Println("Execute command as a client")
 	return walletscli.ExecuteCommand()
+}
+
+/*
+* Forwards a command to wallet object. This is needed for cases when a node must do some
+* operation with local wallets
+ */
+func (c *NodeCLI) getLocalNetworkClient() nodeclient.NodeClient {
+	nc := *c.Node.NodeClient
+	nc.NodeAddress.Port = c.AlreadyRunningPort
+	nc.NodeAddress.Host = "localhost"
+	return nc
 }
 
 /*
@@ -599,7 +629,7 @@ func (c *NodeCLI) commandReindexUTXO() error {
 /*
 * Try to mine a block if there is anough unapproved transactions
  */
-func (c *NodeCLI) commandMineBlock() error {
+func (c *NodeCLI) commandMakeBlock() error {
 	block, err := c.Node.TryToMakeBlock()
 
 	if err != nil {
@@ -716,6 +746,74 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 	}
 
 	fmt.Printf("  Number of unapproved transactions - %d\n", unappr)
+
+	return nil
+}
+
+// Displays list of nodes (connections)
+func (c *NodeCLI) commandShowNodes() error {
+	var nodes []lib.NodeAddr
+	var err error
+
+	if c.AlreadyRunningPort > 0 {
+		// connect to node to get nodes list
+		nc := c.getLocalNetworkClient()
+		nodes, err = nc.SendGetNodes()
+
+		if err != nil {
+			return err
+		}
+	} else {
+		nodes = c.Node.NodeNet.GetNodes()
+	}
+	fmt.Println("Nodes:")
+
+	for _, n := range nodes {
+		fmt.Println("  ", n.NodeAddrToString())
+	}
+
+	return nil
+}
+
+// Add a node to connections
+func (c *NodeCLI) commandAddNode() error {
+	newaddr := lib.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
+
+	if c.AlreadyRunningPort > 0 {
+		nc := c.getLocalNetworkClient()
+
+		err := nc.SendAddNode(newaddr)
+
+		if err != nil {
+			return err
+		}
+	} else {
+		c.Node.NodeNet.AddNodeToKnown(newaddr)
+	}
+
+	fmt.Println("Success!")
+
+	return nil
+}
+
+// Remove a node from connections
+func (c *NodeCLI) commandRemoveNode() error {
+	remaddr := lib.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
+	fmt.Printf("Remove %s %d", c.Input.Args.NodeHost, c.Input.Args.NodePort)
+	fmt.Println(remaddr)
+
+	if c.AlreadyRunningPort > 0 {
+		nc := c.getLocalNetworkClient()
+
+		err := nc.SendRemoveNode(remaddr)
+
+		if err != nil {
+			return err
+		}
+	} else {
+		c.Node.NodeNet.RemoveNodeFromKnown(remaddr)
+	}
+	fmt.Println("Success!")
 
 	return nil
 }

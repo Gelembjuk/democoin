@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
@@ -11,12 +12,13 @@ import (
 )
 
 type NodeServerRequest struct {
-	Node        *Node
-	S           *NodeServer
-	Request     []byte
-	Logger      *lib.LoggerMan
-	HasResponse bool
-	Response    []byte
+	Node              *Node
+	S                 *NodeServer
+	Request           []byte
+	Logger            *lib.LoggerMan
+	HasResponse       bool
+	Response          []byte
+	NodeAuthStrIsGood bool
 }
 
 func (s *NodeServerRequest) Init() {
@@ -251,8 +253,10 @@ func (s *NodeServerRequest) handleAddr() error {
 	}
 	addednodes := []lib.NodeAddr{}
 
+	s.Logger.Trace.Printf("Received nodes %s", payload)
+
 	for _, node := range payload {
-		if s.Node.NodeNet.AddNodeToKnown(node) {
+		if s.S.Node.NodeNet.AddNodeToKnown(node) {
 			addednodes = append(addednodes, node)
 		}
 	}
@@ -512,7 +516,7 @@ func (s *NodeServerRequest) handleGetData() error {
 	if payload.Type == "tx" {
 
 		if txe, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(payload.ID); err == nil && txe != nil {
-			s.Logger.Trace.Printf("Return transaction with ID %x\n", payload.ID)
+			s.Logger.Trace.Printf("Return transaction with ID %x to %s\n", payload.ID, payload.AddrFrom.NodeAddrToString())
 			// exists
 			s.Node.NodeClient.SendTx(payload.AddrFrom, txe.Serialize())
 
@@ -550,6 +554,22 @@ func (s *NodeServerRequest) handleTx() error {
 	err = s.Node.NodeTX.ReceivedNewTransaction(&tx)
 
 	if err != nil {
+		// if error is because some input transaction is not found, then request it and after it this TX again
+		s.Logger.Trace.Println("Error ", err.Error())
+
+		if err, ok := err.(*TXVerifyError); ok {
+			s.Logger.Trace.Println("Custom errro of kind ", err.kind)
+
+			if err.kind == TXVerifyErrorNoInput {
+				s.Logger.Trace.Printf("Request another 2 TX %x , %x", err.TX, tx.ID)
+				s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", err.TX)
+				time.Sleep(1 * time.Second) // wait to get a chance to return that TX
+				// TODO we need to be able to request more TX in order in single request
+				s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", tx.ID)
+				return nil
+			}
+
+		}
 		return err
 	}
 
@@ -601,7 +621,81 @@ func (s *NodeServerRequest) handleVersion() error {
 	} else {
 		s.Logger.Trace.Printf("Teir blockchain is same as my for %s\n", payload.AddrFrom.NodeAddrToString())
 	}
-	s.Node.CheckAddressKnown(payload.AddrFrom)
+	s.S.Node.CheckAddressKnown(payload.AddrFrom)
+
+	return nil
+}
+
+// Returns list of nodes from contacts on this node
+
+func (s *NodeServerRequest) handleGetNodes() error {
+	s.HasResponse = true
+
+	nodes := s.S.Node.NodeNet.GetNodes()
+
+	s.Logger.Trace.Printf("Return %d nodes\n", len(nodes))
+
+	var err error
+
+	s.Response, err = lib.GobEncode(&nodes)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Add new node to list of nodes
+func (s *NodeServerRequest) handleAddNode() error {
+	if !s.NodeAuthStrIsGood {
+		return errors.New("Local Network Auth is required")
+	}
+
+	s.HasResponse = true
+
+	var payload nodeclient.ComManageNode
+
+	err := s.parseRequestData(&payload)
+
+	if err != nil {
+		return err
+	}
+
+	added := s.S.Node.NodeNet.AddNodeToKnown(payload.Node)
+
+	if added {
+		s.Logger.Trace.Printf("Added node %s\n", payload.Node.NodeAddrToString())
+		// end version to this node
+		s.Node.SendVersionToNodes([]lib.NodeAddr{payload.Node})
+	}
+
+	s.Response = []byte{}
+
+	return nil
+}
+
+// Remove node from list of nodes
+func (s *NodeServerRequest) handleRemoveNode() error {
+	if !s.NodeAuthStrIsGood {
+		return errors.New("Local Network Auth is required")
+	}
+
+	s.HasResponse = true
+
+	var payload nodeclient.ComManageNode
+
+	err := s.parseRequestData(&payload)
+
+	if err != nil {
+		return err
+	}
+
+	s.S.Node.NodeNet.RemoveNodeFromKnown(payload.Node)
+
+	s.Logger.Trace.Printf("Removed node %s\n", payload.Node.NodeAddrToString())
+	s.Logger.Trace.Println(s.S.Node.NodeNet.Nodes)
+
+	s.Response = []byte{}
 
 	return nil
 }

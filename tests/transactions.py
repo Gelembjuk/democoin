@@ -161,6 +161,7 @@ def GetUnapprovedTransactions(datadir):
     
     _lib.StartTest("Get unapproved transactions")
     res = _lib.ExecuteNode(['unapprovedtransactions','-datadir',datadir])
+    
     _lib.FatalAssertSubstr(res,"============ Transaction","Output should contains list of transactions")
 
     regex = ur"--- Transaction ([^:]+):"

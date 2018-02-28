@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 
 	"golang.org/x/crypto/ripemd160"
 )
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 // Structure to manage logs
 type LoggerMan struct {
@@ -161,4 +164,12 @@ func HashPubKey(pubKey []byte) ([]byte, error) {
 	publicRIPEMD160 := RIPEMD160Hasher.Sum(nil)
 
 	return publicRIPEMD160, nil
+}
+
+func RandString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

@@ -73,7 +73,7 @@ func (n *NodeDaemon) checkPIDFile() error {
 
 		isfine := true
 		// check if process is really running
-		ProcessID, _, err := n.loadPIDFile()
+		ProcessID, _, _, err := n.loadPIDFile()
 
 		if err == nil && ProcessID > 0 {
 
@@ -187,8 +187,16 @@ func (n *NodeDaemon) StartServerInteractive() error {
 	}
 
 	pid := os.Getpid()
+
 	n.Logger.Trace.Println("Process ID is : ", pid)
-	n.savePIDFile(pid, n.Port)
+
+	authstr, err := n.savePIDFile(pid, n.Port)
+
+	if err != nil {
+		return err
+	}
+
+	n.Server.NodeAuthStr = authstr
 
 	err = n.DaemonizeServer()
 
@@ -205,7 +213,7 @@ func (n *NodeDaemon) StartServerInteractive() error {
 * Stops a node daemon. Finds a process and kills it.
  */
 func (n *NodeDaemon) StopServer() error {
-	ProcessID, _, err := n.loadPIDFile()
+	ProcessID, _, _, err := n.loadPIDFile()
 
 	if err == nil && ProcessID > 0 {
 
@@ -244,6 +252,10 @@ func (n *NodeDaemon) StopServer() error {
  */
 func (n *NodeDaemon) DaemonizeServer() error {
 	n.Logger.Trace.Println("Daemon process runs")
+
+	_, _, authstr, _ := n.loadPIDFile()
+
+	n.Server.NodeAuthStr = authstr
 
 	// the channel to notify main thread about all work done on kill signal
 	theendchan := make(chan struct{})
@@ -304,76 +316,78 @@ func (n *NodeDaemon) DaemonizeServer() error {
 /*
 * Save PID file for a process
  */
-func (n *NodeDaemon) savePIDFile(pid int, port int) error {
+func (n *NodeDaemon) savePIDFile(pid int, port int) (string, error) {
 
 	file, err := os.Create(n.getServerPidFile())
 
 	if err != nil {
 		n.Logger.Error.Printf("Unable to create pid file : %v\n", err)
-		return err
+		return "", err
 	}
 
 	defer file.Close()
 
-	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port))
+	// generate some random string. it will be used to auth local network requests
+	authstr := lib.RandString(lib.CommandLength) // we use same length as for network commands, but this is not related
+
+	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port) + " " + authstr)
 
 	if err != nil {
 		n.Logger.Error.Printf("Unable to create pid file : %v\n", err)
-		return err
+		return "", err
 	}
 
 	file.Sync() // flush to disk
 
-	return nil
+	return authstr, nil
 }
 
 /*
 * Laads PID file.
  */
-func (n *NodeDaemon) loadPIDFile() (int, int, error) {
+func (n *NodeDaemon) loadPIDFile() (int, int, string, error) {
 
 	if _, err := os.Stat(n.getServerPidFile()); err == nil {
 		// get running port from pid file
 		pidfilecontentsbytes, err := ioutil.ReadFile(n.getServerPidFile())
 
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, "", err
 		}
 
 		pidfilecontents := string(pidfilecontentsbytes)
 
-		i := strings.Index(pidfilecontents, " ") // port is after pid and space in this text
+		parts := strings.Split(pidfilecontents, " ") // port is after pid and space in this text
 
-		if i > -1 {
-			portstring := pidfilecontents[i+1:]
-			pidstring := pidfilecontents[:i]
+		if len(parts) == 3 {
+			portstring := parts[1]
+			pidstring := parts[0]
+			authstring := parts[2]
 
 			port, err := strconv.Atoi(portstring)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, "", err
 			}
 
 			pid, errp := strconv.Atoi(pidstring)
 
 			if errp != nil {
-				return 0, 0, errp
+				return 0, 0, "", errp
 			}
 
-			return pid, port, nil
-		} else {
-			return 0, 0, errors.New("PID file wrong format")
+			return pid, port, authstring, nil
 		}
-
+		return 0, 0, "", errors.New("PID file wrong format")
 	}
 
-	return -1, 0, nil
+	return -1, 0, "", nil
 }
 
 /*
 * Returns state of a server. Detects if it is running
  */
 func (n *NodeDaemon) GetServerState() (bool, int, int, error) {
-	ProcessID, Port, err := n.loadPIDFile()
+	ProcessID, Port, _, err := n.loadPIDFile()
 
 	if err == nil && ProcessID > 0 {
 

@@ -8,8 +8,13 @@ NODE_BIN = '../node/node'
 WALLET_BIN = '../wallet/wallet'
 VERBOSE = False
 
+CURRENT_MODULE = ""
+
 def getCurrentDir():
     return os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+
+def SetCurMode(m):
+    CURRENT_MODULE = m
 
 def CleanTestFolders():
     # Delete all subfolders looking like prev tests
@@ -71,6 +76,12 @@ def EndTestGroupSuccess():
     print "PASS ==="
     
 def Exit():
+    if CURRENT_MODULE != "":
+        methods = dir(CURRENT_MODULE)
+        
+        if "aftertest" in methods:
+            test_module.aftertest("")
+        
     sys.exit(0)
 #=============================================================================================================
 # Assert functions

@@ -264,7 +264,7 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 
 		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
-			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x", vin.Txid))
+			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . Data to verify %x, full TX %s", vin.Txid, dataToVerify, prevTx))
 		}
 		txCopy.Vin[inID].PubKey = nil
 	}

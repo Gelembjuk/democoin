@@ -91,7 +91,7 @@ func (wc *WalletCLI) ExecuteCommand() error {
 	} else if wc.Input.Command == "listaddresses" {
 		return wc.commandListAddresses()
 
-	} else if wc.Input.Command == "listaddressesext" ||
+	} else if wc.Input.Command == "getbalances" ||
 		wc.Input.Command == "listbalances" {
 		return wc.commandListAddressesExt()
 

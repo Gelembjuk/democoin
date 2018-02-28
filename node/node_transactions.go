@@ -107,7 +107,9 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 			return false, err
 		}
 	}
-
+	n.Logger.Trace.Println("Go to verify Deep")
+	n.Logger.Trace.Println(tx)
+	//n.Logger.Trace.Println(inputTXs)
 	// do final check against inputs
 	err = tx.Verify(inputTXs)
 
@@ -243,6 +245,12 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	if err != nil {
 		n.Logger.Trace.Printf("Sending Error for %x: %s", NewTX.ID, err.Error())
 		return nil, err
+	}
+
+	n.Logger.Trace.Println(NewTX)
+	n.Logger.Trace.Println("Data to sign")
+	for _, d := range DataToSign {
+		n.Logger.Trace.Println(d)
 	}
 
 	return NewTX, nil

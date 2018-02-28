@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 // INterface for extra storage for a nodes.
@@ -76,11 +77,15 @@ func (n *NodeNetwork) LoadInitialNodes() error {
 	if n.Storage != nil {
 		// remember loaded nodes in local storage
 		for _, node := range nodes.Nodes {
+			node.Host = strings.Trim(node.Host, " ")
 			n.Storage.AddNodeToKnown(node)
 		}
 	}
 
 	return nil
+}
+func (n *NodeNetwork) GetNodes() []NodeAddr {
+	return n.Nodes
 }
 
 // Returns number of known nodes

@@ -24,6 +24,7 @@ type NodeClient struct {
 	Address     string // wallet address
 	Logger      *lib.LoggerMan
 	NodeNet     *lib.NodeNetwork
+	NodeAuthStr string
 }
 
 type ComBlock struct {
@@ -126,6 +127,16 @@ type ComVersion struct {
 	Version    int
 	BestHeight int
 	AddrFrom   lib.NodeAddr
+}
+
+// To send nodes manage command.
+type ComManageNode struct {
+	Node lib.NodeAddr
+}
+
+// Check if node address looks fine
+func (c *NodeClient) SetAuthStr(auth string) {
+	c.NodeAuthStr = auth
 }
 
 // Check if node address looks fine
@@ -240,6 +251,7 @@ func (c *NodeClient) SendGetFirstBlocks(address lib.NodeAddr) (*ComGetFirstBlock
 
 // Request for a transaction or a block to get full info by ID or Hash
 func (c *NodeClient) SendGetData(address lib.NodeAddr, kind string, id []byte) error {
+
 	data := ComGetData{c.NodeAddress, kind, id}
 
 	request, err := c.BuildCommandData("getdata", &data)
@@ -366,8 +378,62 @@ func (c *NodeClient) SendGetUnspent(addr lib.NodeAddr, address string, chaintip 
 	return datapayload, nil
 }
 
+// Request for list of nodes in contacts
+func (c *NodeClient) SendGetNodes() ([]lib.NodeAddr, error) {
+	request, err := c.BuildCommandData("getnodes", nil)
+
+	datapayload := []lib.NodeAddr{}
+
+	err = c.SendDataWaitResponse(c.NodeAddress, request, &datapayload)
+
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Get Nodes Response Error: %s", err.Error()))
+	}
+
+	return datapayload, nil
+}
+
+// Request to add new node to contacts
+func (c *NodeClient) SendAddNode(node lib.NodeAddr) error {
+	data := ComManageNode{node}
+	request, err := c.BuildCommandDataWithAuth("addnode", &data)
+
+	err = c.SendDataWaitResponse(c.NodeAddress, request, nil)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Add Node Response Error: %s", err.Error()))
+	}
+
+	return nil
+}
+
+// Request to remove a node from contacts
+func (c *NodeClient) SendRemoveNode(node lib.NodeAddr) error {
+	data := ComManageNode{node}
+	request, err := c.BuildCommandDataWithAuth("removenode", &data)
+
+	err = c.SendDataWaitResponse(c.NodeAddress, request, nil)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Remove Node Response Error: %s", err.Error()))
+	}
+
+	return nil
+}
+
+// Builds a command data. It prepares a slice of bytes from given data
+func (c *NodeClient) BuildCommandDataWithAuth(command string, data interface{}) ([]byte, error) {
+	authbytes := lib.CommandToBytes(c.NodeAuthStr)
+	return c.doBuildCommandData(command, data, authbytes)
+}
+
 // Builds a command data. It prepares a slice of bytes from given data
 func (c *NodeClient) BuildCommandData(command string, data interface{}) ([]byte, error) {
+	return c.doBuildCommandData(command, data, []byte{})
+}
+
+// Builds a command data. It prepares a slice of bytes from given data
+func (c *NodeClient) doBuildCommandData(command string, data interface{}, extra []byte) ([]byte, error) {
 	var payload []byte
 	var err error
 
@@ -386,7 +452,19 @@ func (c *NodeClient) BuildCommandData(command string, data interface{}) ([]byte,
 	binary.LittleEndian.PutUint32(bs, payloadlength) // convert int to []byte
 
 	request := append(lib.CommandToBytes(command), bs...)
+
+	// add length of extra data
+	payloadlength = uint32(len(extra))
+	bs = make([]byte, 4)
+	binary.LittleEndian.PutUint32(bs, payloadlength) // convert int to []byte
+
+	request = append(request, bs...)
+
 	request = append(request, payload...)
+
+	if len(extra) > 0 {
+		request = append(request, extra...)
+	}
 
 	return request, nil
 }

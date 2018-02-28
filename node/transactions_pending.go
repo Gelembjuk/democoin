@@ -73,7 +73,7 @@ func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []transaction.TXI
 		}
 
 		if tx == nil {
-			return errors.New("Input transaction is not found in prepared to approve")
+			return NewTXVerifyError("Input transaction is not found in prepared to approve", TXVerifyErrorNoInput, vin.Txid)
 		}
 
 		checked[txstr] = append(checked[txstr], vin.Vout)
@@ -120,7 +120,7 @@ func (u *UnApprovedTransactions) CheckInputsWereBefore(
 		}
 
 		if !exists {
-			return inputTXs, errors.New("Input transaction is not found in prepared to approve")
+			return inputTXs, NewTXVerifyError("Input transaction is not found in prepared to approve", TXVerifyErrorNoInput, vin.Txid)
 		}
 
 		checked[txstr] = append(checked[txstr], vin.Vout)
@@ -385,7 +385,7 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			tx := transaction.DeserializeTransaction(v)
-			u.Logger.Trace.Printf("Iterate over. Next %x", tx.ID)
+			//u.Logger.Trace.Printf("Iterate over. Next %x", tx.ID)
 			callback(hex.EncodeToString(k), tx.String())
 			total++
 		}

@@ -31,6 +31,9 @@ for testscript in testfiles:
             print "######## ",testname
         
         test_module = __import__(testname)
+        
+        _lib.SetCurMode(test_module)
+        
         methods = dir(test_module)
         
         if "beforetest" in methods:
