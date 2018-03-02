@@ -1,0 +1,216 @@
+import _lib
+import re
+import time
+import startnode
+import transactions
+import blocksbasic
+import managenodes
+import initblockchain
+import random
+
+datadir1 = ""
+datadir2 = ""
+datadir3 = ""
+
+def aftertest(testfilter):
+    global datadir1
+    global datadir2
+    global datadir3
+    
+    if datadir1 != "" or datadir2 != "" or datadir3 != "":
+        _lib.StartTestGroup("Ending After failure of the test")
+    
+    if datadir1 != "":
+        startnode.StopNode(datadir1,"Server 1")
+    if datadir2 != "":    
+        startnode.StopNode(datadir2,"Server 2")
+    if datadir3 != "":    
+        startnode.StopNode(datadir3,"Server 3")
+        
+def test(testfilter):
+    global datadir1
+    global datadir2
+    global datadir3
+    
+    _lib.StartTestGroup("Blocks exhange between nodes")
+    
+    _lib.CleanTestFolders()
+    
+    inf = MakeBlockchainWithBlocks('30000')
+    datadir = inf[0]
+    address1 = inf[1]
+    address1_2 = inf[2]
+    address1_3 = inf[3]
+    
+    startnode.StartNode(datadir, address1,'30000', "Server 1")
+    datadir1 = datadir
+    managenodes.RemoveAllNodes(datadir1)
+    
+    d = StartNodeAndImport('30001', '30000', "Server 2")
+    datadir2 = d[0]
+    address2 = d[1]
+    
+    d = StartNodeAndImport('30002', '30000', "Server 3")
+    datadir3 = d[0]
+    address3 = d[1]
+    
+    startnode.StopNode(datadir1,"Server 1")
+    startnode.StopNode(datadir2,"Server 2")
+    startnode.StopNode(datadir3,"Server 3")
+    
+    datadir1 = ""
+    datadir2 = ""
+    datadir3 = ""
+    
+    #_lib.RemoveTestFolder(datadir)
+    _lib.EndTestGroupSuccess()
+
+def StartNodeAndImport(port, importport, title):
+    
+    datadir = _lib.CreateTestFolder()
+    
+    address = initblockchain.ImportBockchain(datadir,"localhost",importport)
+    
+    # this will create config file to remember other node address
+    configfile = "{\"MinterAddress\":\""+address+"\",\"Port\": "+str(port)+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(importport)+"}]}"
+    _lib.SaveConfigFile(datadir, configfile)
+    
+    startnode.StartNode(datadir, address,port, title)
+    
+    #check nodes. must be minimum 1 and import port must be present 
+    nodes = managenodes.GetNodes(datadir)
+    _lib.FatalAssert(len(nodes) > 0,"Should be minimum 1 nodes in output")
+    print nodes
+    
+    return [datadir, address]
+
+def MakeBlockchainWithBlocks(port):
+    
+    datadir = _lib.CreateTestFolder()
+    
+    r = blocksbasic.PrepareBlockchain(datadir,port)
+    address = r[0]
+
+    # create another 3 addresses
+    address2 = transactions.CreateWallet(datadir)
+    address3 = transactions.CreateWallet(datadir)
+
+    _lib.StartTestGroup("Do transactions")
+
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    amount1 = '1'
+    amount2 = '2'
+    amount3 = '3'
+    
+    txid1 = transactions.Send(datadir,address,address2,amount1)
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    txid2 = transactions.Send(datadir,address,address3,amount2)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
+    txid3 = transactions.Send(datadir,address,address3,amount3)
+    
+    # node needs some time to make a block, so transaction still will be in list of unapproved
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
+    
+    txid4 = transactions.Send(datadir,address3,address2,amount1)
+    
+    # node needs some time to make a block, so transaction still will be in list of unapproved
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 4,"Should be 4 unapproved transaction")
+    
+    if txid1 not in txlist.keys():
+        _lib.Fatal("Transaction 1 is not in the list of transactions")
+    
+    if txid2 not in txlist.keys():
+        _lib.Fatal("Transaction 2 is not in the list of transactions")
+    
+    if txid3 not in txlist.keys():
+        _lib.Fatal("Transaction 3 is not in the list of transactions")
+    
+    if txid4 not in txlist.keys():
+        _lib.Fatal("Transaction 4 is not in the list of transactions")
+    
+    _lib.FatalAssertFloat(amount1, txlist[txid1][2], "Amount of transaction 1 is wrong")
+    
+    _lib.FatalAssertFloat(amount2, txlist[txid2][2], "Amount of transaction 2 is wrong")
+    
+    _lib.FatalAssertFloat(amount3, txlist[txid3][2], "Amount of transaction 3 is wrong")
+    
+    _lib.FatalAssertFloat(amount1, txlist[txid4][2], "Amount of transaction 4 is wrong")
+    
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = blocksbasic.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain")
+    
+    _lib.StartTestGroup("Send 3 transactions")
+    
+    microamount = 0.01
+    
+    txid1 = transactions.Send(datadir,address,address2,microamount)
+    txid2 = transactions.Send(datadir,address2,address3,microamount)
+    txid3 = transactions.Send(datadir,address3,address,microamount)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
+    
+    if txid1 not in txlist.keys():
+        _lib.Fatal("Transaction 1 is not in the list of transactions after iteration "+str(i))
+
+    if txid2 not in txlist.keys():
+        _lib.Fatal("Transaction 2 is not in the list of transactions after iteration "+str(i))
+
+    if txid3 not in txlist.keys():
+        _lib.Fatal("Transaction 3 is not in the list of transactions after iteration "+str(i))
+           
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = blocksbasic.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 3,"Should be 3 blocks in blockchain")
+    
+    _lib.StartTestGroup("Send 3 transactions. Random value")
+    
+    microamountmax = 0.01
+    microamountmin = 0.0095
+    
+    a1 = random.uniform(microamountmin, microamountmax)
+    a2 = random.uniform(microamountmin, microamountmax)
+    a3 = random.uniform(microamountmin, microamountmax)
+    txid1 = transactions.Send(datadir,address,address2,a1)
+    txid2 = transactions.Send(datadir,address2,address3,a2)
+    txid3 = transactions.Send(datadir,address3,address,a3)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
+    
+    if txid1 not in txlist.keys():
+        _lib.Fatal("Transaction 1 is not in the list of transactions after iteration "+str(i))
+
+    if txid2 not in txlist.keys():
+        _lib.Fatal("Transaction 2 is not in the list of transactions after iteration "+str(i))
+
+    if txid3 not in txlist.keys():
+        _lib.Fatal("Transaction 3 is not in the list of transactions after iteration "+str(i))
+        
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = blocksbasic.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain")
+    
+    return [datadir, address, address2, address3]

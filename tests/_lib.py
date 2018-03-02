@@ -8,13 +8,8 @@ NODE_BIN = '../node/node'
 WALLET_BIN = '../wallet/wallet'
 VERBOSE = False
 
-CURRENT_MODULE = ""
-
 def getCurrentDir():
     return os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-
-def SetCurMode(m):
-    CURRENT_MODULE = m
 
 def CleanTestFolders():
     # Delete all subfolders looking like prev tests
@@ -75,14 +70,13 @@ def EndTestSuccess():
 def EndTestGroupSuccess():
     print "PASS ==="
     
+def SaveConfigFile(datadir, contents):
+    text_file = open(datadir+"/config.json", "w")
+    text_file.write(contents)
+    text_file.close()
+    
 def Exit():
-    if CURRENT_MODULE != "":
-        methods = dir(CURRENT_MODULE)
-        
-        if "aftertest" in methods:
-            test_module.aftertest("")
-        
-    sys.exit(0)
+    raise NameError('Test failed')
 #=============================================================================================================
 # Assert functions
 def Fatal(comment):

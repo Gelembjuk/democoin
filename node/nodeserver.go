@@ -334,10 +334,6 @@ func (s *NodeServer) TryToMakeNewBlock(tx []byte) {
 * and it can be empty slice . it means to exit from teh routibe
  */
 func (s *NodeServer) BlockBuilder() {
-	// we create separate node object for this thread
-	// pointers are used everywhere. so, it can be some sort of conflict with main thread
-	NodeClone := s.CloneNode()
-
 	for {
 		txID := <-s.BlockBilderChan
 
@@ -351,6 +347,10 @@ func (s *NodeServer) BlockBuilder() {
 		}
 
 		s.Logger.Trace.Printf("Go to make new block attempt")
+
+		// we create separate node object for this thread
+		// pointers are used everywhere. so, it can be some sort of conflict with main thread
+		NodeClone := s.CloneNode()
 		// try to buid new block
 		newBlockHash, err := NodeClone.TryToMakeBlock()
 

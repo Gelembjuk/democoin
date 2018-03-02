@@ -107,8 +107,8 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 			return false, err
 		}
 	}
-	n.Logger.Trace.Println("Go to verify Deep")
-	n.Logger.Trace.Println(tx)
+	//n.Logger.Trace.Println("Go to verify Deep")
+	//n.Logger.Trace.Println(tx)
 	//n.Logger.Trace.Println(inputTXs)
 	// do final check against inputs
 	err = tx.Verify(inputTXs)

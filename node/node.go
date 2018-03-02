@@ -189,9 +189,9 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	return nil
 }
 
-/*
-* Load start blocks of blockchain from other node.
- */
+// Creates new blockchain DB from given list of blocks
+// This would be used when new empty node started and syncs with other nodes
+
 func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	if host == "" {
 		// get node from known nodes
@@ -212,15 +212,55 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 		return false, err
 	}
 
-	MH, err := n.NodeBC.CreateBlockchainFromBlocks(result.Blocks)
+	if len(result.Blocks) == 0 {
+		return false, errors.New("No blocks found on taht node")
+	}
+
+	firstblockbytes := result.Blocks[0]
+
+	block := &Block{}
+	err = block.DeserializeBlock(firstblockbytes)
 
 	if err != nil {
 		return false, err
 	}
+	// make blockchain with single block
+	err = n.NodeBC.CreateBlockchain(block)
 
-	// init DB for unspent and unapproved transactions
+	if err != nil {
+		return false, err
+	}
+	// open block chain now
 	n.OpenBlockchain()
 
+	MH := block.Height
+
+	if len(result.Blocks) > 1 {
+		// add all blocks
+		skip := true
+		for _, blockdata := range result.Blocks {
+			if skip {
+				skip = false
+				continue
+			}
+			// add this block
+			block := &Block{}
+			err := block.DeserializeBlock(blockdata)
+
+			if err != nil {
+				return false, err
+			}
+
+			_, err = n.NodeBC.AddBlock(block)
+
+			if err != nil {
+				return false, err
+			}
+			MH = block.Height
+		}
+	}
+
+	// init DB for unspent and unapproved transactions
 	n.NodeTX.UnspentTXs.Reindex()
 	n.NodeTX.UnapprovedTXs.InitDB()
 

@@ -8,7 +8,7 @@ import random
 #def beforetest(testfilter):
 #    print "before test"
 #def aftertest(testfilter):
-#    print "after test"
+    #print "after test"
 def test(testfilter):
     _lib.StartTestGroup("Blocks making")
     
@@ -83,6 +83,10 @@ def test(testfilter):
     
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
+    blockshashes = GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain")
+    
     _lib.StartTestGroup("Send 30 transactions")
     
     microamount = 0.01
@@ -110,6 +114,10 @@ def test(testfilter):
     
     blockchash = MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 3,"Should be 3 blocks in blockchain")
     
     _lib.StartTestGroup("Send 30 transactions. Random value")
     
@@ -142,6 +150,10 @@ def test(testfilter):
     
     blockchash = MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain")
     
     #_lib.RemoveTestFolder(datadir)
     _lib.EndTestGroupSuccess()
@@ -233,3 +245,13 @@ def PrepareBlockchain(datadir,port):
     
     return [address,PID]
 
+def GetBlocks(datadir):
+    _lib.StartTest("Load blocks chain")
+    res = _lib.ExecuteNode(['printchain','-datadir',datadir, '-view', "short"])
+    _lib.FatalAssertSubstr(res,"Hash: ","Blockchain display returned wrong data or no any blocks")
+    
+    regex = ur"Hash: ([a-z0-9A-Z]+)"
+
+    blocks = re.findall(regex, res)
+    
+    return blocks

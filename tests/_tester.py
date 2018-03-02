@@ -32,15 +32,26 @@ for testscript in testfiles:
         
         test_module = __import__(testname)
         
-        _lib.SetCurMode(test_module)
-        
         methods = dir(test_module)
-        
+
         if "beforetest" in methods:
             test_module.beforetest(testname)
-            
-        test_module.test(testname)
         
+        success = True
+        
+        try:
+            test_module.test(testname)
+        except NameError as e:
+            print "Name exception: ", e
+            success = False
+        except:
+            # do nothing. We catch exception only to be able to execute end function
+            e = sys.exc_info()[0]
+            print "Fail exception: ", e
+            success = False
+            
         if "aftertest" in methods:
             test_module.aftertest(testname)
-        
+            
+        if not success:
+            break

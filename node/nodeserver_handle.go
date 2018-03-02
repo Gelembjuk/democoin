@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
@@ -561,12 +560,18 @@ func (s *NodeServerRequest) handleTx() error {
 			s.Logger.Trace.Println("Custom errro of kind ", err.kind)
 
 			if err.kind == TXVerifyErrorNoInput {
-				s.Logger.Trace.Printf("Request another 2 TX %x , %x", err.TX, tx.ID)
-				s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", err.TX)
-				time.Sleep(1 * time.Second) // wait to get a chance to return that TX
-				// TODO we need to be able to request more TX in order in single request
-				s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", tx.ID)
-				return nil
+				/*
+					* we will not do somethign in this case. If no base TX that is not yet approved we wil ignore it
+					* previous TX must exist on a node that sent this TX, so, let it complete this work abd build a block
+					* This case is possible if a node was not online when previous TX was created
+					s.Logger.Trace.Printf("Request another 2 TX %x , %x", err.TX, tx.ID)
+					s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", err.TX)
+					time.Sleep(1 * time.Second) // wait to get a chance to return that TX
+					// TODO we need to be able to request more TX in order in single request
+					s.Node.NodeClient.SendGetData(payload.AddFrom, "tx", tx.ID)
+					return nil*/
+
+				// TODO in future we can createsomethign more start here. Like, get TX with all previous TXs that are not approved yet
 			}
 
 		}

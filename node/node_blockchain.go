@@ -170,49 +170,6 @@ func (n *NodeBlockchain) CreateBlockchain(genesis *Block) error {
 	return bc.CreateBlockchain(n.DataDir, genesis)
 }
 
-// Creates new blockchain DB from given list of blocks
-// This would be used when new empty node started and syncs with other nodes
-func (n *NodeBlockchain) CreateBlockchainFromBlocks(blocks [][]byte) (int, error) {
-	if len(blocks) == 0 {
-		return -1, errors.New("No blocks in the list to init from")
-	}
-	bc := Blockchain{}
-
-	firstblockbytes := blocks[0]
-
-	blocks = blocks[1:]
-
-	block := &Block{}
-	err := block.DeserializeBlock(firstblockbytes)
-
-	if err != nil {
-		return -1, err
-	}
-
-	err = bc.CreateBlockchain(n.DataDir, block)
-
-	if err != nil {
-		return -1, err
-	}
-
-	maxHeight := block.Height
-
-	n.OpenBlockchain()
-
-	for _, blockdata := range blocks {
-		block := &Block{}
-		err := block.DeserializeBlock(blockdata)
-
-		if err != nil {
-			return -1, err
-		}
-		n.AddBlock(block)
-
-		maxHeight = block.Height
-	}
-	return maxHeight, nil
-}
-
 // Creates iterator to go over blockchain
 func (n *NodeBlockchain) GetBlockChainIterator() (*BlocksIterator, error) {
 	bci := BlocksIterator{n.BC.Iterator()}
@@ -423,6 +380,7 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 	prevTXs := []*transaction.Transaction{}
 
 	for _, tx := range block.Transactions {
+		n.Logger.Trace.Printf("Verify TX %x", tx.ID)
 		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs)
 
 		if err != nil {

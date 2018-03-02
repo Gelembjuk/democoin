@@ -11,6 +11,13 @@ datadir2 = ""
 datadir3 = ""
 
 def aftertest(testfilter):
+    global datadir1
+    global datadir2
+    global datadir3
+    
+    if datadir1 != "" or datadir2 != "" or datadir3 != "":
+        _lib.StartTestGroup("Ending After failure of the test")
+    
     if datadir1 != "":
         startnode.StopNode(datadir1,"Server 1")
     if datadir2 != "":    
@@ -19,6 +26,10 @@ def aftertest(testfilter):
         startnode.StopNode(datadir3,"Server 3")
     
 def test(testfilter):
+    global datadir1
+    global datadir2
+    global datadir3
+    
     _lib.StartTestGroup("Manage nodes list")
 
     _lib.CleanTestFolders()
@@ -55,7 +66,7 @@ def test(testfilter):
     _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
     
     # check transactions work fine between nodes
-    txid1 = transactions.Send(datadir1,address,address2,'5')
+    txid1 = transactions.Send(datadir1,address,address2,'4')
     
     txlist = transactions.GetUnapprovedTransactions(datadir1)
     
@@ -89,17 +100,16 @@ def test(testfilter):
     nodes = GetNodes(datadir3)
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 3")
     
-    txid1 = transactions.Send(datadir1,address,address3,'5') 
+    txid1 = transactions.Send(datadir1,address,address3,'4') 
     
-    time.sleep(3) # we need to give a chance to sync all
+    time.sleep(1) # we need to give a chance to sync all
     
-    txlist3 = transactions.GetUnapprovedTransactions(datadir3)
-    txlist1 = transactions.GetUnapprovedTransactions(datadir1)
     txlist2 = transactions.GetUnapprovedTransactions(datadir2)
+    txlist1 = transactions.GetUnapprovedTransactions(datadir1)
+    transactions.GetUnapprovedTransactionsEmpty(datadir3)
     
     _lib.FatalAssert(len(txlist1) == 2,"Should be 2 unapproved transactions on 1")
     _lib.FatalAssert(len(txlist2) == 2,"Should be 2 unapproved transactions on 2")
-    _lib.FatalAssert(len(txlist3) == 2,"Should be 2 unapproved transactions on 3")
     
     if txid1 not in txlist1.keys():
         _lib.Fatal("Transaction 2 is not in the list of transactions on node 1")
@@ -107,8 +117,24 @@ def test(testfilter):
     if txid1 not in txlist2.keys():
         _lib.Fatal("Transaction 2 is not in the list of transactions on node 2")
         
-    if txid1 not in txlist3.keys():
-        _lib.Fatal("Transaction 2 is not in the list of transactions on node 3")
+    # send one more TX. Block must be created    
+    txid3 = transactions.Send(datadir1,address,address2,'1')
+    
+    time.sleep(4) # wait while a block is minted and posted to other nodes 
+    transactions.GetUnapprovedTransactionsEmpty(datadir1)
+    transactions.GetUnapprovedTransactionsEmpty(datadir2)
+    transactions.GetUnapprovedTransactionsEmpty(datadir3)
+    
+    # check if a block is present on all nodes. it must be 2 block on every node
+    blockshashes = blocksbasic.GetBlocks(datadir1)
+    
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 1")
+    
+    blockshashes = blocksbasic.GetBlocks(datadir2)
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 2")
+    
+    blockshashes = blocksbasic.GetBlocks(datadir3)
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 3")
     
     startnode.StopNode(datadir1,"Server 1")
     startnode.StopNode(datadir2,"Server 2")
@@ -129,7 +155,7 @@ def GetNodes(datadir):
 
     _lib.FatalAssertSubstr(res,"Nodes:","Output should contain list of nodes")
 
-    regex = ur"  ([^:]+):(\d+)"
+    regex = ur"  ([^: ]+):(\d+)"
 
     nodes = re.findall(regex, res)
     
