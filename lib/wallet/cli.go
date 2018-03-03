@@ -236,7 +236,7 @@ func (wc *WalletCLI) commandGetBalance() error {
 		balance += tx.Amount
 	}
 
-	fmt.Printf("\nBalance - %f\n", balance)
+	fmt.Printf("Balance of '%s': %f\n", wc.Input.Address, balance)
 
 	return nil
 }

@@ -54,12 +54,23 @@ def test(testfilter):
     datadir3 = d[0]
     address3 = d[1]
     
-    startnode.StopNode(datadir1,"Server 1")
-    startnode.StopNode(datadir2,"Server 2")
-    startnode.StopNode(datadir3,"Server 3")
+    time.sleep(1)
+    nodes = managenodes.GetNodes(datadir1)
+    _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes on server 1")
+    nodes = managenodes.GetNodes(datadir2)
+    _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes on server 2")
+    nodes = managenodes.GetNodes(datadir3)
+    _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes on server 3")
     
+    # get balance 
+    
+    startnode.StopNode(datadir1,"Server 1")
     datadir1 = ""
+    
+    startnode.StopNode(datadir2,"Server 2")
     datadir2 = ""
+    
+    startnode.StopNode(datadir3,"Server 3")
     datadir3 = ""
     
     #_lib.RemoveTestFolder(datadir)

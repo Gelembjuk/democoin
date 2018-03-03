@@ -416,6 +416,17 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 		// open BC DB again
 		n.OpenBlockchain()
+		Minter.BC = n.NodeBC.BC
+
+		// final correction. while we did minting, there can be something changes
+		// some other block could be added to the blockchain in parallel process
+
+		err = Minter.FinalBlockCheck(block)
+
+		if err != nil {
+			n.Logger.Trace.Printf("Final check is not passed. Error: %s", err.Error())
+			return nil, err
+		}
 
 		// add new block to local blockchain. this will check a block again
 		// TODO we need to skip checking. no sense, we did it right

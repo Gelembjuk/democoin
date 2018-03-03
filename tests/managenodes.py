@@ -152,7 +152,7 @@ def test(testfilter):
 def GetNodes(datadir):
     _lib.StartTest("Get nodes")
     res = _lib.ExecuteNode(['shownodes','-datadir',datadir])
-
+    
     _lib.FatalAssertSubstr(res,"Nodes:","Output should contain list of nodes")
 
     regex = ur"  ([^: ]+):(\d+)"

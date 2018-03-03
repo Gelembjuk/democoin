@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/gelembjuk/democoin/lib"
 )
@@ -87,7 +86,7 @@ func GetAppInput() (AppInput, error) {
 	}
 
 	input.Port = input.Args.Port
-	input.Host = strings.Trim(input.Args.Host, " ")
+	input.Host = input.Args.Host
 
 	// read config file . command line arguments are more important than a config
 

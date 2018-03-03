@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"time"
 
@@ -212,4 +213,25 @@ func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transactio
 	}
 
 	return &newblock, nil
+}
+
+// correct a block before adding to blockchain
+// it can be that input transactions were used
+// or current block transactions were used in other block added paralelly
+// wecan continue, we can correct and we can return error here
+// TODO . Not sure we have do this work. We can build parallel chain if somethign happens on background
+func (n *NodeBlockMaker) FinalBlockCheck(b *Block) error {
+	// Blockchain DB should be opened here
+	lastHash, _, err := n.BC.GetState()
+
+	if err != nil {
+		return err
+	}
+
+	if bytes.Compare(lastHash, b.PrevBlockHash) == 0 {
+		// all is fine. nothing changed since we started minting
+		return nil
+	}
+	// TODO
+	return nil
 }
