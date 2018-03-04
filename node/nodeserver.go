@@ -63,12 +63,12 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 	if read != 4 {
 		return "", nil, "", errors.New("Wrong number of bytes received for a request")
 	}
+
 	var datalength uint32
 	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &datalength)
 
 	// TODO 3 and 4 are similar. can be new func made
 	// 3. Get length of extra data
-
 	lengthbuffer = make([]byte, 4)
 
 	read, err = conn.Read(lengthbuffer)
@@ -84,6 +84,8 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &extradatalength)
 
 	// 4. read command data by length
+	//s.Logger.Trace.Printf("Before read data %d bytes", datalength)
+
 	databuffer := make([]byte, datalength)
 
 	if datalength > 0 {
@@ -101,7 +103,7 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 	// 5. read extra data by length
 
 	authstr := ""
-
+	//s.Logger.Trace.Printf("Before read extra data %d bytes. ", extradatalength)
 	if extradatalength > 0 {
 		extradatabuffer := make([]byte, extradatalength)
 
@@ -116,7 +118,7 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 		}
 		authstr = lib.BytesToCommand(extradatabuffer)
 	}
-
+	//s.Logger.Trace.Printf("All read")
 	return command, databuffer, authstr, nil
 }
 

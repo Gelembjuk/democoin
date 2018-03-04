@@ -3,6 +3,7 @@ import re
 import _lib
 from os import listdir
 from os.path import isfile, join
+import traceback
 
 test = ""
 
@@ -46,8 +47,9 @@ for testscript in testfiles:
             success = False
         except:
             # do nothing. We catch exception only to be able to execute end function
-            e = sys.exc_info()[0]
-            print "Fail exception: ", e
+            e = sys.exc_info()[1]
+            print "Error: ",e
+            traceback.print_exc(file=sys.stdout)
             success = False
             
         if "aftertest" in methods:

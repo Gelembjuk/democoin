@@ -28,10 +28,10 @@ def RemoveTestFolder(path):
     
     shutil.rmtree(path)
 
-def CreateTestFolder():
+def CreateTestFolder(suffix = ""):
     curdir = getCurrentDir()
     
-    newfolder = 'test' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+    newfolder = 'test'+ suffix + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
     
     newfolder = curdir + '/' + newfolder
     
@@ -39,25 +39,26 @@ def CreateTestFolder():
     
     return newfolder
 
-def Execute(command):
-    if VERBOSE:
+def Execute(command, verbose = False):
+    if verbose:
         commandtext = ' '.join(command)
         print commandtext
+        sys.Exit(0)
         
     res = subprocess.check_output(command)
     
-    if VERBOSE:
+    if verbose:
         print res
     
     return res
     
-def ExecuteNode(args):
+def ExecuteNode(args,verbose=False):
     command = [NODE_BIN] + args
-    return Execute(command)
+    return Execute(command,verbose)
 
-def ExecuteWallet(args):
+def ExecuteWallet(args,verbose=False):
     command = [WALLET_BIN] + args
-    return Execute(command)
+    return Execute(command,verbose)
 
 def StartTestGroup(title):
     print "==================="+title+"======================"

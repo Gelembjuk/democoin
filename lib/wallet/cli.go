@@ -141,6 +141,9 @@ func (wc *WalletCLI) commandListAddresses() error {
 func (wc *WalletCLI) commandListAddressesExt() error {
 	addresses := wc.WalletsObj.GetAddresses()
 
+	fmt.Println("Balance for all addresses:")
+	fmt.Println()
+
 	for _, address := range addresses {
 		// the wallet has to connect to node to execute this operation
 		list, err := wc.NodeCLI.SendGetUnspent(wc.Node, address, []byte{})
@@ -155,7 +158,7 @@ func (wc *WalletCLI) commandListAddressesExt() error {
 			balance += tx.Amount
 		}
 
-		fmt.Printf("%s - %f\n", address, balance)
+		fmt.Printf("%s: %.8f\n", address, balance)
 	}
 
 	return nil
@@ -236,7 +239,7 @@ func (wc *WalletCLI) commandGetBalance() error {
 		balance += tx.Amount
 	}
 
-	fmt.Printf("Balance of '%s': %f\n", wc.Input.Address, balance)
+	fmt.Printf("Balance of '%s': %.8f\n", wc.Input.Address, balance)
 
 	return nil
 }

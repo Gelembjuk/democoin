@@ -454,9 +454,10 @@ func (c *NodeCLI) commandAddressesBalance() error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("Balance for all addresses:")
+	fmt.Println()
 	for address, balance := range result {
-		fmt.Printf("%s: %f\n", address, balance)
+		fmt.Printf("%s: %.8f\n", address, balance)
 	}
 
 	return nil
@@ -560,7 +561,7 @@ func (c *NodeCLI) commandGetBalance() error {
 		return err
 	}
 
-	fmt.Printf("Balance of '%s': %f\n", c.Input.Args.Address, balance)
+	fmt.Printf("Balance of '%s': %.8f\n", c.Input.Args.Address, balance)
 	return nil
 }
 

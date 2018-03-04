@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -273,11 +274,14 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 	totaloutput := float64(0)
 
 	for _, vout := range tx.Vout {
+		if vout.Value < lib.SmallestUnit {
+			return errors.New(fmt.Sprintf("Too small output value %f", vout.Value))
+		}
 		totaloutput += vout.Value
 	}
 
-	if totalinput != totaloutput {
-		return errors.New("Input and output values of a transaction are not same")
+	if math.Abs(totalinput-totaloutput) >= lib.SmallestUnit {
+		return errors.New(fmt.Sprintf("Input and output values of a transaction are not same: %.10f vs %.10f . Diff %.10f", totalinput, totaloutput, totalinput-totaloutput))
 	}
 
 	return nil

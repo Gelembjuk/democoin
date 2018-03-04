@@ -197,9 +197,9 @@ def MakeBlockchainWithBlocks(port):
     microamountmax = 0.01
     microamountmin = 0.0095
     
-    a1 = random.uniform(microamountmin, microamountmax)
-    a2 = random.uniform(microamountmin, microamountmax)
-    a3 = random.uniform(microamountmin, microamountmax)
+    a1 = round(random.uniform(microamountmin, microamountmax),8)
+    a2 = round(random.uniform(microamountmin, microamountmax),8)
+    a3 = round(random.uniform(microamountmin, microamountmax),8)
     txid1 = transactions.Send(datadir,address,address2,a1)
     txid2 = transactions.Send(datadir,address2,address3,a2)
     txid3 = transactions.Send(datadir,address3,address,a3)
