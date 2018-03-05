@@ -1,4 +1,5 @@
 import _lib
+import _transfers
 import re
 import time
 import startnode
@@ -29,13 +30,13 @@ def test(testfilter):
     amount1 = '1'
     amount2 = '2'
     
-    txid1 = Send(datadir,address,address2,amount1)
+    txid1 = _transfers.Send(datadir,address,address2,amount1)
     
     txlist = GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
         
-    txid2 = Send(datadir,address,address3,amount2)
+    txid2 = _transfers.Send(datadir,address,address3,amount2)
     
     txlist = GetUnapprovedTransactions(datadir)
     
@@ -53,7 +54,7 @@ def test(testfilter):
     
     _lib.StartTestGroup("Cancel transaction")
     
-    txid3 = Send(datadir,address,address2,float(amount1)+float(amount2))
+    txid3 = _transfers.Send(datadir,address,address2,float(amount1)+float(amount2))
     
     txlist = GetUnapprovedTransactions(datadir)
     
@@ -72,7 +73,7 @@ def test(testfilter):
     if txid2 not in txlist.keys():
         _lib.Fatal("Transaction 2 is not in the list of transactions")
     
-    SendTooMuch(datadir,address,address2,15)# the account should have only 10
+    _transfers.SendTooMuch(datadir,address,address2,15)# the account should have only 10
     
     # cancel all transactions
     CancelTransaction(datadir,txid1)
@@ -84,13 +85,13 @@ def test(testfilter):
     # send when node server is running
     startnode.StartNode(datadir, address, '30000')
     
-    txid1 = Send(datadir,address,address2,amount1)
+    txid1 = _transfers.Send(datadir,address,address2,amount1)
     
     txlist = GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
         
-    txid2 = Send(datadir,address,address3,amount2)
+    txid2 = _transfers.Send(datadir,address,address3,amount2)
     
     txlist = GetUnapprovedTransactions(datadir)
     
@@ -125,30 +126,6 @@ def CreateWallet(datadir):
     address = match.group(1)
     
     return address
-
-def Send(datadir,fromaddr,to,amount):
-    _lib.StartTest("Send money. From "+fromaddr+" to "+to+" amount "+str(amount))
-    
-    res = _lib.ExecuteNode(['send','-datadir',datadir,'-from',fromaddr,'-to',to,'-amount',str(amount)])
-    
-    _lib.FatalAssertSubstr(res,"Success. New transaction:","Sending of money failed. NO info about new transaction")
-    
-    # get transaction from this response 
-    match = re.match( r'Success. New transaction: (.+)', res)
-
-    if not match:
-        _lib.Fatal("Transaction ID can not be found in "+res)
-        
-    txid = match.group(1)
-
-    return txid
-
-def SendTooMuch(datadir,fromaddr,to,amount):
-    _lib.StartTest("Send too much money. From "+fromaddr+" to "+to+" amount "+str(amount))
-    
-    res = _lib.ExecuteNode(['send','-datadir',datadir,'-from',fromaddr,'-to',to,'-amount',str(amount)])
-    
-    _lib.FatalAssertSubstr(res,"No anough funds","Sending of money didn't gail as expected")
     
 
 def GetUnapprovedTransactionsEmpty(datadir):

@@ -1,4 +1,5 @@
 import _lib
+import _transfers
 import re
 import time
 import startnode
@@ -66,7 +67,7 @@ def test(testfilter):
     _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
     
     # check transactions work fine between nodes
-    txid1 = transactions.Send(datadir1,address,address2,'4')
+    txid1 = _transfers.Send(datadir1,address,address2,'4')
     
     txlist = transactions.GetUnapprovedTransactions(datadir1)
     
@@ -100,7 +101,7 @@ def test(testfilter):
     nodes = GetNodes(datadir3)
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 3")
     
-    txid1 = transactions.Send(datadir1,address,address3,'4') 
+    txid1 = _transfers.Send(datadir1,address,address3,'4') 
     
     time.sleep(1) # we need to give a chance to sync all
     
@@ -118,7 +119,7 @@ def test(testfilter):
         _lib.Fatal("Transaction 2 is not in the list of transactions on node 2")
         
     # send one more TX. Block must be created    
-    txid3 = transactions.Send(datadir1,address,address2,'1')
+    txid3 = _transfers.Send(datadir1,address,address2,'1')
     
     time.sleep(4) # wait while a block is minted and posted to other nodes 
     transactions.GetUnapprovedTransactionsEmpty(datadir1)

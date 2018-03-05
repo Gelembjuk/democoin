@@ -1,11 +1,12 @@
 import _lib
+import _transfers
 import re
 import time
 import startnode
-import transactions
 import blocksbasic
 import managenodes
 import initblockchain
+import transactions
 import random
 
 datadir1 = ""
@@ -91,7 +92,6 @@ def StartNodeAndImport(port, importport, title):
     #check nodes. must be minimum 1 and import port must be present 
     nodes = managenodes.GetNodes(datadir)
     _lib.FatalAssert(len(nodes) > 0,"Should be minimum 1 nodes in output")
-    print nodes
     
     return [datadir, address]
 
@@ -106,7 +106,7 @@ def MakeBlockchainWithBlocks(port):
     address2 = transactions.CreateWallet(datadir)
     address3 = transactions.CreateWallet(datadir)
 
-    _lib.StartTestGroup("Do transactions")
+    _lib.StartTestGroup("Do _transfers")
 
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
@@ -114,22 +114,22 @@ def MakeBlockchainWithBlocks(port):
     amount2 = '2'
     amount3 = '3'
     
-    txid1 = transactions.Send(datadir,address,address2,amount1)
+    txid1 = _transfers.Send(datadir,address,address2,amount1)
     txlist = transactions.GetUnapprovedTransactions(datadir)
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
     
-    txid2 = transactions.Send(datadir,address,address3,amount2)
+    txid2 = _transfers.Send(datadir,address,address3,amount2)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
-    txid3 = transactions.Send(datadir,address,address3,amount3)
+    txid3 = _transfers.Send(datadir,address,address3,amount3)
     
     # node needs some time to make a block, so transaction still will be in list of unapproved
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
     
-    txid4 = transactions.Send(datadir,address3,address2,amount1)
+    txid4 = _transfers.Send(datadir,address3,address2,amount1)
     
     # node needs some time to make a block, so transaction still will be in list of unapproved
     txlist = transactions.GetUnapprovedTransactions(datadir)
@@ -168,9 +168,9 @@ def MakeBlockchainWithBlocks(port):
     
     microamount = 0.01
     
-    txid1 = transactions.Send(datadir,address,address2,microamount)
-    txid2 = transactions.Send(datadir,address2,address3,microamount)
-    txid3 = transactions.Send(datadir,address3,address,microamount)
+    txid1 = _transfers.Send(datadir,address,address2,microamount)
+    txid2 = _transfers.Send(datadir,address2,address3,microamount)
+    txid3 = _transfers.Send(datadir,address3,address,microamount)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
@@ -200,9 +200,9 @@ def MakeBlockchainWithBlocks(port):
     a1 = round(random.uniform(microamountmin, microamountmax),8)
     a2 = round(random.uniform(microamountmin, microamountmax),8)
     a3 = round(random.uniform(microamountmin, microamountmax),8)
-    txid1 = transactions.Send(datadir,address,address2,a1)
-    txid2 = transactions.Send(datadir,address2,address3,a2)
-    txid3 = transactions.Send(datadir,address3,address,a3)
+    txid1 = _transfers.Send(datadir,address,address2,a1)
+    txid2 = _transfers.Send(datadir,address2,address3,a2)
+    txid3 = _transfers.Send(datadir,address3,address,a3)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     

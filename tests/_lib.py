@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import random, string
 import re
+from shutil import copyfile
 
 NODE_BIN = '../node/node'
 WALLET_BIN = '../wallet/wallet'
@@ -78,6 +79,15 @@ def SaveConfigFile(datadir, contents):
     
 def Exit():
     raise NameError('Test failed')
+
+def CopyTestData(todir,testset):
+    srcdir = getCurrentDir()+"/datafortests/"+testset+"/"
+    
+    copyfile(srcdir+"blockchain.t", todir + "/blockchain.db")
+    copyfile(srcdir+"wallet.t", todir + "/wallet.dat")
+    
+    if os.path.isfile(srcdir+"config.t"):
+        copyfile(srcdir+"config.t", todir + "/config.json")
 #=============================================================================================================
 # Assert functions
 def Fatal(comment):

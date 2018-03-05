@@ -361,7 +361,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	n.Logger.Trace.Println("BC Opened")
 	defer n.CloseBlockchain()
 
 	n.Logger.Trace.Println("Create block maker")

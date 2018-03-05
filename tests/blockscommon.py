@@ -1,4 +1,5 @@
 import _lib
+import _transfers
 import re
 import time
 import startnode
@@ -33,19 +34,19 @@ def test(testfilter):
     amount2 = '2'
     amount3 = '3'
     
-    txid1 = transactions.Send(datadir,address,address2,amount1)
+    txid1 = _transfers.Send(datadir,address,address2,amount1)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
         
-    txid2 = transactions.Send(datadir,address,address3,amount2)
+    txid2 = _transfers.Send(datadir,address,address3,amount2)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
     
-    txid3 = transactions.Send(datadir,address,address3,amount3)
+    txid3 = _transfers.Send(datadir,address,address3,amount3)
     
     # node needs some time to make a block, so transaction still will be in list of unapproved
     txlist = transactions.GetUnapprovedTransactions(datadir)

@@ -4,6 +4,8 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strconv"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
@@ -146,6 +148,11 @@ func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) e
 // This function should find good input transactions for this amount
 // Including inputs from unapproved transactions if no good approved transactions yet
 func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amount float64) (*transaction.Transaction, [][]byte, error) {
+	amount, err := strconv.ParseFloat(fmt.Sprintf("%.8f", amount), 64)
+
+	if err != nil {
+		return nil, nil, err
+	}
 	// get from pending transactions. find outputs used by this pubkey
 	pendinginputs, pendingoutputs, err := n.UnapprovedTXs.GetPreparedBy(PubKey)
 	n.Logger.Trace.Printf("Pending transactions state: %d- inputs, %d - unspent outputs", len(pendinginputs), len(pendingoutputs))
@@ -194,7 +201,7 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 	from, _ := lib.PubKeyToAddres(PubKey)
 	outputs = append(outputs, *transaction.NewTXOutput(amount, to))
 
-	if totalamount > amount {
+	if totalamount > amount && totalamount-amount > lib.SmallestUnit {
 		outputs = append(outputs, *transaction.NewTXOutput(totalamount-amount, from)) // a change
 	}
 

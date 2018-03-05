@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib"
@@ -100,7 +101,15 @@ func (bc *Blockchain) Init(datadir string) error {
 	}
 
 	var tip []byte
-	db, err := bolt.Open(dbFile, 0600, nil)
+
+	err := bc.lockDB(datadir)
+
+	if err != nil {
+		return err
+	}
+
+	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: 1 * time.Second})
+
 	if err != nil {
 		bc.Logger.Trace.Println("Error opening BC " + err.Error())
 		return err
@@ -123,11 +132,55 @@ func (bc *Blockchain) Init(datadir string) error {
 	return nil
 }
 
+// Creates a lock file for DB access. We need this to controll parallel access to the DB
+func (bc *Blockchain) lockDB(datadir string) error {
+	lockfile := datadir + dbFileLock
+
+	i := 0
+
+	for bc.dbExists(lockfile) != false {
+		time.Sleep(1 * time.Second)
+		i++
+
+		if i > 100 {
+			return errors.New("Can not open DB. Lock failed after many attempts")
+		}
+	}
+
+	file, err := os.Create(lockfile)
+
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	_, err = file.WriteString("1")
+
+	if err != nil {
+		return err
+	}
+
+	file.Sync() // flush to disk
+
+	return nil
+}
+
+// Removes DB lock file
+func (bc *Blockchain) unLockDB() {
+	lockfile := bc.datadir + dbFileLock
+
+	if bc.dbExists(lockfile) != false {
+		os.Remove(lockfile)
+	}
+}
+
 // Closes blockchain DB. After this call db is not accesible. It is needed to call Init to open it again
 // This frees access to the DB by other processes
 func (bc *Blockchain) Close() {
 	bc.db.Close()
 	bc.db = nil
+	bc.unLockDB()
 }
 
 /*

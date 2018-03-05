@@ -154,8 +154,6 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	defer requestobj.Node.CloseBlockchain() // blockchain is opened while this function is runnning
-
 	//s.Logger.Trace.Printf("Nodes Network State: %d , %s", len(requestobj.Node.NodeNet.Nodes), requestobj.Node.NodeNet.Nodes)
 
 	var rerr error
@@ -211,6 +209,8 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	default:
 		rerr = errors.New("Unknown command!")
 	}
+
+	requestobj.Node.CloseBlockchain()
 
 	if rerr != nil {
 		s.Logger.Error.Println("Network Command Handle Error: ", rerr.Error())
@@ -274,7 +274,10 @@ func (s *NodeServer) StartServer() error {
 	s.Node.SendVersionToNodes([]lib.NodeAddr{})
 
 	s.Logger.Trace.Println("Start block bilding routine")
-	s.BlockBilderChan = make(chan []byte)
+	s.BlockBilderChan = make(chan []byte, 100)
+	// we set buffer to 100 transactions.
+	// we don't expect more 100 TX will be received while building a block. if yes, we will skip
+	// adding a signal. this will not be a problem
 
 	go s.BlockBuilder()
 
@@ -323,7 +326,12 @@ func (s *NodeServer) StartServer() error {
 * And try to make a block if there are enough transactions
  */
 func (s *NodeServer) TryToMakeNewBlock(tx []byte) {
-	s.BlockBilderChan <- tx // send signal to block building thread to try to make new block now
+	// don't block sending. buffer size is 100
+	// TX will be skipped if a buffer is full
+	select {
+	case s.BlockBilderChan <- tx: // send signal to block building thread to try to make new block now
+	default:
+	}
 }
 
 /*

@@ -201,6 +201,10 @@ func (s *NodeServerRequest) handleTxRequest() error {
 	}
 	address, _ := lib.PubKeyToAddres(payload.PubKey)
 	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", result.TX.ID, address)
+
+	for i, ds := range DataToSign {
+		s.Logger.Trace.Printf("Data to sign %x for %x\n", result.TX.Vin[i].Txid, ds)
+	}
 	return nil
 }
 

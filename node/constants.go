@@ -19,6 +19,7 @@ const maxNumberTransactionInBlock = 100
 
 // File names
 const dbFile = "blockchain.db"
+const dbFileLock = "blockchain.lock"
 const pidFileName = "server.pid"
 
 // DB settings.

@@ -18,9 +18,10 @@ curdir = _lib.getCurrentDir()
 
 testfiles = [f for f in listdir(curdir) if isfile(join(curdir, f)) and re.search(r'^[a-z].+\.py$',f)]
 
+tests = []
+
 for testscript in testfiles:
     if test == "all" or test+'.py' == testscript:
-        
         m = re.search(r'^([a-z].+)\.py$',testscript)
         
         if not m:
@@ -28,8 +29,15 @@ for testscript in testfiles:
         
         testname = m.group(1)
         
+        tests.append(testname)
+
+num = 1
+failed = []
+
+for testname in tests:
+    if test == "all" or test == testname:
         if test == "all":
-            print "######## ",testname
+            print "######## ",testname, str(num)+" of "+str(len(tests))
         
         test_module = __import__(testname)
         
@@ -57,3 +65,5 @@ for testscript in testfiles:
             
         if not success:
             break
+        
+        num = num + 1
