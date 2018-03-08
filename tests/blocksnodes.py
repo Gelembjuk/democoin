@@ -1,5 +1,6 @@
 import _lib
 import _transfers
+import _blocks
 import re
 import time
 import startnode
@@ -160,7 +161,7 @@ def MakeBlockchainWithBlocks(port):
     
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = blocksbasic.GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain")
     
@@ -188,7 +189,7 @@ def MakeBlockchainWithBlocks(port):
     blockchash = blocksbasic.MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = blocksbasic.GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 3,"Should be 3 blocks in blockchain")
     
@@ -220,7 +221,7 @@ def MakeBlockchainWithBlocks(port):
     blockchash = blocksbasic.MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = blocksbasic.GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain")
     

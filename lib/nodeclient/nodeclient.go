@@ -51,6 +51,18 @@ type ComGetData struct {
 	ID       []byte
 }
 
+// Wallet Balance response
+type ComWalletBalance struct {
+	Total    float64
+	Approved float64
+	Pending  float64
+}
+
+// Request for a wallet balance
+type ComGetWalletBalance struct {
+	Address string
+}
+
 // New Transaction command. Is used by lite wallets
 type ComNewTransaction struct {
 	Address string
@@ -373,6 +385,24 @@ func (c *NodeClient) SendGetUnspent(addr lib.NodeAddr, address string, chaintip 
 
 	if err != nil {
 		return ComUnspentTransactions{}, err
+	}
+
+	return datapayload, nil
+}
+
+// Request for list of unspent transactions outputs
+// It can be used by wallet to see a state of balance
+func (c *NodeClient) SendGetBalance(addr lib.NodeAddr, address string) (ComWalletBalance, error) {
+	data := ComGetWalletBalance{address}
+
+	request, err := c.BuildCommandData("getbalance", &data)
+
+	datapayload := ComWalletBalance{}
+
+	err = c.SendDataWaitResponse(addr, request, &datapayload)
+
+	if err != nil {
+		return ComWalletBalance{}, err
 	}
 
 	return datapayload, nil

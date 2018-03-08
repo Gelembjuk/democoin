@@ -9,6 +9,9 @@ test = ""
 
 if len(sys.argv) > 1 :
     test = sys.argv[1]
+    m = re.search(r'^([a-z].+)\.py$',test)
+    if m:
+        test = m.group(1)
 
 if test == "":
     test = "all"
@@ -67,3 +70,7 @@ for testname in tests:
             break
         
         num = num + 1
+
+if test == "all":
+    passed = len(tests) - len(failed)
+    print str(passed)+" of "+str(len(tests))+" tests passed"

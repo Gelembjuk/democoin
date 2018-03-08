@@ -1,5 +1,6 @@
 import _lib
 import _transfers
+import _blocks
 import re
 import time
 import startnode
@@ -127,14 +128,14 @@ def test(testfilter):
     transactions.GetUnapprovedTransactionsEmpty(datadir3)
     
     # check if a block is present on all nodes. it must be 2 block on every node
-    blockshashes = blocksbasic.GetBlocks(datadir1)
+    blockshashes = _blocks.GetBlocks(datadir1)
     
     _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 1")
     
-    blockshashes = blocksbasic.GetBlocks(datadir2)
+    blockshashes = _blocks.GetBlocks(datadir2)
     _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 2")
     
-    blockshashes = blocksbasic.GetBlocks(datadir3)
+    blockshashes = _blocks.GetBlocks(datadir3)
     _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 3")
     
     startnode.StopNode(datadir1,"Server 1")

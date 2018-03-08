@@ -20,16 +20,14 @@ type NodeTransactions struct {
 	DataDir       string
 }
 
-/*
-* Calculates balance of address. Uses DB of unspent trasaction outputs
-* TODO must check lso cache of unapproved to skip return of transactions added as input
-* to unapproved
- */
-func (n *NodeTransactions) GetAddressesBalance(addresses []string) (map[string]float64, error) {
-	result := map[string]float64{}
+// Calculates balance of address. Uses DB of unspent trasaction outputs
+// TODO must check lso cache of unapproved to skip return of transactions added as input
+// to unapproved
+func (n *NodeTransactions) GetAddressesBalance(addresses []string) (map[string]wallet.WalletBalance, error) {
+	result := map[string]wallet.WalletBalance{}
 
 	for _, address := range addresses {
-		balance, err := n.UnspentTXs.GetAddressBalance(address)
+		balance, err := n.GetAddressBalance(address)
 
 		if err != nil {
 			return result, err
@@ -38,6 +36,65 @@ func (n *NodeTransactions) GetAddressesBalance(addresses []string) (map[string]f
 	}
 
 	return result, nil
+}
+
+// Calculates balance of address. Uses DB of unspent trasaction outputs
+// and cache of pending transactions
+func (n *NodeTransactions) GetAddressBalance(address string) (wallet.WalletBalance, error) {
+	balance := wallet.WalletBalance{}
+
+	result, err := n.UnspentTXs.GetAddressBalance(address)
+
+	if err != nil {
+		return balance, err
+	}
+
+	balance.Approved = result
+
+	// get pending
+	p, err := n.GetAddressPendingBalance(address)
+
+	if err != nil {
+		return balance, err
+	}
+	balance.Pending = p
+
+	balance.Total = balance.Approved + balance.Pending
+
+	return balance, nil
+}
+
+// Calculates pending balance of address.
+func (n *NodeTransactions) GetAddressPendingBalance(address string) (float64, error) {
+	PubKeyHash, _ := lib.AddresToPubKeyHash(address)
+
+	// inputs this is what a wallet spent
+	// outputs this is what a wallet receives
+	_, outputs, inputs, err := n.UnapprovedTXs.GetPreparedBy(PubKeyHash)
+
+	if err != nil {
+		return 0, err
+	}
+
+	pendingbalance := float64(0)
+
+	for _, o := range outputs {
+		// this is amount sent to this wallet and this
+		// list contains only what was not spent in other prepared TX
+		pendingbalance += o.Value
+	}
+
+	// we need to know values for inputs. this are inputs based on TXs that are in unapproved
+	for _, i := range inputs {
+		v, err := n.UnspentTXs.GetInputValue(i)
+
+		if err != nil {
+			return 0, err
+		}
+		pendingbalance -= v
+	}
+
+	return pendingbalance, nil
 }
 
 /*
@@ -113,6 +170,7 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 	//n.Logger.Trace.Println(tx)
 	//n.Logger.Trace.Println(inputTXs)
 	// do final check against inputs
+	transaction.Logger = n.Logger
 	err = tx.Verify(inputTXs)
 
 	if err != nil {
@@ -153,8 +211,9 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 	if err != nil {
 		return nil, nil, err
 	}
+	PubKeyHash, _ := lib.HashPubKey(PubKey)
 	// get from pending transactions. find outputs used by this pubkey
-	pendinginputs, pendingoutputs, err := n.UnapprovedTXs.GetPreparedBy(PubKey)
+	pendinginputs, pendingoutputs, _, err := n.UnapprovedTXs.GetPreparedBy(PubKeyHash)
 	n.Logger.Trace.Printf("Pending transactions state: %d- inputs, %d - unspent outputs", len(pendinginputs), len(pendingoutputs))
 
 	inputs, prevTXs, totalamount, err := n.UnspentTXs.GetNewTransactionInputs(PubKey, to, amount, pendinginputs)
@@ -206,7 +265,9 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 	}
 
 	tx := transaction.Transaction{nil, inputs, outputs, 0}
-
+	n.Logger.Trace.Println("Prepare sign data")
+	n.Logger.Trace.Println(tx)
+	n.Logger.Trace.Println(prevTXs)
 	signdata, err := tx.PrepareSignData(prevTXs)
 
 	if err != nil {

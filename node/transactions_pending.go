@@ -130,10 +130,11 @@ func (u *UnApprovedTransactions) CheckInputsWereBefore(
 
 // Returns pending transations info prepared by address
 // Return contains:
-// List of all inputs used by this PubKey
+// List of all inputs used by this PubKeyHash
 // List of Outputs that were not yet used in any input returns in the first list
-func (u *UnApprovedTransactions) GetPreparedBy(PubKey []byte) ([]transaction.TXInput, []*transaction.TXOutputIndependent, error) {
-	PubKeyHash, _ := lib.HashPubKey(PubKey)
+// List of inputs based on non-approved outputs (sub list of the first list)
+func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction.TXInput,
+	[]*transaction.TXOutputIndependent, []transaction.TXInput, error) {
 
 	inputs := []transaction.TXInput{}
 	outputs := []*transaction.TXOutputIndependent{}
@@ -172,10 +173,12 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKey []byte) ([]transaction.TXI
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-
+	// outputs not yet used in other pending transactions
 	realoutputs := []*transaction.TXOutputIndependent{}
+	// inputs based on approved transactions
+	pendinginputs := []transaction.TXInput{}
 
 	for _, vout := range outputs {
 		used := false
@@ -190,8 +193,37 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKey []byte) ([]transaction.TXI
 			realoutputs = append(realoutputs, vout)
 		}
 	}
+	for _, vin := range inputs {
+		pendingout := false
 
-	return inputs, realoutputs, nil
+		for _, vout := range outputs {
+			if bytes.Compare(vin.Txid, vout.TXID) == 0 && vin.Vout == vout.OIndex {
+				// this input uses pending output
+				pendingout = true
+				break
+			}
+		}
+
+		if !pendingout {
+			pendinginputs = append(pendinginputs, vin)
+		}
+	}
+	return inputs, realoutputs, pendinginputs, nil
+}
+
+// Get input value for TX in the cache
+func (u *UnApprovedTransactions) GetInputValue(input transaction.TXInput) (float64, error) {
+	tx, err := u.GetIfExists(input.Txid)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if tx == nil {
+		return 0, errors.New("TX not found in cache of unapproved")
+	}
+
+	return tx.Vout[input.Vout].Value, nil
 }
 
 // Check if transaction exists in a cache of unapproved

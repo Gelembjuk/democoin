@@ -183,6 +183,9 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	case "gethistory":
 		rerr = requestobj.handleGetHistory()
 
+	case "getbalance":
+		rerr = requestobj.handleGetBalance()
+
 	case "getfblocks":
 		rerr = requestobj.handleGetFirstBlocks()
 

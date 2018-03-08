@@ -1,5 +1,6 @@
 import _lib
 import _transfers
+import _blocks
 import re
 import time
 import startnode
@@ -84,7 +85,7 @@ def test(testfilter):
     
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain")
     
@@ -116,7 +117,7 @@ def test(testfilter):
     blockchash = MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 3,"Should be 3 blocks in blockchain")
     
@@ -152,7 +153,7 @@ def test(testfilter):
     blockchash = MintBlock(datadir,address)
     transactions.GetUnapprovedTransactionsEmpty(datadir)
     
-    blockshashes = GetBlocks(datadir)
+    blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain")
     
@@ -246,13 +247,3 @@ def PrepareBlockchain(datadir,port):
     
     return [address,PID]
 
-def GetBlocks(datadir):
-    _lib.StartTest("Load blocks chain")
-    res = _lib.ExecuteNode(['printchain','-datadir',datadir, '-view', "short"])
-    _lib.FatalAssertSubstr(res,"Hash: ","Blockchain display returned wrong data or no any blocks")
-    
-    regex = ur"Hash: ([a-z0-9A-Z]+)"
-
-    blocks = re.findall(regex, res)
-    
-    return blocks

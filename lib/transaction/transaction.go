@@ -20,6 +20,8 @@ import (
 	"github.com/gelembjuk/democoin/lib"
 )
 
+var Logger *lib.LoggerMan
+
 // Transaction represents a Bitcoin transaction
 type Transaction struct {
 	ID   []byte
@@ -81,6 +83,11 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
 		dataToSign := fmt.Sprintf("%x\n", txCopy)
+
+		if Logger != nil {
+			Logger.Trace.Println("Data to sign created for %s", txCopy)
+			Logger.Trace.Println(dataToSign)
+		}
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
 		if err != nil {
@@ -265,7 +272,7 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 
 		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
-			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . Data to verify %x, full TX %s", vin.Txid, dataToVerify, prevTx))
+			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . TX as input %s. Data to verify %x, full TX %s", vin.Txid, txCopy, dataToVerify, prevTx))
 		}
 		txCopy.Vin[inID].PubKey = nil
 	}

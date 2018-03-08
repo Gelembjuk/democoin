@@ -87,6 +87,38 @@ func (u UnspentTransactions) GetAddressBalance(address string) (float64, error) 
 	return balance, nil
 }
 
+// CGet input value. Input is unspent TX output
+func (u UnspentTransactions) GetInputValue(input transaction.TXInput) (float64, error) {
+	value := float64(0)
+
+	err := u.Blockchain.db.View(func(tx *bolt.Tx) error {
+		b := u.getBucket(tx)
+
+		outsBytes := b.Get(input.Txid)
+
+		if outsBytes == nil {
+			return errors.New("Input TX is not found in unspent outputs")
+		}
+		outs := u.DeserializeOutputs(outsBytes)
+
+		for _, o := range outs {
+			if o.OIndex == input.Vout {
+				value = o.Value
+				break
+			}
+		}
+		if value > 0 {
+			return nil
+		}
+		return errors.New("Output index is not found in unspent outputs")
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return value, nil
+}
+
 // Choose inputs for new transaction
 func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount float64,
 	pendinguse []transaction.TXInput) (float64, []transaction.TXOutputIndependent, error) {

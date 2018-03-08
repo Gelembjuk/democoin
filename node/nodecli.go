@@ -457,7 +457,7 @@ func (c *NodeCLI) commandAddressesBalance() error {
 	fmt.Println("Balance for all addresses:")
 	fmt.Println()
 	for address, balance := range result {
-		fmt.Printf("%s: %.8f\n", address, balance)
+		fmt.Printf("%s: %.8f (Approved - %.8f, Pending - %.8f)\n", address, balance.Total, balance.Approved, balance.Pending)
 	}
 
 	return nil
@@ -485,7 +485,7 @@ func (c *NodeCLI) commandAddressHistory() error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("History of transactions:")
 	for _, rec := range result {
 		if rec.IOType {
 			fmt.Printf("%f\t In from\t%s\n", rec.Value, rec.Address)
@@ -555,13 +555,15 @@ func (c *NodeCLI) commandGetBalance() error {
 	}
 	defer c.Node.CloseBlockchain()
 
-	balance, err := c.Node.NodeTX.UnspentTXs.GetAddressBalance(c.Input.Args.Address)
+	balance, err := c.Node.NodeTX.GetAddressBalance(c.Input.Args.Address)
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Balance of '%s': %.8f\n", c.Input.Args.Address, balance)
+	fmt.Printf("Balance of '%s': \nTotal - %.8f\n", c.Input.Args.Address, balance.Total)
+	fmt.Printf("Approved - %.8f\n", balance.Approved)
+	fmt.Printf("Pending - %.8f\n", balance.Pending)
 	return nil
 }
 

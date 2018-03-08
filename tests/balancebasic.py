@@ -1,10 +1,10 @@
 import _lib
 import _wallet
 import _transfers
+import _blocks
 import re
 import time
 import blocksnodes
-import blocksbasic
 import startnode
 
 datadir = ""
@@ -72,7 +72,7 @@ def test(testfilter):
     waddress2_2 = _wallet.CreateWallet(walletdatadir2);
     
     #send some funds to all that wallets
-    amounttosend = "%.8f" % round(bal1/5,8)
+    amounttosend = "%.8f" % round(bal1[0]/5,8)
     
     _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
     _transfers.Send(datadir,address1, waddress1_2 ,amounttosend)
@@ -80,17 +80,15 @@ def test(testfilter):
     
     # we control how blocks are created. here we wait on a block started and then send another 3 TX
     # we will get 2 more blocks here
-    time.sleep(4)
+    time.sleep(1)
     
     _transfers.Send(datadir,address1, waddress2_2 ,amounttosend)
-    amounttosend2 = "%.8f" % round(bal1_2/5,8)
+    amounttosend2 = "%.8f" % round(bal1_2[0]/5,8)
     _transfers.Send(datadir,address1_2, waddress1_1 ,amounttosend2)
     _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
     
     # wait to complete blocks 
-    time.sleep(3)
-    
-    blocks = blocksbasic.GetBlocks(datadir)
+    blocks = _blocks.WaitBlocks(datadir,6)
     
     _lib.FatalAssert(len(blocks) == 6, "Expected 6 blocks")
     
@@ -100,10 +98,10 @@ def test(testfilter):
     am3 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_1, "localhost", nodeport)
     am4 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_2, "localhost", nodeport)
     
-    _lib.FatalAssert(am1 == round(float(amounttosend) + float(amounttosend2),8), "Expected balance is different for wallet 1_1")
-    _lib.FatalAssert(am2 == round(float(amounttosend) + float(amounttosend2),8), "Expected balance is different for wallet 1_2")
-    _lib.FatalAssert(am3 == float(amounttosend), "Expected balance is different for wallet 2_1")
-    _lib.FatalAssert(am4 == float(amounttosend), "Expected balance is different for wallet 2_2")
+    _lib.FatalAssert(am1[1] == round(float(amounttosend) + float(amounttosend2),8), "Expected balance is different for wallet 1_1")
+    _lib.FatalAssert(am2[1] == round(float(amounttosend) + float(amounttosend2),8), "Expected balance is different for wallet 1_2")
+    _lib.FatalAssert(am3[1] == float(amounttosend), "Expected balance is different for wallet 2_1")
+    _lib.FatalAssert(am4[1] == float(amounttosend), "Expected balance is different for wallet 2_2")
     
     #get group blances on a wallet loc
     balances = _transfers.GetGroupBalance(datadir)
@@ -112,10 +110,10 @@ def test(testfilter):
     balances1 = _wallet.GetGroupBalanceWallet(walletdatadir1,"localhost", nodeport)
     balances2 = _wallet.GetGroupBalanceWallet(walletdatadir2,"localhost", nodeport)
     
-    _lib.FatalAssert(am1 == balances1[waddress1_1], "Expected balance is different from group listing for 1_1")
-    _lib.FatalAssert(am2 == balances1[waddress1_2], "Expected balance is different from group listing for 1_2")
-    _lib.FatalAssert(am3 == balances2[waddress2_1], "Expected balance is different from group listing for 2_1")
-    _lib.FatalAssert(am4 == balances2[waddress2_2], "Expected balance is different from group listing for 2_2")
+    _lib.FatalAssert(am1[1] == balances1[waddress1_1][1], "Expected balance is different from group listing for 1_1")
+    _lib.FatalAssert(am2[1] == balances1[waddress1_2][1], "Expected balance is different from group listing for 1_2")
+    _lib.FatalAssert(am3[1] == balances2[waddress2_1][1], "Expected balance is different from group listing for 2_1")
+    _lib.FatalAssert(am4[1] == balances2[waddress2_2][1], "Expected balance is different from group listing for 2_2")
     
     startnode.StopNode(datadir)
     datadir = ""

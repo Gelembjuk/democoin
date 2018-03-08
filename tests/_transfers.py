@@ -7,32 +7,53 @@ def GetBalance(datadir, address):
     _lib.FatalAssertSubstr(res,"Balance of","Balance info is not found")
     
     # get balance from this response 
-    match = re.match( r'Balance of \'(.+)\': ([0-9.]+)', res)
+    match = re.search( r'Balance of \'([^\']+)\':', res)
 
     if not match:
-        _lib.Fatal("Balance can not be found in "+res)
+        _lib.Fatal("Address can not be found in "+res)
     
     addr = match.group(1)
     
     _lib.FatalAssert(addr == address, "Address in a response is not same as requested. "+res)
     
-    balance = match.group(2)
+    balance = [0,0,0];
     
-    return round(float(balance),8)
+    match = re.search( r'Approved\s+-\s+([0-9.]+)', res)
+
+    if not match:
+        _lib.Fatal("Approved Balance can not be found in "+res)
+    
+    balance[1] = round(float(match.group(1)),8)
+    
+    match = re.search( r'Total\s+-\s+([0-9.]+)', res)
+
+    if not match:
+        _lib.Fatal("Total Balance can not be found in "+res)
+    
+    balance[0] = round(float(match.group(1)),8)
+    
+    match = re.search( r'Pending\s+-\s+([0-9.-]+)', res)
+
+    if not match:
+        _lib.Fatal("Pending Balance can not be found in "+res)
+    
+    balance[2] = round(float(match.group(1)),8)
+    
+    return balance
 
 def GetGroupBalance(datadir):
     _lib.StartTest("Request group balance for addresses on a node")
     res = _lib.ExecuteNode(['getbalances','-datadir',datadir])
+    
     _lib.FatalAssertSubstr(res,"Balance for all addresses:","Balance result not printed")
     
-    regex = ur"([a-z0-9A-Z]+): ([0-9.]+)"
+    regex = ur"([a-z0-9A-Z]+): ([0-9.]+) .Approved - ([0-9.]+), Pending - ([0-9.]+)"
 
     balancesres = re.findall(regex, res)
-    
     balances = {}
     
     for r in balancesres:
-        balances[r[0]] = round(float(r[1]),8)
+        balances[r[0]] = [round(float(r[1]),8),round(float(r[2]),8),round(float(r[3]),8)]
     
     return balances
 

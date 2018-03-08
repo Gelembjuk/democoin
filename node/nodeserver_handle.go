@@ -86,10 +86,7 @@ func (s *NodeServerRequest) handleGetUnspent() error {
 	return nil
 }
 
-/*
-* Find and return  history of transactions for wallet address
-*
- */
+// Find and return  history of transactions for wallet address
 func (s *NodeServerRequest) handleGetHistory() error {
 	s.HasResponse = true
 
@@ -129,6 +126,39 @@ func (s *NodeServerRequest) handleGetHistory() error {
 		return err
 	}
 	s.Logger.Trace.Printf("Return %d history records for %s\n", len(result), payload.Address)
+	return nil
+}
+
+// Balance for address. Complex balance
+func (s *NodeServerRequest) handleGetBalance() error {
+	s.HasResponse = true
+
+	var payload nodeclient.ComGetWalletBalance
+
+	err := s.parseRequestData(&payload)
+
+	if err != nil {
+		return err
+	}
+
+	balance := nodeclient.ComWalletBalance{}
+
+	balancen, err := s.Node.NodeTX.GetAddressBalance(payload.Address)
+
+	if err != nil {
+		return err
+	}
+	// we copy with this way because the structure WalletBalance in not known on nodeclient
+	balance.Total = balancen.Total
+	balance.Approved = balancen.Approved
+	balance.Pending = balancen.Pending
+
+	s.Response, err = lib.GobEncode(balance)
+
+	if err != nil {
+		return err
+	}
+	s.Logger.Trace.Printf("Return balance for %s. %.8f, %.8f, %.8f", payload.Address, balance.Total, balance.Approved, balance.Pending)
 	return nil
 }
 

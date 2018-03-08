@@ -16,6 +16,12 @@ type Wallet struct {
 	PublicKey  []byte
 }
 
+type WalletBalance struct {
+	Total    float64
+	Approved float64
+	Pending  float64
+}
+
 // MakeWallet creates Wallet. It generates new keys pair and assign to the object
 func (w *Wallet) MakeWallet() {
 	private, public := w.newKeyPair()

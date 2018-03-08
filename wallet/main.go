@@ -21,7 +21,13 @@ func main() {
 		os.Exit(0)
 	}
 	if checkConfigUpdateNeeded(input) {
-		updateConfig(input.DataDir, input)
+		err := updateConfig(input.DataDir, input)
+		if err != nil {
+			fmt.Printf("Error: %s", err.Error())
+		} else {
+			fmt.Println("Config updated")
+		}
+
 		os.Exit(0)
 	}
 

@@ -128,6 +128,8 @@ func (wc *WalletCLI) commandCreatewallet() error {
 
 // List addresses (wallets) stored in the wallets file
 func (wc *WalletCLI) commandListAddresses() error {
+	fmt.Println("Wallets (addresses):")
+
 	addresses := wc.WalletsObj.GetAddresses()
 
 	for _, address := range addresses {
@@ -145,20 +147,13 @@ func (wc *WalletCLI) commandListAddressesExt() error {
 	fmt.Println()
 
 	for _, address := range addresses {
-		// the wallet has to connect to node to execute this operation
-		list, err := wc.NodeCLI.SendGetUnspent(wc.Node, address, []byte{})
+		balance, err := wc.NodeCLI.SendGetBalance(wc.Node, address)
 
 		if err != nil {
 			return err
 		}
 
-		balance := float64(0)
-
-		for _, tx := range list.Transactions {
-			balance += tx.Amount
-		}
-
-		fmt.Printf("%s: %.8f\n", address, balance)
+		fmt.Printf("%s: %.8f (Approved - %.8f, Pending - %.8f)\n", address, balance.Total, balance.Approved, balance.Pending)
 	}
 
 	return nil
@@ -178,6 +173,8 @@ func (wc *WalletCLI) commandShowHistory() error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("History of transactions:")
 
 	for _, rec := range list {
 		if rec.IOType {
@@ -227,19 +224,15 @@ func (wc *WalletCLI) commandGetBalance() error {
 		return errors.New("Address is not valid")
 	}
 
-	list, err := wc.NodeCLI.SendGetUnspent(wc.Node, wc.Input.Address, []byte{})
+	balance, err := wc.NodeCLI.SendGetBalance(wc.Node, wc.Input.Address)
 
 	if err != nil {
 		return err
 	}
 
-	balance := float64(0)
-
-	for _, tx := range list.Transactions {
-		balance += tx.Amount
-	}
-
-	fmt.Printf("Balance of '%s': %.8f\n", wc.Input.Address, balance)
+	fmt.Printf("Balance of '%s': \nTotal - %.8f\n", wc.Input.Address, balance.Total)
+	fmt.Printf("Approved - %.8f\n", balance.Approved)
+	fmt.Printf("Pending - %.8f\n", balance.Pending)
 
 	return nil
 }
