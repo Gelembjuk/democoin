@@ -19,7 +19,7 @@ def WaitBlocks(datadir, explen):
     while True:
         blocks = GetBlocks(datadir)
         
-        if len(blocks) >= explen or i >= 5:
+        if len(blocks) >= explen or i >= 10:
             break
         time.sleep(1)
         i = i + 1

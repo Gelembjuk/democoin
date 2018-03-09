@@ -211,7 +211,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 		outputs = append(outputs, TXOutput{vout.Value, vout.PubKeyHash})
 	}
 
-	txCopy := Transaction{tx.ID, inputs, outputs, time.Now().UTC().Unix()}
+	txCopy := Transaction{tx.ID, inputs, outputs, tx.Time}
 
 	return txCopy
 }
