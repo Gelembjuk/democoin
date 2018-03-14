@@ -280,7 +280,7 @@ func (n *NodeBlockchain) DropBlock() (*Block, error) {
 }
 
 // Add block to blockchain
-// Block is already verified
+// Block is not yet verified
 func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 	// do some checks of the block
 	// check if block exists
@@ -300,7 +300,7 @@ func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 		return BCBAddState_notAddedNoPrev, nil
 	}
 
-	// verify this block against rules
+	// verify this block against rules.
 	err = n.VerifyBlock(block)
 
 	if err != nil {
@@ -312,16 +312,20 @@ func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 
 // returns two branches of a block starting from their common block.
 // One of branches is primary at this time
-func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte) ([]*Block, []*Block, error) {
-	return n.BC.GetBranchesReplacement(sideBranchHash)
+func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*Block, []*Block, error) {
+	if len(tip) == 0 {
+		tip, _, _ = n.BC.GetState()
+	}
+	return n.BC.GetBranchesReplacement(sideBranchHash, tip)
 }
 
 /*
 * Checks state of a block by hashes
 * returns
-* 0 if block doesn't exist and prev block exists
-* 1 if block exists
-* 2 if block doesn't exist and prev block doesn't exist
+* -1 BCBState_error
+* 0 BCBState_canAdd if block doesn't exist and prev block exists
+* 1 BCBState_exists if block exists
+* 2 BCBState_notExistAndPrevNotExist if block doesn't exist and prev block doesn't exist
  */
 func (n *NodeBlockchain) CheckBlockState(hash, prevhash []byte) (int, error) {
 	exists, err := n.CheckBlockExists(hash)
@@ -367,6 +371,7 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 
 // Verify a block against blockchain
 // RULES
+// 0. Verification is done agains blockchain branch starting from prevblock, not current top branch
 // 1. There can be only 1 block make reward transaction
 // 2. amount of block reward transaction must be correct
 // 3. number of transactions must be in correct ranges (reward transaction is not calculated)
@@ -381,7 +386,7 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 
 	for _, tx := range block.Transactions {
 		n.Logger.Trace.Printf("Verify TX %x", tx.ID)
-		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs)
+		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
 
 		if err != nil {
 			return err

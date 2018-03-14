@@ -281,16 +281,17 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 	}
 }
 
-/*
-* Send block to all known nodes
- */
-func (n *Node) SendBlockToAll(newBlock *Block) {
+// Send block to all known nodes
+// This is used in case when new block was received from other node or
+// created by this node. We will notify our network about new block
+// But not send full block, only hash and previous hash. So, other can copy it
+// Address from where we get it will be skipped
+func (n *Node) SendBlockToAll(newBlock *Block, skipaddr lib.NodeAddr) {
 	for _, node := range n.NodeNet.Nodes {
 		blockshortdata, err := newBlock.GetShortCopy().Serialize()
 		if err == nil {
 			n.NodeClient.SendInv(node, "block", [][]byte{blockshortdata})
 		}
-
 	}
 }
 
@@ -430,13 +431,13 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 		// add new block to local blockchain. this will check a block again
 		// TODO we need to skip checking. no sense, we did it right
-		err = n.AddBlock(block)
+		_, err = n.AddBlock(block)
 
 		if err != nil {
 			return nil, err
 		}
 		// send new block to all known nodes
-		n.SendBlockToAll(block)
+		n.SendBlockToAll(block, lib.NodeAddr{} /*nothing to skip*/)
 
 		n.Logger.Trace.Println("Block done. Sent to all")
 
@@ -449,14 +450,14 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 // Add new block to blockchain.
 // It can be executed when new block was created locally or received from other node
 
-func (n *Node) AddBlock(block *Block) error {
+func (n *Node) AddBlock(block *Block) (uint, error) {
 	curLastHash, _, err := n.NodeBC.BC.GetState()
 
 	// we need to know how the block was added to managed transactions caches correctly
 	addstate, err := n.NodeBC.AddBlock(block)
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if addstate == BCBAddState_addedToTop {
 		// only if a block was really added
@@ -468,10 +469,10 @@ func (n *Node) AddBlock(block *Block) error {
 
 	} else if addstate == BCBAddState_addedToParallelTop {
 		// get 2 blocks branches that replaced each other
-		newChain, oldChain, err := n.NodeBC.GetBranchesReplacement(curLastHash)
+		newChain, oldChain, err := n.NodeBC.GetBranchesReplacement(curLastHash, []byte{})
 
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		if newChain != nil && oldChain != nil {
@@ -487,7 +488,7 @@ func (n *Node) AddBlock(block *Block) error {
 		}
 	}
 
-	return nil
+	return addstate, nil
 }
 
 /*
@@ -539,34 +540,36 @@ func (n *Node) ReceivedBlockFromOtherNode(addrfrom lib.NodeAddr, bsdata []byte) 
 * Check if this is new block and if previous block is fine
 * returns state of processing. if a block data was requested or exists or prev doesn't exist
  */
-func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, error) {
+func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *Block, error) {
+	addstate := uint(BCBAddState_error)
+
 	block := &Block{}
 	err := block.DeserializeBlock(blockdata)
 
 	if err != nil {
-		return -1, err
+		return -1, addstate, nil, err
 	}
 
-	n.Logger.Trace.Println("Recevied a new block!")
+	n.Logger.Trace.Printf("Recevied a new block %x", block.Hash)
 
 	// check state of this block
 	blockstate, err := n.NodeBC.CheckBlockState(block.Hash, block.PrevBlockHash)
 
 	if err != nil {
-		return 0, err
+		return 0, addstate, nil, err
 	}
 
 	if blockstate == 0 {
 		// only in this case we can add a block!
 		// addblock should also verify the block
-		err = n.AddBlock(block)
+		addstate, err := n.AddBlock(block)
 
 		if err != nil {
-			return -1, err
+			return -1, addstate, nil, err
 		}
 		n.Logger.Trace.Printf("Added block %x\n", block.Hash)
 	} else {
 		n.Logger.Trace.Printf("Block can not be added. State is %d\n", blockstate)
 	}
-	return blockstate, nil
+	return blockstate, addstate, block, nil
 }

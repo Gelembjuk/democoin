@@ -376,9 +376,11 @@ func (u *UnApprovedTransactions) Delete(txid []byte) (bool, error) {
  */
 func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*Block) error {
 	for _, block := range blocks {
+
 		err := u.DeleteFromBlock(block)
 
 		if err != nil {
+
 			return err
 		}
 	}
@@ -534,6 +536,7 @@ func (u *UnApprovedTransactions) DetectConflicts(txs []*transaction.Transaction)
  */
 func (u *UnApprovedTransactions) AddFromBlocksCancel(blocks []*Block) error {
 	for _, block := range blocks {
+
 		err := u.AddFromCanceled(block.Transactions)
 
 		if err != nil {
@@ -549,7 +552,13 @@ func (u *UnApprovedTransactions) AddFromBlocksCancel(blocks []*Block) error {
 func (u *UnApprovedTransactions) AddFromCanceled(txs []*transaction.Transaction) error {
 	for _, tx := range txs {
 		if !tx.IsCoinbase() {
-			u.Add(tx)
+			err := u.Add(tx)
+
+			if err != nil {
+				u.Logger.Trace.Printf("add tx %x error %s", tx.ID, err.Error())
+			} else {
+				u.Logger.Trace.Printf("add tx fine %x", tx.ID)
+			}
 		}
 	}
 

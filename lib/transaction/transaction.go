@@ -20,8 +20,6 @@ import (
 	"github.com/gelembjuk/democoin/lib"
 )
 
-var Logger *lib.LoggerMan
-
 // Transaction represents a Bitcoin transaction
 type Transaction struct {
 	ID   []byte
@@ -83,11 +81,6 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
 		dataToSign := fmt.Sprintf("%x\n", txCopy)
-
-		if Logger != nil {
-			Logger.Trace.Println("Data to sign created for %s", txCopy)
-			Logger.Trace.Println(dataToSign)
-		}
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
 		if err != nil {

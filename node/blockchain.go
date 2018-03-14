@@ -13,12 +13,16 @@ import (
 )
 
 const (
-	BCBAddState_error              = 0
-	BCBAddState_addedToTop         = 1
-	BCBAddState_addedToParallelTop = 2
-	BCBAddState_addedToParallel    = 3
-	BCBAddState_notAddedNoPrev     = 4
-	BCBAddState_notAddedExists     = 5
+	BCBAddState_error                = 0
+	BCBAddState_addedToTop           = 1
+	BCBAddState_addedToParallelTop   = 2
+	BCBAddState_addedToParallel      = 3
+	BCBAddState_notAddedNoPrev       = 4
+	BCBAddState_notAddedExists       = 5
+	BCBState_error                   = -1
+	BCBState_canAdd                  = 0
+	BCBState_exists                  = 1
+	BCBState_notExistAndPrevNotExist = 2
 )
 
 /*
@@ -321,9 +325,14 @@ func (bc *Blockchain) DeleteBlock() (*Block, error) {
 // returns also spending status, if it was already spent or not
 // and block hash where transaction is stored
 // If block is unknown
-func (bc *Blockchain) FindTransaction(ID []byte) (*transaction.Transaction, map[int][]byte, []byte, error) {
+func (bc *Blockchain) FindTransaction(ID []byte, tip []byte) (*transaction.Transaction, map[int][]byte, []byte, error) {
+	var bci *BlockchainIterator
 
-	bci := bc.Iterator()
+	if len(tip) > 0 {
+		bci = bc.IteratorFrom(tip)
+	} else {
+		bci = bc.Iterator()
+	}
 
 	txo := map[int][]byte{}
 
@@ -734,7 +743,7 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 // Returns: map of previous transactions (full info about input TX). map by input index
 // next map is wrong input, where a TX is not found.
 // TODO this function is not really good. it iterates over blockchain
-func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
+func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction, tip []byte) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
 	prevTXs := make(map[int]*transaction.Transaction)
 	badinputs := make(map[int]transaction.TXInput)
 
@@ -743,7 +752,7 @@ func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction) (ma
 	}
 
 	for vind, vin := range tx.Vin {
-		prevTX, spentouts, _, err := bc.FindTransaction(vin.Txid)
+		prevTX, spentouts, _, err := bc.FindTransaction(vin.Txid, tip)
 
 		if err != nil {
 			return prevTXs, badinputs, err
@@ -773,15 +782,90 @@ func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction) (ma
 	return prevTXs, badinputs, nil
 }
 
-// Returns a chain of blocks starting fron a hash and till
+// Returns a chain of blocks starting from a hash and till
 // end of blockchain or block from main chain found
 // if already in main chain then returns empty list
 // Returns also a block from main chain which is the base of the side branch
 //
 // The function load all hashes to the memory from "main" chain
 
-func (bc *Blockchain) GetSideBranch(hash []byte) ([]*Block, *Block, error) {
-	return nil, nil, nil
+func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, []*Block, *Block, error) {
+	// get 2 blocks with hashes from arguments
+	sideblock_o, err := bc.GetBlock(hash)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	topblock_o, err := bc.GetBlock(currentTip)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sideblock := &sideblock_o
+	topblock := &topblock_o
+
+	bc.Logger.Trace.Printf("States: top %d, side %d", topblock.Height, sideblock.Height)
+
+	if sideblock.Height < 1 || topblock.Height < 1 {
+		return nil, nil, nil, errors.New("Can not do this for genesis block")
+	}
+
+	sideBlocks := []*Block{}
+	mainBlocks := []*Block{}
+
+	if sideblock.Height > topblock.Height {
+		// go down from side block till heigh is same as top
+		bci := bc.IteratorFrom(sideblock.Hash)
+
+		for {
+			block := bci.Next()
+			bc.Logger.Trace.Printf("next side %x", block.Hash)
+			if block.Height == topblock.Height {
+				sideblock = block
+				break
+			}
+			sideBlocks = append(sideBlocks, block)
+		}
+	} else if sideblock.Height < topblock.Height {
+		// go down from top block till heigh is same as side
+		bci := bc.IteratorFrom(topblock.Hash)
+
+		for {
+			block := bci.Next()
+			bc.Logger.Trace.Printf("next top %x", block.Hash)
+			if block.Height == sideblock.Height {
+				topblock = block
+				break
+			}
+			mainBlocks = append(mainBlocks, block)
+		}
+	}
+
+	// at this point sideblock and topblock have same heigh
+	bcis := bc.IteratorFrom(sideblock.Hash)
+	bcit := bc.IteratorFrom(topblock.Hash)
+
+	for {
+		sideblock = bcis.Next()
+		topblock = bcit.Next()
+
+		bc.Logger.Trace.Printf("parallel %x vs %x", sideblock.Hash, topblock.Hash)
+
+		if bytes.Compare(sideblock.Hash, topblock.Hash) == 0 {
+			return sideBlocks, mainBlocks, sideblock, nil
+		}
+		sideBlocks = append(sideBlocks, sideblock)
+		mainBlocks = append(mainBlocks, topblock)
+
+		if len(sideblock.PrevBlockHash) == 0 || len(topblock.PrevBlockHash) == 0 {
+			return nil, nil, nil, errors.New("No connect with main blockchain")
+		}
+
+	}
+	// this point should be never reached
+	return nil, nil, nil, errors.New("Chain error")
 }
 
 /*
@@ -791,38 +875,28 @@ func (bc *Blockchain) GetSideBranch(hash []byte) ([]*Block, *Block, error) {
 *
 * The function load all hashes to the memory from "main" chain
  */
-func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte) ([]*Block, []*Block, error) {
-	sideBlocks, BCBlock, err := bc.GetSideBranch(sideBranchHash)
+func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*Block, []*Block, error) {
+	bc.Logger.Trace.Printf("Go to get branch %x %x", sideBranchHash, tip)
+	sideBlocks, mainBlocks, BCBlock, err := bc.GetSideBranch(sideBranchHash, tip)
+	bc.Logger.Trace.Printf("Result sideblocks %d mainblocks %d", len(sideBlocks), len(mainBlocks))
+	bc.Logger.Trace.Printf("%x", BCBlock.Hash)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if BCBlock == nil {
-		// the branch is not found or is already in main chain
-		// or not connected to main chain at all
+	if bytes.Compare(BCBlock.Hash, sideBranchHash) == 0 {
+		// side branch is part of the tip chain
 		return nil, nil, nil
 	}
-
-	// iterate main chain till this block and correct blocks
-	bci := bc.Iterator()
-
-	mainBlocks := []*Block{}
-
-	for {
-		block := bci.Next()
-
-		if bytes.Compare(block.Hash, BCBlock.Hash) == 0 {
-			break
-		}
-
-		mainBlocks = append(mainBlocks, block)
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
+	bc.Logger.Trace.Println("Main blocks")
+	for _, b := range mainBlocks {
+		bc.Logger.Trace.Printf("%x", b.Hash)
 	}
-
+	bc.Logger.Trace.Println("Side blocks")
+	for _, b := range sideBlocks {
+		bc.Logger.Trace.Printf("%x", b.Hash)
+	}
 	return mainBlocks, sideBlocks, nil
 }
 

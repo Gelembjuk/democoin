@@ -316,19 +316,26 @@ func (s *NodeServerRequest) handleBlock() error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Node.ReceivedFullBlockFromOtherNode(payload.Block)
+	blockstate, addstate, block, err := s.Node.ReceivedFullBlockFromOtherNode(payload.Block)
 	// state of this adding we don't check. not interesting in this place
 	if err != nil {
 		return err
 	}
+
+	if blockstate == 0 {
+		// block was added, now we can send it to all other nodes.
+		s.Node.SendBlockToAll(block, payload.AddrFrom)
+	}
 	// this is the list of hashes some node posted before. If there are yes some data then try to get that blocks.
 	// TODO this list must be made as map per node address. we can not have mised list for all other nodes
-	if len(s.S.BlocksInTransit) > 0 {
+	if s.S.Transit.GetBlocksCount(payload.AddrFrom) > 0 {
 		// get next block. continue to get next block if nothing is sent
 		for {
-			blockdata := s.S.BlocksInTransit[0][:]
+			blockdata, err := s.S.Transit.ShiftNextBlock(payload.AddrFrom)
 
-			s.S.BlocksInTransit = s.S.BlocksInTransit[1:]
+			if err != nil {
+				return err
+			}
 
 			blockstate, err := s.Node.ReceivedBlockFromOtherNode(payload.AddrFrom, blockdata)
 
@@ -343,7 +350,8 @@ func (s *NodeServerRequest) handleBlock() error {
 
 			if blockstate == 2 {
 				// previous block is not in the blockchain. no sense to check next blocks in this list
-				s.S.BlocksInTransit = [][]byte{}
+				s.S.Transit.CleanBlocks(payload.AddrFrom)
+
 				// request from a node blocks down to this first block
 				bs := &BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
@@ -355,10 +363,15 @@ func (s *NodeServerRequest) handleBlock() error {
 				s.Node.NodeClient.SendGetBlocks(payload.AddrFrom, bs.PrevBlockHash)
 			}
 
-			if len(s.S.BlocksInTransit) == 0 {
+			if s.S.Transit.GetBlocksCount(payload.AddrFrom) == 0 {
 				break
 			}
 		}
+	}
+
+	if addstate == BCBAddState_addedToParallelTop {
+		// maybe some transactiosn become unapproved now. try to make new block from them on top of new chain
+		s.S.TryToMakeNewBlock([]byte{1})
 	}
 	s.Node.CheckAddressKnown(payload.AddrFrom)
 
@@ -382,15 +395,15 @@ func (s *NodeServerRequest) handleInv() error {
 	s.Logger.Trace.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
 
 	if payload.Type == "block" {
-		s.S.BlocksInTransit = payload.Items
-		for {
-			blockdata := s.S.BlocksInTransit[0][:]
 
-			if len(s.S.BlocksInTransit) > 1 {
-				// remember other blocks to get them later
-				s.S.BlocksInTransit = s.S.BlocksInTransit[1:]
-			} else {
-				s.S.BlocksInTransit = [][]byte{}
+		s.S.Transit.AddBlocks(payload.AddrFrom, payload.Items)
+
+		for {
+
+			blockdata, err := s.S.Transit.ShiftNextBlock(payload.AddrFrom)
+
+			if err != nil {
+				return err
 			}
 
 			blockstate, err := s.Node.ReceivedBlockFromOtherNode(payload.AddrFrom, blockdata)
@@ -406,7 +419,8 @@ func (s *NodeServerRequest) handleInv() error {
 
 			if blockstate == 2 {
 				// previous block is not in the blockchain. no sense to check next blocks in this list
-				s.S.BlocksInTransit = [][]byte{}
+				s.S.Transit.CleanBlocks(payload.AddrFrom)
+
 				// request from a node blocks down to this first block
 				bs := &BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
@@ -418,7 +432,7 @@ func (s *NodeServerRequest) handleInv() error {
 				s.Node.NodeClient.SendGetBlocks(payload.AddrFrom, bs.PrevBlockHash)
 			}
 
-			if len(s.S.BlocksInTransit) == 0 {
+			if s.S.Transit.GetBlocksCount(payload.AddrFrom) == 0 {
 				break
 			}
 		}

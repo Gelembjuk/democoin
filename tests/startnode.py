@@ -67,6 +67,32 @@ def StartNode(datadir, address, port,comment = ""):
     _lib.StartTest("Start node again. should not be allowed")
     res = _lib.ExecuteNode(['startnode','-datadir',datadir])
     _lib.FatalAssertSubstr(res,"Already running or PID file exists","Second attempt to run should fail")
+    
+def StartNodeConfig(datadir, comment = ""):
+    _lib.StartTestGroup("Start node "+comment)
+    
+    _lib.StartTest("Start normal")
+    res = _lib.ExecuteNode(['startnode','-datadir',datadir])
+    _lib.FatalAssertStr(res,"","Should not be any output on succes start")
+
+    # get process of the node. find this process exists
+    _lib.StartTest("Check node state")
+    res = _lib.ExecuteNode(['nodestate','-datadir',datadir])
+    _lib.FatalAssertSubstr(res,"Server is running","Server should be runnning")
+
+    # get address from this response 
+    match = re.search( r'Process: (\d+),', res, re.M)
+
+    if not match:
+        _lib.Fatal("Can not get process ID from the response "+res)
+
+    PID = int(match.group(1))
+
+    _lib.FatalAssertPIDRunning(PID, "Can not find process with ID "+str(PID))
+
+    _lib.StartTest("Start node again. should not be allowed")
+    res = _lib.ExecuteNode(['startnode','-datadir',datadir])
+    _lib.FatalAssertSubstr(res,"Already running or PID file exists","Second attempt to run should fail")
 
 def StopNode(datadir, comment = ""):
     _lib.StartTestGroup("Stop node "+comment)

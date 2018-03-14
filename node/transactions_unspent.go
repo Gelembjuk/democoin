@@ -326,9 +326,11 @@ func (u UnspentTransactions) Reindex() (int, error) {
  */
 func (u UnspentTransactions) UpdateOnBlocksAdd(blocks []*Block) error {
 	for _, block := range blocks {
+
 		err := u.UpdateOnBlockAdd(block)
 
 		if err != nil {
+
 			return err
 		}
 	}
@@ -345,22 +347,28 @@ func (u UnspentTransactions) UpdateOnBlocksAdd(blocks []*Block) error {
  */
 func (u UnspentTransactions) UpdateOnBlockAdd(block *Block) error {
 	db := u.Blockchain.db
-
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
+	u.Logger.Trace.Printf("UPdate UTXO on block add %x", block.Hash)
+	err := db.Update(func(txdb *bolt.Tx) error {
+		b := u.getBucket(txdb)
 
 		for _, tx := range block.Transactions {
-
+			u.Logger.Trace.Printf("UpdateOnBlockAdd check tx %x", tx.ID)
 			sender := []byte{}
 
 			if !tx.IsCoinbase() {
 				for _, vin := range tx.Vin {
 					sender, _ = lib.HashPubKey(vin.PubKey)
 
-					updatedOuts := []transaction.TXOutputIndependent{}
-
 					outsBytes := b.Get(vin.Txid)
+
+					if outsBytes == nil {
+						u.Logger.Trace.Printf("UpdateOnBlockAdd in tx is not found %x", vin.Txid)
+						continue
+					}
+
 					outs := u.DeserializeOutputs(outsBytes)
+
+					updatedOuts := []transaction.TXOutputIndependent{}
 
 					for _, out := range outs {
 						if out.OIndex != vin.Vout {
@@ -412,9 +420,11 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *Block) error {
  */
 func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*Block) error {
 	for _, block := range blocks {
+
 		err := u.UpdateOnBlockCancel(block)
 
 		if err != nil {
+
 			return err
 		}
 	}
@@ -429,16 +439,31 @@ func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*Block) error {
  */
 func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 	db := u.Blockchain.db
-
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
+	u.Logger.Trace.Printf("Update UTXO n block removed %x", block.Hash) //REM
+	err := db.Update(func(txdb *bolt.Tx) error {
+		b := u.getBucket(txdb)
 
 		for _, tx := range block.Transactions {
+			u.Logger.Trace.Printf("tx %x", tx.ID) //REM
 			if tx.IsCoinbase() == false {
 
 				// all input outputs must be added back to unspent
+				// but only if inputs are in current BC
 				for _, vin := range tx.Vin {
-					txi, spending, blockHash, err := u.Blockchain.FindTransaction(vin.Txid)
+					txi, spending, blockHash, err := u.Blockchain.FindTransaction(vin.Txid, []byte{})
+					u.Logger.Trace.Printf("tx find input %x", vin.Txid) //REM
+					if err != nil {
+						u.Logger.Trace.Printf("error finding tx %x %s", tx.ID, err.Error()) //REM
+						return err
+					}
+
+					if txi == nil {
+						// TX is not found in current BC . no sense to add it to unspent
+						u.Logger.Trace.Printf("tx not found in current BC") //REM
+						return nil
+					}
+
+					u.Logger.Trace.Printf("found tx in block %x", blockHash) //REM
 
 					sender, _ := lib.HashPubKey(txi.Vin[0].PubKey)
 
@@ -448,10 +473,11 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 						if _, ok := spending[outInd]; !ok {
 							no := transaction.TXOutputIndependent{}
 							no.LoadFromSimple(out, txi.ID, outInd, sender, tx.IsCoinbase(), blockHash)
+
 							UnspentOuts = append(UnspentOuts, no)
 						}
 					}
-
+					u.Logger.Trace.Printf("tx save as unspent %x %d outputs", vin.Txid, len(UnspentOuts))
 					err = b.Put(vin.Txid, u.SerializeOutputs(UnspentOuts))
 
 					if err != nil {

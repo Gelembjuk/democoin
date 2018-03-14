@@ -81,7 +81,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			// we need to verify each transaction
 			// we will do full deep check of transaction
 			// also, a transaction can have input from other transaction from thi block
-			vtx, err := n.NodeTX.VerifyTransactionDeep(tx, txs)
+			vtx, err := n.NodeTX.VerifyTransactionDeep(tx, txs, []byte{})
 
 			if err != nil {
 				// this can be case when a transaction is based on other unapproved transaction

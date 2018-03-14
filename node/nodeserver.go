@@ -18,7 +18,7 @@ type NodeServer struct {
 
 	NodeAddress lib.NodeAddr
 
-	BlocksInTransit [][]byte
+	Transit NodeTransit
 
 	Logger *lib.LoggerMan
 	// Channels to manipulate roitunes

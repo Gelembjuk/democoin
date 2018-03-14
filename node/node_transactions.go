@@ -151,8 +151,8 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 // If it is build on correct outputs.This does checks agains blockchain. Needs more time
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
-func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction) (bool, error) {
-	inputTXs, notFoundInputs, err := n.BC.GetInputTransactionsState(tx)
+func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction, tip []byte) (bool, error) {
+	inputTXs, notFoundInputs, err := n.BC.GetInputTransactionsState(tx, tip)
 
 	if err != nil {
 		return false, err
@@ -166,11 +166,8 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 			return false, err
 		}
 	}
-	//n.Logger.Trace.Println("Go to verify Deep")
-	//n.Logger.Trace.Println(tx)
-	//n.Logger.Trace.Println(inputTXs)
 	// do final check against inputs
-	transaction.Logger = n.Logger
+
 	err = tx.Verify(inputTXs)
 
 	if err != nil {
