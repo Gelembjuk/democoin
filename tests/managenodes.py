@@ -2,6 +2,7 @@ import _lib
 import _transfers
 import _blocks
 import re
+import os
 import time
 import startnode
 import initblockchain

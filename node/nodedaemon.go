@@ -56,6 +56,8 @@ func (n *NodeDaemon) createServer() error {
 
 	server.Logger = n.Logger
 
+	server.Transit.Init(n.Logger)
+
 	server.Node = n.Node
 
 	n.Server = &server

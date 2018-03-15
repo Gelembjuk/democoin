@@ -8,8 +8,15 @@ import (
 
 type NodeTransit struct {
 	Blocks map[string][][]byte
+	Logger *lib.LoggerMan
 }
 
+func (t *NodeTransit) Init(l *lib.LoggerMan) error {
+	t.Logger = l
+	t.Blocks = make(map[string][][]byte)
+
+	return nil
+}
 func (t *NodeTransit) AddBlocks(fromaddr lib.NodeAddr, blocks [][]byte) error {
 	key := fromaddr.NodeAddrToString()
 
