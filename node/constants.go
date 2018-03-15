@@ -3,9 +3,6 @@ package main
 // ==========================================================
 // this can be altered to experiment with blockchain
 
-const applicationtitle = "DemoCoin"
-const applicationversion = "0.1 alpha"
-
 // this defines how strong miming is needed. 16 is simple mining less 5 sec in simple desktop
 // 24 will need 30 seconds in average
 const targetBits = 16

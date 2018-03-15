@@ -15,7 +15,7 @@ func main() {
 		fmt.Printf("Error: %s\n", ierr.Error())
 		os.Exit(0)
 	}
-
+	fmt.Printf("%s Wallet - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 	if checkNeedsHelp(input) {
 		printUsage()
 		os.Exit(0)

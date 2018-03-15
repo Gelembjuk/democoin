@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/gelembjuk/democoin/lib"
 )
 
 func main() {
@@ -14,6 +16,8 @@ func main() {
 		fmt.Printf("Error: %s\n", ierr.Error())
 		os.Exit(0)
 	}
+
+	fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 
 	if input.checkNeedsHelp() {
 		// if user requested a help, display it
