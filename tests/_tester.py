@@ -36,6 +36,7 @@ for testscript in testfiles:
 
 num = 1
 failed = []
+passed = []
 
 for testname in tests:
     if test == "all" or test == testname:
@@ -69,8 +70,9 @@ for testname in tests:
         if not success:
             break
         
+        passed.append(testname)
         num = num + 1
 
 if test == "all":
-    passed = len(tests) - len(failed)
-    print str(passed)+" of "+str(len(tests))+" tests passed"
+    passedlen = len(passed)
+    print str(passedlen)+" of "+str(len(tests))+" tests passed"

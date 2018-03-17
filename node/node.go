@@ -95,6 +95,7 @@ func (n *Node) initBlockMaker() (*NodeBlockMaker, error) {
 	Minter.BC = n.NodeBC.BC
 	Minter.Logger = n.Logger
 	Minter.NodeTX = &n.NodeTX
+	Minter.NodeBC = &n.NodeBC
 
 	return Minter, nil
 }
@@ -562,7 +563,7 @@ func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *Blo
 	if blockstate == 0 {
 		// only in this case we can add a block!
 		// addblock should also verify the block
-		addstate, err := n.AddBlock(block)
+		addstate, err = n.AddBlock(block)
 
 		if err != nil {
 			return -1, addstate, nil, err

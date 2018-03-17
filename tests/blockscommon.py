@@ -39,30 +39,28 @@ def test(testfilter):
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    #block making will be started now 
+    time.sleep(4)
         
     txid2 = _transfers.Send(datadir,address,address3,amount2)
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
-    _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
+    _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
     
     txid3 = _transfers.Send(datadir,address,address3,amount3)
     
     # node needs some time to make a block, so transaction still will be in list of unapproved
     txlist = transactions.GetUnapprovedTransactions(datadir)
     
-    _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
-    
-    if txid1 not in txlist.keys():
-        _lib.Fatal("Transaction 1 is not in the list of transactions")
+    _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
     
     if txid2 not in txlist.keys():
         _lib.Fatal("Transaction 2 is not in the list of transactions")
     
     if txid3 not in txlist.keys():
         _lib.Fatal("Transaction 3 is not in the list of transactions")
-    
-    _lib.FatalAssertFloat(amount1, txlist[txid1][2], "Amount of transaction 1 is wrong")
     
     _lib.FatalAssertFloat(amount2, txlist[txid2][2], "Amount of transaction 2 is wrong")
     

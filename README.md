@@ -88,7 +88,7 @@ Usage:
   showunspent -address ADDRESS
         - Displays the list of all unspent transactions and total balance
   showhistory -address ADDRESS
-        - Displays the wallet history. All In?Out transactions
+        - Displays the wallet history. All In/Out transactions
   getbalance -address ADDRESS
         - Get balance of ADDRESS
   listaddresses
@@ -104,3 +104,38 @@ Usage:
 ### Your test scenario
 
 #### Download and compile
+
+Install dependencies
+
+```
+go get github.com/boltdb/bolt
+go get github.com/btcsuite/btcutil
+```
+
+Now get the code of DemoCoin
+
+```
+go get github.com/gelembjuk/democoin
+```
+
+Go to sources. On Ubuntu this looks like
+
+```
+cd $GOPATH/src/github.com/gelembjuk/democoin/
+```
+
+Finally, build the node and the wallet 
+
+```
+cd node/
+go build
+
+cd ../wallet
+go build
+```
+
+Now, you can run ./node and ./wallet commands (or node.exe and wallet.exe on Windows)
+
+## Author
+
+Roman Gelembjuk , roman@gelembjuk.com 

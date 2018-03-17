@@ -107,6 +107,30 @@ func (n *NodeBlockchain) GetBlockChainObject() *Blockchain {
 	return n.BC
 }
 
+//Get minimum and maximum number of transaction allowed in block for current chain
+func (n *NodeBlockchain) GetTransactionNumbersLimits(block *Block) (int, int, error) {
+	var min int
+
+	if block == nil {
+		bestHeight, err := n.BC.GetBestHeight()
+
+		if err != nil {
+			return 0, 0, err
+		}
+		min = bestHeight
+	} else {
+		min = block.Height
+	}
+
+	if min > maxMinNumberTransactionInBlock {
+		min = maxMinNumberTransactionInBlock
+	} else if min < 1 {
+		min = 1
+	}
+
+	return min, maxNumberTransactionInBlock, nil
+}
+
 // Checks if a block exists in the chain. It will go over blocks list
 func (n *NodeBlockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 	return n.BC.CheckBlockExists(blockHash)
@@ -373,19 +397,43 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 // RULES
 // 0. Verification is done agains blockchain branch starting from prevblock, not current top branch
 // 1. There can be only 1 block make reward transaction
-// 2. amount of block reward transaction must be correct
-// 3. number of transactions must be in correct ranges (reward transaction is not calculated)
-// 4. transactions can have as input other transaction from this block and it must be listed BEFORE
+// 2. number of transactions must be in correct ranges (reward transaction is not calculated)
+// 3. transactions can have as input other transaction from this block and it must be listed BEFORE
 //   (output must be before input in same block)
-// 5. all inputs must be in blockchain (correct unspent inputs)
-// 6. Additionally verify each transaction agains signatures, total amount, balance etc
+// 4. all inputs must be in blockchain (correct unspent inputs)
+// 5. Additionally verify each transaction agains signatures, total amount, balance etc
 func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 	//TODO
+
+	// 2. check number of TX
+	txnum := len(block.Transactions) - 1 /*minus coinbase TX*/
+
+	min, max, err := n.GetTransactionNumbersLimits(block)
+
+	if err != nil {
+		return err
+	}
+
+	if txnum < min {
+		return errors.New("Number of transactions is too low")
+	}
+
+	if txnum > max {
+		return errors.New("Number of transactions is too high")
+	}
+
+	// 1
+	coinbaseused := false
 
 	prevTXs := []*transaction.Transaction{}
 
 	for _, tx := range block.Transactions {
-		n.Logger.Trace.Printf("Verify TX %x", tx.ID)
+		if tx.IsCoinbase() {
+			if coinbaseused {
+				return errors.New("2 coin base TX in the block")
+			}
+			coinbaseused = true
+		}
 		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
 
 		if err != nil {
@@ -398,6 +446,8 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 
 		prevTXs = append(prevTXs, tx)
 	}
-
+	if !coinbaseused {
+		return errors.New("No coinbase TX in the block")
+	}
 	return nil
 }

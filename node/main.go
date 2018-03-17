@@ -17,9 +17,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
-
 	if input.checkNeedsHelp() {
+		fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 		// if user requested a help, display it
 		input.printUsage()
 		os.Exit(0)
@@ -29,6 +28,7 @@ func main() {
 	cli := getNodeCLI(input)
 
 	if cli.isInteractiveMode() {
+		fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 		// it is command to display results right now
 		err := cli.ExecuteCommand()
 

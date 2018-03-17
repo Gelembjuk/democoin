@@ -32,18 +32,24 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 
 // Prepares data for next iteration of PoW
 // this will be hashed
-func (pow *ProofOfWork) prepareData() []byte {
+func (pow *ProofOfWork) prepareData() ([]byte, error) {
+	txshash, err := pow.block.HashTransactions()
+
+	if err != nil {
+		return nil, err
+	}
+
 	data := bytes.Join(
 		[][]byte{
 			pow.block.PrevBlockHash,
-			pow.block.HashTransactions(),
+			txshash,
 			lib.IntToHex(pow.block.Timestamp),
 			lib.IntToHex(int64(targetBits)),
 		},
 		[]byte{},
 	)
 
-	return data
+	return data, nil
 }
 
 func (pow *ProofOfWork) addNonceToPrepared(data []byte, nonce int) []byte {
@@ -53,12 +59,16 @@ func (pow *ProofOfWork) addNonceToPrepared(data []byte, nonce int) []byte {
 }
 
 // Run performs a proof-of-work
-func (pow *ProofOfWork) Run() (int, []byte) {
+func (pow *ProofOfWork) Run() (int, []byte, error) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
 
-	predata := pow.prepareData()
+	predata, err := pow.prepareData()
+
+	if err != nil {
+		return 0, nil, err
+	}
 
 	for nonce < maxNonce {
 		// prepare data for next nonce
@@ -76,20 +86,25 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 		}
 	}
 
-	return nonce, hash[:]
+	return nonce, hash[:], nil
 }
 
 // Validate validates block's PoW
 // It calculates hash from same data and check if it is equal to block hash
-func (pow *ProofOfWork) Validate() bool {
+func (pow *ProofOfWork) Validate() (bool, error) {
 	var hashInt big.Int
 
-	predata := pow.prepareData()
+	predata, err := pow.prepareData()
+
+	if err != nil {
+		return false, err
+	}
+
 	data := pow.addNonceToPrepared(predata, pow.block.Nonce)
 	hash := sha256.Sum256(data)
 	hashInt.SetBytes(hash[:])
 
 	isValid := hashInt.Cmp(pow.target) == -1
 
-	return isValid
+	return isValid, nil
 }

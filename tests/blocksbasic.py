@@ -186,7 +186,7 @@ def PrepareBlockchain(datadir,port):
     _lib.FatalAssertSubstr(res,"Your new address","Address creation returned wrong result")
 
     # get address from this response 
-    match = re.match( r'.+: (.+)', res)
+    match = re.search( r'.+: (.+)', res)
 
     if not match:
         _lib.Fatal("Address can not be found in "+res)

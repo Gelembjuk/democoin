@@ -118,7 +118,7 @@ def CreateWallet(datadir):
     _lib.FatalRegex(r'.+: (.+)', res, "Address can not be found in "+res);
     
     # get address from this response 
-    match = re.match( r'.+: (.+)', res)
+    match = re.search( r'.+: (.+)', res)
 
     if not match:
         _lib.Fatal("Address can not be found in "+res)
@@ -132,7 +132,7 @@ def GetUnapprovedTransactionsEmpty(datadir):
     
     _lib.StartTest("Get unapproved transactions")
     res = _lib.ExecuteNode(['unapprovedtransactions','-datadir',datadir])
-    _lib.FatalAssertSubstr(res,"Total transactions: 0","Output should contains list of transactions")
+    _lib.FatalAssertSubstr(res,"Total transactions: 0","Output should not contains list of transactions")
 
 def GetUnapprovedTransactions(datadir):
     

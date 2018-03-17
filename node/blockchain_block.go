@@ -84,15 +84,20 @@ func (b *Block) PrepareNewBlock(transactions []*transaction.Transaction, prevBlo
 }
 
 // HashTransactions returns a hash of the transactions in the block
-func (b *Block) HashTransactions() []byte {
+func (b *Block) HashTransactions() ([]byte, error) {
 	var transactions [][]byte
 
 	for _, tx := range b.Transactions {
-		transactions = append(transactions, tx.Serialize())
+		txser, err := tx.Serialize()
+
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, txser)
 	}
 	mTree := lib.NewMerkleTree(transactions)
 
-	return mTree.RootNode.Data
+	return mTree.RootNode.Data, nil
 }
 
 // Serialize serializes the block

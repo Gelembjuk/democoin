@@ -15,7 +15,6 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"log"
 
 	"github.com/gelembjuk/democoin/lib"
 )
@@ -34,42 +33,51 @@ func (tx Transaction) IsCoinbase() bool {
 }
 
 // Serialize returns a serialized Transaction
-func (tx Transaction) Serialize() []byte {
+func (tx Transaction) Serialize() ([]byte, error) {
 	var encoded bytes.Buffer
 
 	enc := gob.NewEncoder(&encoded)
 	err := enc.Encode(tx)
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
-	return encoded.Bytes()
+	return encoded.Bytes(), nil
 }
 
 // Hash returns the hash of the Transaction
-func (tx *Transaction) Hash() []byte {
-	var hash [32]byte
-
+func (tx *Transaction) TimeNow() {
 	tx.Time = time.Now().UTC().UnixNano()
+}
+
+// Hash returns the hash of the Transaction
+func (tx *Transaction) Hash() ([]byte, error) {
+	var hash [32]byte
 
 	txCopy := *tx
 	txCopy.ID = []byte{}
 
-	hash = sha256.Sum256(txCopy.Serialize())
+	txser, err := txCopy.Serialize()
+
+	if err != nil {
+		return nil, err
+	}
+
+	hash = sha256.Sum256(txser)
 
 	tx.ID = hash[:]
-	return tx.ID
+	return tx.ID, nil
 }
 
 // Sign signs each input of a Transaction
-func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
+func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) error {
 	if tx.IsCoinbase() {
-		return
+		return nil
 	}
 
 	for _, vin := range tx.Vin {
 		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
-			log.Panic("ERROR: Previous transaction is not correct")
+			return errors.New("Previous transaction is not correct")
 		}
 	}
 
@@ -84,13 +92,14 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
 		if err != nil {
-			log.Panic(err)
+			return err
 		}
 		signature := append(r.Bytes(), s.Bytes()...)
 
 		tx.Vin[inID].Signature = signature
 		txCopy.Vin[inID].PubKey = nil
 	}
+	return nil
 }
 
 // prepare data to sign as part of transaction
@@ -210,10 +219,21 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 }
 
 // TrimmedCopy creates a trimmed copy of Transaction to be used in signing
-func (tx *Transaction) Copy() Transaction {
-	d := tx.Serialize()
-	txCopy := DeserializeTransaction(d)
-	return txCopy
+func (tx *Transaction) Copy() (Transaction, error) {
+	txCopy := Transaction{}
+
+	d, err := tx.Serialize()
+
+	if err != nil {
+		return txCopy, err
+	}
+
+	err = txCopy.DeserializeTransaction(d)
+
+	if err != nil {
+		return txCopy, err
+	}
+	return txCopy, nil
 }
 
 // Verify verifies signatures of Transaction inputs
@@ -313,16 +333,15 @@ func (tx *Transaction) MakeCoinbaseTX(to, data string) error {
 }
 
 // DeserializeTransaction deserializes a transaction
-func DeserializeTransaction(data []byte) Transaction {
-	var transaction Transaction
-
+func (tx *Transaction) DeserializeTransaction(data []byte) error {
 	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&transaction)
+	err := decoder.Decode(tx)
+
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
-	return transaction
+	return nil
 }
 
 // Sorting of transactions slice

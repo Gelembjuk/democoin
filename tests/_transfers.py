@@ -65,7 +65,7 @@ def Send(datadir,fromaddr,to,amount):
     _lib.FatalAssertSubstr(res,"Success. New transaction:","Sending of money failed. NO info about new transaction")
     
     # get transaction from this response 
-    match = re.match( r'Success. New transaction: (.+)', res)
+    match = re.search( r'Success. New transaction: (.+)', res)
 
     if not match:
         _lib.Fatal("Transaction ID can not be found in "+res)

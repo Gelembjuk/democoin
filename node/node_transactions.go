@@ -262,6 +262,7 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 	}
 
 	tx := transaction.Transaction{nil, inputs, outputs, 0}
+	tx.TimeNow()
 	n.Logger.Trace.Println("Prepare sign data")
 	n.Logger.Trace.Println(tx)
 	n.Logger.Trace.Println(prevTXs)
@@ -315,7 +316,7 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	n.Logger.Trace.Println(NewTX)
 	n.Logger.Trace.Println("Data to sign")
 	for _, d := range DataToSign {
-		n.Logger.Trace.Println(d)
+		n.Logger.Trace.Printf("%x", d)
 	}
 
 	return NewTX, nil

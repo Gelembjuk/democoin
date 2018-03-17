@@ -69,11 +69,27 @@ def test(testfilter):
     _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
     
     # check transactions work fine between nodes
-    txid1 = _transfers.Send(datadir1,address,address2,'4')
+    _transfers.Send(datadir1,address,address2,'3')
     
     txlist = transactions.GetUnapprovedTransactions(datadir1)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    blocks = _blocks.WaitBlocks(datadir1,2)
+    
+    # send another 2 TX to make a block
+    _transfers.Send(datadir1,address,address2,'0.01')
+    _transfers.Send(datadir1,address,address2,'0.01')
+    
+    blocks = _blocks.WaitBlocks(datadir1,3)
+    
+    txid1 = _transfers.Send(datadir1,address,address2,'1')
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir1)
+    
+    _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    time.sleep(1)
     
     # and now get transactions from second node
     txlist = transactions.GetUnapprovedTransactions(datadir2)
@@ -93,7 +109,7 @@ def test(testfilter):
     
     AddNode(datadir3, "localhost",'30001')
     
-    time.sleep(1)# wait while nodes exchange addresses
+    time.sleep(2)# wait while nodes exchange addresses
     nodes = GetNodes(datadir1)
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 1")
     
@@ -105,12 +121,13 @@ def test(testfilter):
     
     txid1 = _transfers.Send(datadir1,address,address3,'4') 
     
-    time.sleep(1) # we need to give a chance to sync all
-    
-    txlist2 = transactions.GetUnapprovedTransactions(datadir2)
     txlist1 = transactions.GetUnapprovedTransactions(datadir1)
     transactions.GetUnapprovedTransactionsEmpty(datadir3)
     
+    time.sleep(3) # we need to give a chance to sync all
+    
+    txlist2 = transactions.GetUnapprovedTransactions(datadir2)
+   
     _lib.FatalAssert(len(txlist1) == 2,"Should be 2 unapproved transactions on 1")
     _lib.FatalAssert(len(txlist2) == 2,"Should be 2 unapproved transactions on 2")
     
@@ -131,13 +148,13 @@ def test(testfilter):
     # check if a block is present on all nodes. it must be 2 block on every node
     blockshashes = _blocks.GetBlocks(datadir1)
     
-    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 1")
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain on 1")
     
     blockshashes = _blocks.GetBlocks(datadir2)
-    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 2")
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain on 2")
     
     blockshashes = _blocks.GetBlocks(datadir3)
-    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain on 3")
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain on 3")
     
     startnode.StopNode(datadir1,"Server 1")
     startnode.StopNode(datadir2,"Server 2")

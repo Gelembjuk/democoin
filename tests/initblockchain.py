@@ -42,7 +42,7 @@ def ImportBockchain(datadir,host,port):
     _lib.FatalRegex(r'.+: (.+)', res, "Address can not be found in "+res);
     
     # get address from this response 
-    match = re.match( r'.+: (.+)', res)
+    match = re.search( r'.+: (.+)', res)
 
     if not match:
         _lib.Fatal("Address can not be found in "+res)

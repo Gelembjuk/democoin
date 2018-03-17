@@ -85,7 +85,7 @@ def CreateWallet(datadir):
     _lib.StartTest("Create new wallet")
     res = _lib.ExecuteWallet(['createwallet','-datadir',datadir])
     _lib.FatalAssertSubstr(res,"Your new address","Address creation failed")
-    match = re.match( r'.+: (.+)', res)
+    match = re.search( r'.+: (.+)', res)
 
     if not match:
         _lib.Fatal("Address can not be found in "+res)
@@ -113,7 +113,7 @@ def Send(datadir,fromaddr,to,amount,host,port):
     _lib.FatalAssertSubstr(res,"Success. New transaction:","Sending of money failed. NO info about new transaction")
     
     # get transaction from this response 
-    match = re.match( r'Success. New transaction: (.+)', res)
+    match = re.search( r'Success. New transaction: (.+)', res)
 
     if not match:
         _lib.Fatal("Transaction ID can not be found in "+res)
@@ -130,7 +130,7 @@ def SendNoNode(datadir,fromaddr,to,amount):
     _lib.FatalAssertSubstr(res,"Success. New transaction:","Sending of money failed. NO info about new transaction")
     
     # get transaction from this response 
-    match = re.match( r'Success. New transaction: (.+)', res)
+    match = re.search( r'Success. New transaction: (.+)', res)
 
     if not match:
         _lib.Fatal("Transaction ID can not be found in "+res)

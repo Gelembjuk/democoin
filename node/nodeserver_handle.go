@@ -317,12 +317,14 @@ func (s *NodeServerRequest) handleBlock() error {
 		return err
 	}
 	blockstate, addstate, block, err := s.Node.ReceivedFullBlockFromOtherNode(payload.Block)
+	s.Logger.Trace.Printf("adding new block %d, %d", blockstate, addstate)
 	// state of this adding we don't check. not interesting in this place
 	if err != nil {
 		return err
 	}
 
 	if blockstate == 0 {
+		s.Logger.Trace.Printf("send block to all ")
 		// block was added, now we can send it to all other nodes.
 		s.Node.SendBlockToAll(block, payload.AddrFrom)
 	}
@@ -368,7 +370,7 @@ func (s *NodeServerRequest) handleBlock() error {
 			}
 		}
 	}
-
+	s.Logger.Trace.Printf("check if try to make new %d , %d ", addstate, BCBAddState_addedToParallelTop)
 	if addstate == BCBAddState_addedToParallelTop {
 		// maybe some transactiosn become unapproved now. try to make new block from them on top of new chain
 		s.S.TryToMakeNewBlock([]byte{1})
@@ -565,7 +567,13 @@ func (s *NodeServerRequest) handleGetData() error {
 		if txe, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(payload.ID); err == nil && txe != nil {
 			s.Logger.Trace.Printf("Return transaction with ID %x to %s\n", payload.ID, payload.AddrFrom.NodeAddrToString())
 			// exists
-			s.Node.NodeClient.SendTx(payload.AddrFrom, txe.Serialize())
+			txser, err := txe.Serialize()
+
+			if err != nil {
+				return err
+			}
+
+			s.Node.NodeClient.SendTx(payload.AddrFrom, txser)
 
 		}
 	}
@@ -591,7 +599,12 @@ func (s *NodeServerRequest) handleTx() error {
 	}
 
 	txData := payload.Transaction
-	tx := transaction.DeserializeTransaction(txData)
+	tx := transaction.Transaction{}
+	err = tx.DeserializeTransaction(txData)
+
+	if err != nil {
+		return err
+	}
 
 	if txe, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(tx.ID); err == nil && txe != nil {
 		// exists , nothing to do, it was already processed before

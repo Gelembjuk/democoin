@@ -546,7 +546,12 @@ func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, t
 		input := transaction.TXInput{out.TXID, out.OIndex, nil, PubKey}
 		inputs = append(inputs, input)
 
-		prevTX := transaction.DeserializeTransaction(out.BlockHash) // here we have transaction serialised, not block hash
+		prevTX := transaction.Transaction{}
+		err := prevTX.DeserializeTransaction(out.BlockHash) // here we have transaction serialised, not block hash
+
+		if err != nil {
+			return inputs, prevTXs, totalamount, err
+		}
 
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 

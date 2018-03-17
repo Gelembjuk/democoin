@@ -13,6 +13,7 @@ type NodeBlockMaker struct {
 	Logger        *lib.LoggerMan
 	BC            *Blockchain
 	NodeTX        *NodeTransactions
+	NodeBC        *NodeBlockchain
 	MinterAddress string // this is the wallet that will receive for mining
 }
 
@@ -37,9 +38,11 @@ func (n *NodeBlockMaker) CheckUnapprovedCache() bool {
 
 	n.Logger.Trace.Printf("Transaction in cache - %d", count)
 
-	if count >= minNumberTransactionInBlock {
-		if count > maxNumberTransactionInBlock {
-			count = maxNumberTransactionInBlock
+	min, max, err := n.NodeBC.GetTransactionNumbersLimits(nil)
+
+	if count >= min {
+		if count > max {
+			count = max
 		}
 		return true
 	}
@@ -56,13 +59,18 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	min, max, err := n.NodeBC.GetTransactionNumbersLimits(nil)
 
-	n.Logger.Trace.Printf("Minting: Found %d transaction from minimum %d\n", count, minNumberTransactionInBlock)
+	if err != nil {
+		return nil, err
+	}
 
-	if count >= minNumberTransactionInBlock {
+	n.Logger.Trace.Printf("Minting: Found %d transaction from minimum %d\n", count, min)
+
+	if count >= min {
 		// number of transactions is fine
-		if count > maxNumberTransactionInBlock {
-			count = maxNumberTransactionInBlock
+		if count > max {
+			count = max
 		}
 		// get unapproved transactions
 		txlist, err := n.NodeTX.UnapprovedTXs.GetTransactions(count)
@@ -110,7 +118,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			return nil, errors.New("All transactions are invalid! Waiting for new ones...")
 		}
 		// check if total count is still good
-		if len(txs) < minNumberTransactionInBlock {
+		if len(txs) < min {
 			return nil, errors.New("No enought valid transactions! Waiting for new ones...")
 		}
 
@@ -133,7 +141,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			}
 		}
 
-		if len(txs) < minNumberTransactionInBlock {
+		if len(txs) < min {
 			return nil, errors.New("No enought valid transactions! Waiting for new ones...")
 		}
 
@@ -167,7 +175,11 @@ func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
 	starttime := time.Now()
 
 	pow := NewProofOfWork(b)
-	nonce, hash := pow.Run()
+	nonce, hash, err := pow.Run()
+
+	if err != nil {
+		return err
+	}
 
 	b.Hash = hash[:]
 	b.Nonce = nonce

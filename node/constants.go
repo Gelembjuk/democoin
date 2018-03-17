@@ -8,8 +8,8 @@ package main
 const targetBits = 16
 
 // MAx and Min number of transactions per block
-const minNumberTransactionInBlock = 3
-const maxNumberTransactionInBlock = 100
+const maxMinNumberTransactionInBlock = 3
+const maxNumberTransactionInBlock = 10000
 
 // ==========================================================
 //No need to change this

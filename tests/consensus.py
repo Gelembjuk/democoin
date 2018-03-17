@@ -47,6 +47,7 @@ def test(testfilter):
         
     #check nodes on each node is correct 
     for node in nodes:
+        #print os.path.basename(node['datadir'])
         nodeslist = managenodes.GetNodes(node['datadir'])
         _lib.FatalAssert(len(nodeslist) == 2,"Should be 2 nodes on "+node["title"])
         
@@ -79,21 +80,19 @@ def test(testfilter):
     _lib.FatalAssert(len(txlist) == 3,"SHould be 3 unapproved TXs")
     
     # wait while new block created and posted to all other
-    _blocks.WaitBlocks(nodes[1]["datadir"],10)
-    _blocks.WaitBlocks(nodes[0]["datadir"],10)
+    b1 = _blocks.WaitBlocks(nodes[1]["datadir"],10)
+    b2 = _blocks.WaitBlocks(nodes[0]["datadir"],10)
     
     _lib.StartTestGroup("Check blockchain after updates")
     blocks2_0 = _blocks.GetBlocks(nodes[0]["datadir"])
-    
+
     _lib.FatalAssert(len(blocks2_0) == 10,"10 block must be on node 0")
     _lib.FatalAssert(blocks2_0[1] == blocks1[0],"9 block must be same for both")
     
     blocks2_1 = _blocks.GetBlocks(nodes[1]["datadir"])
     _lib.FatalAssert(len(blocks2_1) == 10,"10 block must be on node 1")
     _lib.FatalAssert(blocks2_1[1] == blocks1[0],"9 block must be same for both")
-    
-    _lib.FatalAssert(blocks2_0 == blocks2_1,"Blocks on 0 must be same as on 1")
-    
+        
     _lib.StartTestGroup("Node 2 "+os.path.basename(nodes[2]["datadir"]))
     _blocks.WaitBlocks(nodes[2]["datadir"],10)
     

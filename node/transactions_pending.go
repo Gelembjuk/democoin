@@ -146,7 +146,12 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			tx := transaction.DeserializeTransaction(v)
+			tx := transaction.Transaction{}
+			err := tx.DeserializeTransaction(v)
+
+			if err != nil {
+				return err
+			}
 
 			sender := []byte{}
 
@@ -240,7 +245,12 @@ func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*transaction.Transact
 		v := b.Get(txid)
 
 		if v != nil {
-			tx := transaction.DeserializeTransaction(v)
+			tx := transaction.Transaction{}
+			err := tx.DeserializeTransaction(v)
+
+			if err != nil {
+				return err
+			}
 			txres = &tx
 		}
 
@@ -260,14 +270,20 @@ func (u *UnApprovedTransactions) GetTransactions(number int) ([]*transaction.Tra
 	db := u.Blockchain.db
 	txset := []*transaction.Transaction{}
 
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
+	err := db.View(func(txdb *bolt.Tx) error {
+		b := u.getBucket(txdb)
 		c := b.Cursor()
 
 		totalnumber := 0
 
 		for k, v := c.First(); k != nil && number > totalnumber; k, v = c.Next() {
-			tx := transaction.DeserializeTransaction(v)
+			tx := transaction.Transaction{}
+			err := tx.DeserializeTransaction(v)
+
+			if err != nil {
+				return err
+			}
+
 			txset = append(txset, &tx)
 			totalnumber++
 		}
@@ -326,7 +342,14 @@ func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := u.getBucket(tx)
 		u.Logger.Trace.Printf("adding TX to unappr %x", txadd.ID)
-		err := b.Put(txadd.ID, txadd.Serialize())
+
+		txser, err := txadd.Serialize()
+
+		if err != nil {
+			return err
+		}
+
+		err = b.Put(txadd.ID, txser)
 
 		if err != nil {
 			return errors.New("Adding new transaction to unapproved cache: " + err.Error())
@@ -412,13 +435,18 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 
 	total := 0
 
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
+	err := db.View(func(txdb *bolt.Tx) error {
+		b := u.getBucket(txdb)
 
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			tx := transaction.DeserializeTransaction(v)
+			tx := transaction.Transaction{}
+			err := tx.DeserializeTransaction(v)
+
+			if err != nil {
+				return err
+			}
 			//u.Logger.Trace.Printf("Iterate over. Next %x", tx.ID)
 			callback(hex.EncodeToString(k), tx.String())
 			total++
@@ -447,7 +475,12 @@ func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Tran
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			txexi := transaction.DeserializeTransaction(v)
+			txexi := transaction.Transaction{}
+			err := txexi.DeserializeTransaction(v)
+
+			if err != nil {
+				return err
+			}
 
 			conflicts := false
 
