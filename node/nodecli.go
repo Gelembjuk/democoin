@@ -328,6 +328,14 @@ func (c *NodeCLI) commandCreateBlockchain() error {
 * To init blockchain loaded from other node. Is executed for new nodes if blockchain already exists
  */
 func (c *NodeCLI) commandInitBlockchain() error {
+	// try to open existent BC to check if it exists
+	err := c.Node.OpenBlockchain()
+
+	if err == nil {
+		c.Node.CloseBlockchain()
+		return errors.New("Blockchain already exists")
+	}
+
 	alldone, err := c.Node.InitBlockchainFromOther(c.Input.Args.NodeHost, c.Input.Args.NodePort)
 
 	if err != nil {

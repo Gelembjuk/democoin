@@ -278,7 +278,7 @@ func (wc *WalletCLI) commandSend() error {
 		return err
 	}
 
-	fmt.Printf("Success. New transaction: %x", txID)
+	fmt.Printf("Success. New transaction: %x\n", txID)
 
 	return nil
 }

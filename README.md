@@ -101,8 +101,6 @@ Usage:
         - Saves a node host and port to configfile.
 ```
 
-### Your test scenario
-
 #### Download and compile
 
 Install dependencies
@@ -135,6 +133,93 @@ go build
 ```
 
 Now, you can run ./node and ./wallet commands (or node.exe and wallet.exe on Windows)
+
+
+#### Your test scenario
+
+1. Create a first wallet. In your case a wallet addres will be different
+
+```
+./node createwallet
+DemoCoin - 0.1 alpha
+
+Your new address: 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT
+```
+
+2. Init a blockchain
+
+2.A. Create new blockchain. Use your wallet address to assign first block reward to it
+
+```
+./node createblockchain -address 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -genesis "THis is initial block of new cryptocurrency"
+```
+
+2.B. Or connect to existent blockchain. You can provide a node address and port or just use defalt nodes to join the existent coin "DemoCoin"
+
+```
+./node initblockchain
+```
+
+3. Display the blocks list
+
+```
+./node printchain
+```
+4. Create one more wallet
+
+```
+./node createwallet
+Your new address: 1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv
+```
+
+5. Send money from the first wallet to this one
+
+```
+./node send -from 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -to 1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv -amount 2
+```
+
+6. Force to make a block (while node is not running, it will not make blocks automatically). Set your first wallet to be a minter. It will get reward for new block.
+
+```
+./node makeblock -minter 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT
+```
+
+7. Display balance of wallets
+
+```
+./node getbalances
+Balance for all addresses:
+
+18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT: 18.00000000 (Approved - 18.00000000, Pending - 0.00000000)
+1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv: 2.00000000 (Approved - 2.00000000, Pending - 0.00000000)
+```
+
+8. Start a node to run as a server. You have to provide a wallet address who will get rewards for new blocks and a network port to listen connections. Then check a node status.
+
+```
+./node startnode -minter 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -port 20000
+./node nodestate
+```
+
+9. Send another 2 transactions and wait for new block (minimum number of transactions per block is 'count of blocks'-1, if your chain has now more blocks, send more transactions to get new block)
+
+```
+./node send -from 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -to 1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv -amount 0.5
+./node send -from 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -to 1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv -amount 0.6
+```
+
+10. Verify the chain state
+
+```
+./node getbalances
+./node printchain
+```
+
+11. Stop the node
+
+```
+./node stopnode
+```
 
 ## Author
 
