@@ -25,7 +25,7 @@ It is possible to use only **Node** without a wallet client. A node has a wallet
 ### Node
 
 ```
-$****./node 
+$./node 
 Usage  
   help - Prints this help
   == Any of next commands can have optional argument [-datadir /path/to/dir] [-logdest stdout]==
