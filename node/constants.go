@@ -6,6 +6,7 @@ package main
 // this defines how strong miming is needed. 16 is simple mining less 5 sec in simple desktop
 // 24 will need 30 seconds in average
 const targetBits = 16
+const targetBits_2 = 24
 
 // MAx and Min number of transactions per block
 const maxMinNumberTransactionInBlock = 3

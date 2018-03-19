@@ -61,8 +61,8 @@ Usage
         - Cancel unapproved transaction. NOTE!. This cancels only from local cache!
   startnode [-minter ADDRESS] [-port PORT]
         - Start a node server. -minter defines minting address and -port - listening port
-  startintnode [-minter ADDRESS] [-port PORT]
-        - Start a node server in interactive mode (no deamon). -minter defines minting address and -port - listening port
+  startintnode [-minter ADDRESS] [-host HOST] -port PORT]
+        - Start a node server in interactive mode (no deamon). -minter defines minting address, -host - node hostname and -port - listening port
   stopnode
         - Stop runnning node
   nodestate
@@ -194,10 +194,10 @@ Balance for all addresses:
 1G7aUSsrFkGTMVrAyEsWTumMrods3mxBfv: 2.00000000 (Approved - 2.00000000, Pending - 0.00000000)
 ```
 
-8. Start a node to run as a server. You have to provide a wallet address who will get rewards for new blocks and a network port to listen connections. Then check a node status.
+8. Start a node to run as a server. You have to provide a wallet address who will get rewards for new blocks and a network port to listen connections. Then check a node status. You have to run on a host (IP) and port accesible from outside to other nodes (except, if you build your local network cryptocurrency).
 
 ```
-./node startnode -minter 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -port 20000
+./node startnode -minter 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -host myserverexternalhost.com -port 20000
 ./node nodestate
 ```
 

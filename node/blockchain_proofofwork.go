@@ -23,7 +23,16 @@ type ProofOfWork struct {
 // The object can be used to find a hash for the block
 func NewProofOfWork(b *Block) *ProofOfWork {
 	target := big.NewInt(1)
-	target.Lsh(target, uint(256-targetBits))
+
+	var tb int
+
+	if b.Height >= 1000 {
+		tb = targetBits_2
+	} else {
+		tb = targetBits
+	}
+
+	target.Lsh(target, uint(256-tb))
 
 	pow := &ProofOfWork{b, target}
 

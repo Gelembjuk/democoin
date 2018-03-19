@@ -377,7 +377,7 @@ func (c *NodeCLI) commandPrintChain() error {
 		if c.Input.Args.View == "short" {
 			fmt.Printf("===============\n")
 			fmt.Printf("Hash: %x\n", block.Hash)
-			fmt.Printf("Height: %d\n", block.Height)
+			fmt.Printf("Height: %d, Transactions: %d\n", block.Height, len(block.Transactions)-1)
 			fmt.Printf("Prev: %x\n", block.PrevBlockHash)
 
 			fmt.Printf("\n")

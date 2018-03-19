@@ -159,7 +159,7 @@ func (c AppInput) printUsage() {
 	fmt.Println("  send -from FROM -to TO -amount AMOUNT\n\t- Send AMOUNT of coins from FROM address to TO. ")
 	fmt.Println("  canceltransaction -transaction TRANSACTIONID\n\t- Cancel unapproved transaction. NOTE!. This cancels only from local cache!")
 
-	fmt.Println("  startnode [-minter ADDRESS] [-port PORT]\n\t- Start a node server. -minter defines minting address and -port - listening port")
+	fmt.Println("  startnode [-minter ADDRESS] [-host HOST] [-port PORT]\n\t- Start a node server. -minter defines minting address, -host - hostname of the node server and -port - listening port")
 	fmt.Println("  startintnode [-minter ADDRESS] [-port PORT]\n\t- Start a node server in interactive mode (no deamon). -minter defines minting address and -port - listening port")
 	fmt.Println("  stopnode\n\t- Stop runnning node")
 	fmt.Println("  nodestate\n\t- Print state of the node process")
