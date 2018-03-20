@@ -8,8 +8,12 @@ package main
 const targetBits = 16
 const targetBits_2 = 24
 
-// MAx and Min number of transactions per block
-const maxMinNumberTransactionInBlock = 3
+// Max and Min number of transactions per block
+// If number of block in a chain is less this umber then it is a minimum. if more then
+// this number is  a minimum unmber of TX
+const maxMinNumberTransactionInBlock = 1000
+
+// Max number of TX per block
 const maxNumberTransactionInBlock = 10000
 
 // ==========================================================

@@ -117,7 +117,7 @@ func (n *NodeBlockchain) GetTransactionNumbersLimits(block *Block) (int, int, er
 		if err != nil {
 			return 0, 0, err
 		}
-		min = bestHeight
+		min = bestHeight + 1
 	} else {
 		min = block.Height
 	}
@@ -127,7 +127,7 @@ func (n *NodeBlockchain) GetTransactionNumbersLimits(block *Block) (int, int, er
 	} else if min < 1 {
 		min = 1
 	}
-
+	n.Logger.Trace.Printf("TX count limits %d - %d", min, maxNumberTransactionInBlock)
 	return min, maxNumberTransactionInBlock, nil
 }
 

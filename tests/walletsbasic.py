@@ -68,11 +68,15 @@ def test(testfilter):
     _lib.FatalAssert(len(addresses) == 2, "Expected 2 wallets for second folder")
     
     #send some funds to all that wallets
-    amounttosend = "%.8f" % round(balances[address1][0]/5,8)
+    amounttosend = "%.8f" % round(balances[address1][0]/8,8)
     
+    # for next block minimum 6 TXt are required
     _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
     tx2_1 = _transfers.Send(datadir,address1, waddress1_2 ,amounttosend)
     _transfers.Send(datadir,address1, waddress2_1 ,amounttosend)
+    _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
+    _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
+    _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
     
     # we control how blocks are created. here we wait on a block started and then send another 3 TX
     # we will get 2 more blocks here
@@ -80,11 +84,17 @@ def test(testfilter):
     time.sleep(1)
     #_lib.FatalAssert(len(blocks) == blockslen + 1, "Expected "+str(blockslen + 1)+" blocks")
     
+    # 7 TX are required  for next block
     _transfers.Send(datadir,address1, waddress2_2 ,amounttosend)
     
-    amounttosend2 = "%.8f" % round(balances[address1_2][0]/5,8)
+    amounttosend2 = "%.8f" % round(balances[address1_2][0]/8,8)
     _transfers.Send(datadir,address1_2, waddress1_1 ,amounttosend2)
     tx2_2 = _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
+    
+    _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
+    _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
+    _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
+    _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
     
     # wait to complete blocks 
     blocks = _blocks.WaitBlocks(datadir, blockslen + 2)
@@ -97,8 +107,8 @@ def test(testfilter):
     am3 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_1, "localhost", nodeport)
     am4 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_2, "localhost", nodeport)
     
-    _lib.FatalAssert(am1[1] == float(amounttosend) + float(amounttosend2), "Expected balance is different for wallet 1_1")
-    _lib.FatalAssert(am2[1] == float(amounttosend) + float(amounttosend2), "Expected balance is different for wallet 1_2")
+    _lib.FatalAssert(am1[1] == round(float(amounttosend) * 4 + float(amounttosend2),8), "Expected balance is different for wallet 1_1")
+    _lib.FatalAssert(am2[1] == round(float(amounttosend) + float(amounttosend2) * 5,8), "Expected balance is different for wallet 1_2")
     _lib.FatalAssert(am3[1] == float(amounttosend), "Expected balance is different for wallet 2_1")
     _lib.FatalAssert(am4[1] == float(amounttosend), "Expected balance is different for wallet 2_2")
     
@@ -115,14 +125,22 @@ def test(testfilter):
     _lib.FatalAssert(am3[1] == balances2[waddress2_1][1], "Expected balance is different from group listing for 2_1")
     _lib.FatalAssert(am4[1] == balances2[waddress2_2][1], "Expected balance is different from group listing for 2_2")
     
-    newbalance1 = round(balances[address1][0]  - float(amounttosend) * 4,8) 
+    newbalance1 = round(balances[address1][0]  - float(amounttosend) * 7,8) 
     
     _lib.FatalAssert(newbalance1 == balances_new[address1][1], "Expected balance is different after spending")
     
-    #send from wallets 
+    #send from wallets . 8 TXs
     _wallet.Send(walletdatadir1,waddress1_1, address1 ,amounttosend,"localhost", nodeport)
     _wallet.Send(walletdatadir1,waddress1_1, address1_2 ,amounttosend2,"localhost", nodeport)
     tx2_3 = _wallet.Send(walletdatadir1,waddress1_2 ,address1, amounttosend,"localhost", nodeport)
+    
+    amounttosend3 = "%.8f" % round(float(amounttosend2)/8, 8)
+    
+    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
+    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
+    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
+    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
+    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
     
     blocks = _blocks.WaitBlocks(datadir, blockslen + 3)
     _lib.FatalAssert(len(blocks) == blockslen + 3, "Expected "+str(blockslen + 3)+" blocks")

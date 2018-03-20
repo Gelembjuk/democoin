@@ -118,6 +118,7 @@ func (tx *Transaction) PrepareSignData(prevTXs map[string]Transaction) ([][]byte
 	signdata := make([][]byte, len(tx.Vin))
 
 	txCopy := tx.TrimmedCopy()
+	txCopy.ID = []byte{}
 
 	for inID, vin := range txCopy.Vin {
 		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
@@ -261,13 +262,26 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 	}
 
 	txCopy := tx.TrimmedCopy()
+	txCopy.ID = []byte{}
+
 	curve := elliptic.P256()
 
 	for inID, vin := range tx.Vin {
+		// full input transaction
 		prevTx := prevTXs[inID]
+
+		//hash of key who signed this input
+		signPubKeyHash, _ := lib.HashPubKey(vin.PubKey)
+
+		if bytes.Compare(prevTx.Vout[vin.Vout].PubKeyHash, signPubKeyHash) != 0 {
+			return errors.New(fmt.Sprintf("Sign Key Hash for input %x is different from output hash", vin.Txid))
+		}
+
 		txCopy.Vin[inID].Signature = nil
+		// replace pub key with its hash. same was done when signing
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
+		// build key and verify data
 		r := big.Int{}
 		s := big.Int{}
 		sigLen := len(vin.Signature)

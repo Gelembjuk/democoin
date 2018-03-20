@@ -4,6 +4,8 @@ import subprocess
 import random, string
 import re
 from shutil import copyfile
+import base64
+import json
 
 NODE_BIN = '../node/node'
 WALLET_BIN = '../wallet/wallet'
@@ -52,10 +54,34 @@ def Execute(command, verbose = False):
         print res
     
     return res
+
+def ExecuteHang(command, folder, verbose = False):
+    if verbose:
+        commandtext = ' '.join(command)
+        print commandtext
+        sys.exit(0)
+    
+    commanddata = base64.b64encode(json.dumps(command))
+    folderdata = base64.b64encode(folder)
+    
+    res = subprocess.check_output(["python","_nodeinteractive.py", commanddata, folderdata])
+    
+    if verbose:
+        print res
+    
+    return res
     
 def ExecuteNode(args,verbose=False):
     command = [NODE_BIN] + args
     return Execute(command,verbose)
+
+def ExecuteWallet(args,verbose=False):
+    command = [WALLET_BIN] + args
+    return Execute(command,verbose)
+
+def ExecuteHangNode(args, folder, verbose=False):
+    command = [NODE_BIN] + args
+    return ExecuteHang(command, folder, verbose)
 
 def ExecuteWallet(args,verbose=False):
     command = [WALLET_BIN] + args

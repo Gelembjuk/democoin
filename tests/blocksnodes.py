@@ -4,6 +4,7 @@ import _blocks
 import re
 import time
 import startnode
+import _node
 import blocksbasic
 import managenodes
 import initblockchain
@@ -44,6 +45,7 @@ def test(testfilter):
     address1_2 = inf[2]
     address1_3 = inf[3]
     
+    #_node.StartNodeInteractive(datadir, address1,'30000', "Server 1")
     startnode.StartNode(datadir, address1,'30000', "Server 1")
     datadir1 = datadir
     managenodes.RemoveAllNodes(datadir1)

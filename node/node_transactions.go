@@ -301,6 +301,12 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 		return nil, err
 	}
 
+	n.Logger.Trace.Println(NewTX)
+	n.Logger.Trace.Println("Data to sign")
+	for _, d := range DataToSign {
+		n.Logger.Trace.Printf("%x", d)
+	}
+
 	err = NewTX.SignData(privKey, DataToSign)
 
 	if err != nil {
@@ -311,12 +317,6 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	if err != nil {
 		n.Logger.Trace.Printf("Sending Error for %x: %s", NewTX.ID, err.Error())
 		return nil, err
-	}
-
-	n.Logger.Trace.Println(NewTX)
-	n.Logger.Trace.Println("Data to sign")
-	for _, d := range DataToSign {
-		n.Logger.Trace.Printf("%x", d)
 	}
 
 	return NewTX, nil
