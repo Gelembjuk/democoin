@@ -47,10 +47,10 @@ func (u *UnApprovedTransactions) InitDB() {
 // Check if transaction inputs are pointed to some prepared transactions.
 // Check conflicts too. Same output can not be repeated twice
 
-func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []transaction.TXInput) error {
+func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs map[int]transaction.TXInput, inputTXs map[int]*transaction.Transaction) error {
 	checked := map[string][]int{}
 
-	for _, vin := range inputs {
+	for vinInd, vin := range inputs {
 		// look if not yet checked
 
 		txstr := hex.EncodeToString(vin.Txid)
@@ -75,7 +75,7 @@ func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs []transaction.TXI
 		if tx == nil {
 			return NewTXVerifyError("Input transaction is not found in prepared to approve", TXVerifyErrorNoInput, vin.Txid)
 		}
-
+		inputTXs[vinInd] = tx
 		checked[txstr] = append(checked[txstr], vin.Vout)
 	}
 	return nil
@@ -141,8 +141,8 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 
 	db := u.Blockchain.db
 
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
+	err := db.View(func(txdb *bolt.Tx) error {
+		b := u.getBucket(txdb)
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {

@@ -104,13 +104,16 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 
 // prepare data to sign as part of transaction
 // this return slice of slices. Every of them must be signed for each TX Input
-func (tx *Transaction) PrepareSignData(prevTXs map[string]Transaction) ([][]byte, error) {
+func (tx *Transaction) PrepareSignData(prevTXs map[int]*Transaction) ([][]byte, error) {
 	if tx.IsCoinbase() {
 		return nil, nil
 	}
 
-	for _, vin := range tx.Vin {
-		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
+	for vinInd, vin := range tx.Vin {
+		if _, ok := prevTXs[vinInd]; !ok {
+			return nil, errors.New("Previous transaction is not correct")
+		}
+		if bytes.Compare(prevTXs[vinInd].ID, vin.Txid) != 0 {
 			return nil, errors.New("Previous transaction is not correct")
 		}
 	}
@@ -121,7 +124,7 @@ func (tx *Transaction) PrepareSignData(prevTXs map[string]Transaction) ([][]byte
 	txCopy.ID = []byte{}
 
 	for inID, vin := range txCopy.Vin {
-		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
+		prevTx := prevTXs[inID]
 		txCopy.Vin[inID].Signature = nil
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 

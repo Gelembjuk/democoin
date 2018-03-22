@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/gob"
 	"log"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -81,4 +82,26 @@ func (w *Wallet) newKeyPair() (ecdsa.PrivateKey, []byte) {
 	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
 
 	return *private, pubKey
+}
+func (w Wallet) Serialize() ([]byte, error) {
+	var encoded bytes.Buffer
+
+	enc := gob.NewEncoder(&encoded)
+	err := enc.Encode(w)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return encoded.Bytes(), nil
+}
+func (w *Wallet) Deserialize(data []byte) error {
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(w)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

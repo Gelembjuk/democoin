@@ -1,12 +1,12 @@
 package wallet
 
 import (
-	"crypto/ecdsa"
+	"bytes"
 	"crypto/elliptic"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -255,7 +255,7 @@ func (wc *WalletCLI) commandSend() error {
 		return errors.New("The amount of transaction must be more 0")
 	}
 
-	wc.Logger.Trace.Printf("Prepare wallet to send data to node " + wc.Node.NodeAddrToString())
+	wc.Logger.Trace.Printf("Prepare wallet %s to send data to node %s", wc.Input.Address, wc.Node.NodeAddrToString())
 
 	// load wallet object for this address
 	walletobj, err := wc.WalletsObj.GetWallet(wc.Input.Address)
@@ -263,19 +263,7 @@ func (wc *WalletCLI) commandSend() error {
 	if err != nil {
 		return err
 	}
-	curve := elliptic.P256()
-	x := big.Int{}
-	y := big.Int{}
-	PubKey := walletobj.GetPublicKey()
-	keyLen := len(PubKey)
-	x.SetBytes(PubKey[:(keyLen / 2)])
-	y.SetBytes(PubKey[(keyLen / 2):])
 
-	rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-
-	wc.Logger.Trace.Printf("PubKey: %x", PubKey)
-
-	wc.Logger.Trace.Printf("rawPubKey: %x", rawPubKey)
 	// Prepares new transaction without signatures
 	// This is just request to a node and it returns prepared transaction
 	TX, DataToSign, err := wc.NodeCLI.SendRequestNewTransaction(wc.Node,
@@ -284,7 +272,13 @@ func (wc *WalletCLI) commandSend() error {
 	if err != nil {
 		return err
 	}
+	var encoded bytes.Buffer
+	gob.Register(elliptic.P256())
+	enc := gob.NewEncoder(&encoded)
+	enc.Encode(walletobj.PrivateKey)
 
+	wc.Logger.Trace.Printf("Wallet Pub: %x", walletobj.GetPublicKey())
+	wc.Logger.Trace.Printf("Wallet Pri: %x", encoded.Bytes())
 	// Sign transaction.
 	TX.SignData(walletobj.GetPrivateKey(), DataToSign)
 

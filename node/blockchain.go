@@ -860,7 +860,8 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 
 			return sideBlocks, mainBlocks, sideblock, nil
 		}
-		sideBlocks = append(sideBlocks, sideblock)
+		// side blocks are returned in same order asthey are
+		// main blocks must be reversed to add them in correct order
 		mainBlocks = append(mainBlocks, topblock)
 
 		if len(sideblock.PrevBlockHash) == 0 || len(topblock.PrevBlockHash) == 0 {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -130,7 +132,7 @@ func (n *NodeTransactions) CancelTransaction(txidstr string) error {
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
 func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (bool, error) {
-	notFoundInputs, err := n.UnspentTXs.VerifyTransactionsOutputsAreNotSpent(tx.Vin)
+	notFoundInputs, inputTXs, err := n.UnspentTXs.VerifyTransactionsOutputsAreNotSpent(tx.Vin)
 
 	if err != nil {
 		return false, err
@@ -140,11 +142,25 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 		// some inputs are not existent
 		// we need to try to find them in list of unapproved transactions
 		// if not found then it is bad transaction
-		err := n.UnapprovedTXs.CheckInputsArePrepared(notFoundInputs)
+		err := n.UnapprovedTXs.CheckInputsArePrepared(notFoundInputs, inputTXs)
 
 		if err != nil {
 			return false, err
 		}
+	}
+	// verify signatures
+	// REM
+	var encoded bytes.Buffer
+
+	enc := gob.NewEncoder(&encoded)
+	enc.Encode(inputTXs)
+	n.Logger.Trace.Println(inputTXs)
+	n.Logger.Trace.Printf("TX list %x", encoded.Bytes())
+
+	err = tx.Verify(inputTXs)
+
+	if err != nil {
+		return false, err
 	}
 	return true, nil
 }
@@ -263,12 +279,27 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 		outputs = append(outputs, *transaction.NewTXOutput(totalamount-amount, from)) // a change
 	}
 
+	inputTXs := make(map[int]*transaction.Transaction)
+
+	for vinInd, vin := range inputs {
+		tx := prevTXs[hex.EncodeToString(vin.Txid)]
+		inputTXs[vinInd] = &tx
+	}
+
 	tx := transaction.Transaction{nil, inputs, outputs, 0}
 	tx.TimeNow()
+	// REM
 	n.Logger.Trace.Println("Prepare sign data")
-	n.Logger.Trace.Println(tx)
-	n.Logger.Trace.Println(prevTXs)
-	signdata, err := tx.PrepareSignData(prevTXs)
+	txbytes, _ := tx.Serialize()
+	n.Logger.Trace.Printf("TX %x", txbytes)
+
+	var encoded bytes.Buffer
+	enc := gob.NewEncoder(&encoded)
+	enc.Encode(inputTXs)
+	n.Logger.Trace.Println(inputTXs)
+	n.Logger.Trace.Printf("%x", encoded.Bytes())
+
+	signdata, err := tx.PrepareSignData(inputTXs)
 
 	if err != nil {
 		return nil, nil, err

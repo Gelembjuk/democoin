@@ -566,40 +566,58 @@ func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, t
 
 // Verifies which transactions outputs are not yet spent.
 // Returns list of inputs that are not found in list of unspent outputs
-func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) ([]transaction.TXInput, error) {
-	notFoundInputs := []transaction.TXInput{}
+func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) (map[int]transaction.TXInput, map[int]*transaction.Transaction, error) {
+	// list of full input transactions. it can be used to verify signature later
+	var inputTX map[int]*transaction.Transaction
+	inputTX = make(map[int]*transaction.Transaction)
+
+	var notFoundInputs map[int]transaction.TXInput
+	notFoundInputs = make(map[int]transaction.TXInput)
+
 	db := u.Blockchain.db
 
 	err := db.View(func(tx *bolt.Tx) error {
 		b := u.getBucket(tx)
 
-		for _, txi := range txilist {
+		for txiInd, txi := range txilist {
 			txdata := b.Get(txi.Txid)
 
 			if txdata == nil {
 				// not found
-				notFoundInputs = append(notFoundInputs, txi)
+				inputTX[txiInd] = nil
+				notFoundInputs[txiInd] = txi
 				continue
 			}
 			exists := false
+			blockHash := []byte{}
 
 			outs := u.DeserializeOutputs(txdata)
 
 			for _, out := range outs {
 				if out.OIndex == txi.Vout {
 					exists = true
+					blockHash = out.BlockHash
 					break
 				}
 			}
 
 			if !exists {
-				notFoundInputs = append(notFoundInputs, txi)
+				notFoundInputs[txiInd] = txi
+				inputTX[txiInd] = nil
+			} else {
+				// find this TX and get full info about it
+				prevTX, err := u.Blockchain.FindTransactionByBlock(txi.Txid, blockHash)
+
+				if err != nil {
+					return err
+				}
+				inputTX[txiInd] = prevTX
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return notFoundInputs, nil
+	return notFoundInputs, inputTX, nil
 }
