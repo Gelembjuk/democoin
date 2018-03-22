@@ -1,9 +1,12 @@
 package wallet
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -260,6 +263,19 @@ func (wc *WalletCLI) commandSend() error {
 	if err != nil {
 		return err
 	}
+	curve := elliptic.P256()
+	x := big.Int{}
+	y := big.Int{}
+	PubKey := walletobj.GetPublicKey()
+	keyLen := len(PubKey)
+	x.SetBytes(PubKey[:(keyLen / 2)])
+	y.SetBytes(PubKey[(keyLen / 2):])
+
+	rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
+
+	wc.Logger.Trace.Printf("PubKey: %x", PubKey)
+
+	wc.Logger.Trace.Printf("rawPubKey: %x", rawPubKey)
 	// Prepares new transaction without signatures
 	// This is just request to a node and it returns prepared transaction
 	TX, DataToSign, err := wc.NodeCLI.SendRequestNewTransaction(wc.Node,
@@ -268,6 +284,7 @@ func (wc *WalletCLI) commandSend() error {
 	if err != nil {
 		return err
 	}
+
 	// Sign transaction.
 	TX.SignData(walletobj.GetPrivateKey(), DataToSign)
 

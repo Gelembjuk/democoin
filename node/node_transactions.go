@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -302,6 +304,19 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	}
 
 	n.Logger.Trace.Println(NewTX)
+	curve := elliptic.P256()
+	x := big.Int{}
+	y := big.Int{}
+	keyLen := len(PubKey)
+	x.SetBytes(PubKey[:(keyLen / 2)])
+	y.SetBytes(PubKey[(keyLen / 2):])
+
+	rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
+
+	n.Logger.Trace.Printf("PubKey: %x", PubKey)
+
+	n.Logger.Trace.Printf("rawPubKey: %x", rawPubKey)
+
 	n.Logger.Trace.Println("Data to sign")
 	for _, d := range DataToSign {
 		n.Logger.Trace.Printf("%x", d)

@@ -2,6 +2,7 @@ import _lib
 import _transfers
 import _blocks
 import _complex
+import _node
 import re
 import os
 import time
@@ -22,7 +23,10 @@ def aftertest(testfilter):
         
 def test(testfilter):
     global datadirs
-    
+
+    #return _complex.Make5BlocksBC()
+    #return _complex.PrepareNodes()
+
     _lib.CleanTestFolders()
     
     dirs = _complex.Copy6Nodes()
@@ -39,6 +43,9 @@ def test(testfilter):
         
         nodes.append({'index':i - 1, 'port':port, 'datadir':d,'address':address,"title":"Server "+str(i)})
         
+        #_transfers.ReindexUTXO(d)
+        #txlist = transactions.GetUnapprovedTransactions(d)
+        #print txlist
         #start this node 
         startnode.StartNodeConfig(d)
         
@@ -47,7 +54,7 @@ def test(testfilter):
         
     #check nodes on each node is correct 
     for node in nodes:
-        #print os.path.basename(node['datadir'])
+        print os.path.basename(node['datadir'])
         nodeslist = managenodes.GetNodes(node['datadir'])
         _lib.FatalAssert(len(nodeslist) == 2,"Should be 2 nodes on "+node["title"])
         
@@ -57,7 +64,7 @@ def test(testfilter):
         if node['index'] == 1:
             _lib.FatalAssert("localhost:30002" in nodeslist,"Node 2 should be on the node 1")
             _lib.FatalAssert("localhost:30003" in nodeslist,"Node 3 should be on the node 1")
-    
+    #raise ValueError('Stop')
     # test blocks branches
     _lib.StartTestGroup("Check blockchain before updates")
     blocks1 = _blocks.GetBlocks(nodes[0]["datadir"])
@@ -77,7 +84,18 @@ def test(testfilter):
     
     # get unapproved transactions (after block cancel)
     txlist = transactions.GetUnapprovedTransactions(nodes[1]["datadir"])
-    _lib.FatalAssert(len(txlist) == 3,"SHould be 3 unapproved TXs")
+    _lib.FatalAssert(len(txlist) == 7,"SHould be 7 unapproved TXs")
+    
+    #send another 2 TXs to have 9 required TXs
+    balances = _transfers.GetGroupBalance(nodes[1]["datadir"])
+
+    mainbalance = _transfers.GetGroupBalance(nodes[0]["datadir"])
+
+    addr1 = balances.keys()[0]
+    amount = "%.8f" % round(balances[addr1][0]/5,8)
+    
+    _transfers.Send(nodes[1]["datadir"],addr1,mainbalance.keys()[0],amount)
+    _transfers.Send(nodes[1]["datadir"],addr1,mainbalance.keys()[0],amount)
     
     # wait while new block created and posted to all other
     b1 = _blocks.WaitBlocks(nodes[1]["datadir"],10)

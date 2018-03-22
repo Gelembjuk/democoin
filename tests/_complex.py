@@ -7,6 +7,7 @@ import time
 import random
 import startnode
 import blocksnodes
+import blocksbasic
 import managenodes
 import transactions
 
@@ -19,6 +20,8 @@ def PrepareNodes():
     _lib.CleanTestFolders()
     
     datadir_tmp = CopyBlockchainWithBlocks()
+    
+    blocks = _blocks.GetBlocks(datadir_tmp)
     
     balances = _transfers.GetGroupBalance(datadir_tmp)
     
@@ -55,7 +58,12 @@ def PrepareNodes():
     blockslen = len(blocks)
     
     balance1 = _transfers.GetBalance(datadir, address1)
-    as1 = "%.8f" % round(balance1[0]/5,8)
+    as1 = "%.8f" % round(balance1[0]/10,8)
+    
+    # should be 6 transactions
+    _transfers.Send(datadir,address1, nodes[0]['address'] ,as1)
+    _transfers.Send(datadir,address1, nodes[1]['address'] ,as1)
+    _transfers.Send(datadir,address1, nodes[2]['address'] ,as1)
     
     _transfers.Send(datadir,address1, nodes[0]['address'] ,as1)
     _transfers.Send(datadir,address1, nodes[1]['address'] ,as1)
@@ -113,16 +121,27 @@ def PrepareNodes():
     _lib.StartTestGroup("2 new blocks on first branch")
     
     balance1 = _transfers.GetBalance(datadir, address1)
-    as1 = "%.8f" % round(balance1[0]/7,8)
+    as1 = "%.8f" % round(balance1[0]/20,8)
     
-    tx = [""] * 6
+    # 7 TX for 8-th block
+    tx = [""] * 15
     tx[0] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
     tx[1] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
     tx[2] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
+    tx[3] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
+    tx[4] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
+    tx[5] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
+    tx[6] = _transfers.Send(datadir,address1, nodes[3]['address'] ,as1)
     
-    tx[3] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
-    tx[4] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
-    tx[5] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    # 8 TX for 9-th block
+    tx[7] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[8] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[9] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[10] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[11] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[12] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[13] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
+    tx[14] = _transfers.Send(datadir,address1, nodes[4]['address'] ,as1)
     
     blocks1 = _blocks.WaitBlocks(nodes[4]['datadir'], blockslen + 3)
     
@@ -131,11 +150,16 @@ def PrepareNodes():
     _lib.StartTestGroup("1 new block on second branch")
     
     balance2 = _transfers.GetBalance(nodes[0]['datadir'], nodes[0]['address'])
-    as2 = "%.8f" % round(balance2[0]/5,8)
+    as2 = "%.8f" % round(balance2[0]/10,8)
     
+    # 7 new TX
     tx1 = _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[1]['address'] ,as2)
     tx2 = _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
     tx3 = _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
+    _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
+    _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
+    _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
+    _transfers.Send(nodes[0]['datadir'], nodes[0]['address'], nodes[2]['address'] ,as2)
     
     blocks2 = _blocks.WaitBlocks(nodes[2]['datadir'], blockslen + 2)
     _lib.FatalAssert(len(blocks2) == blockslen + 2, "Expected "+str(blockslen +2)+" blocks for branch 2")
@@ -159,6 +183,13 @@ def PrepareNodes():
     
     configfile = "{\"MinterAddress\":\""+nodes[2]['address']+"\",\"Port\": "+str(nodes[2]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[1]['datadir'], configfile)
+    
+    print os.path.basename(datadir)
+    startnode.StopNode(datadir)
+    
+    for node in nodes:
+        print os.path.basename(node['datadir'])
+        startnode.StopNode(node['datadir'])
     
     return [datadir, address1, nodes, blockslen+1, datadirs]
    
@@ -189,3 +220,136 @@ def Copy6Nodes():
     _lib.CopyTestData(datadirs[5],"bc6nodes_6")
     
     return datadirs
+
+def Make5BlocksBC():
+    datadir = _lib.CreateTestFolder()
+    
+    _lib.StartTest("Create first address")
+    res = _lib.ExecuteNode(['createwallet','-datadir',datadir])
+    _lib.FatalAssertSubstr(res,"Your new address","Address creation returned wrong result")
+
+    # get address from this response 
+    match = re.search( r'.+: (.+)', res)
+
+    if not match:
+        _lib.Fatal("Address can not be found in "+res)
+        
+    address = match.group(1)
+
+    _lib.StartTest("Create blockchain")
+    res = _lib.ExecuteNode(['createblockchain','-datadir',datadir, '-address', address, '-genesis', 'This is the initial block in chain'])
+    _lib.FatalAssertSubstr(res,"Done!","Blockchain init failed")
+    
+    # create another 3 addresses
+    address2 = transactions.CreateWallet(datadir)
+    address3 = transactions.CreateWallet(datadir)
+
+    _lib.StartTestGroup("Do transfers")
+
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    amount1 = '1'
+    amount2 = '2'
+    amount3 = '3'
+    
+    _lib.StartTestGroup("Send 1 transaction")
+    
+    # one TX in first block
+    txid1 = _transfers.Send(datadir,address,address2,amount1)
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    
+    blockshashes = _blocks.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 2,"Should be 2 blocks in blockchain")
+    
+    _lib.StartTestGroup("Send 2 transactions")
+    # 2 TX in second block
+    txid2 = _transfers.Send(datadir,address,address3,amount2)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
+    
+    txid3 = _transfers.Send(datadir,address,address3,amount3)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 2,"Should be 2 unapproved transaction")
+    
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    
+    blockshashes = _blocks.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 3,"Should be 3 blocks in blockchain")
+   
+    _lib.StartTestGroup("Send 3 transactions")
+    
+    microamount = 0.01
+    
+    txid1 = _transfers.Send(datadir,address,address2,microamount)
+    txid2 = _transfers.Send(datadir,address2,address3,microamount)
+    txid3 = _transfers.Send(datadir,address3,address,microamount)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 3,"Should be 3 unapproved transaction")
+    
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = _blocks.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 4,"Should be 4 blocks in blockchain")
+    
+    _lib.StartTestGroup("Send 4 transactions. Random value")
+    
+    microamountmax = 0.01
+    microamountmin = 0.0095
+    
+    a1 = round(random.uniform(microamountmin, microamountmax),8)
+    a2 = round(random.uniform(microamountmin, microamountmax),8)
+    a3 = round(random.uniform(microamountmin, microamountmax),8)
+    a4 = round(random.uniform(microamountmin, microamountmax),8)
+    txid1 = _transfers.Send(datadir,address,address2,a1)
+    txid2 = _transfers.Send(datadir,address2,address3,a2)
+    txid3 = _transfers.Send(datadir,address3,address,a3)
+    txid3 = _transfers.Send(datadir,address3,address,a4)
+    
+    txlist = transactions.GetUnapprovedTransactions(datadir)
+    
+    _lib.FatalAssert(len(txlist) == 4,"Should be 4 unapproved transaction")
+    
+    if txid1 not in txlist.keys():
+        _lib.Fatal("Transaction 1 is not in the list of transactions after iteration "+str(i))
+
+    if txid2 not in txlist.keys():
+        _lib.Fatal("Transaction 2 is not in the list of transactions after iteration "+str(i))
+
+    if txid3 not in txlist.keys():
+        _lib.Fatal("Transaction 3 is not in the list of transactions after iteration "+str(i))
+        
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = _blocks.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 5,"Should be 5 blocks in blockchain")
+    
+    _lib.StartTestGroup("Send 5 transactions. Random value")
+    
+    txid1 = _transfers.Send(datadir,address,address2,a4)
+    txid2 = _transfers.Send(datadir,address2,address3,a3)
+    txid3 = _transfers.Send(datadir,address3,address,a2)
+    txid3 = _transfers.Send(datadir,address3,address,a1)
+    txid1 = _transfers.Send(datadir,address,address2,a1)
+    
+    blockchash = blocksbasic.MintBlock(datadir,address)
+    transactions.GetUnapprovedTransactionsEmpty(datadir)
+    
+    blockshashes = _blocks.GetBlocks(datadir)
+    
+    _lib.FatalAssert(len(blockshashes) == 6,"Should be 6 blocks in blockchain")
+    
+    return [datadir, address, address2, address3]

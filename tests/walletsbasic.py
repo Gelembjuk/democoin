@@ -88,6 +88,7 @@ def test(testfilter):
     _transfers.Send(datadir,address1, waddress2_2 ,amounttosend)
     
     amounttosend2 = "%.8f" % round(balances[address1_2][0]/8,8)
+    
     _transfers.Send(datadir,address1_2, waddress1_1 ,amounttosend2)
     tx2_2 = _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
     
@@ -132,7 +133,7 @@ def test(testfilter):
     #send from wallets . 8 TXs
     _wallet.Send(walletdatadir1,waddress1_1, address1 ,amounttosend,"localhost", nodeport)
     _wallet.Send(walletdatadir1,waddress1_1, address1_2 ,amounttosend2,"localhost", nodeport)
-    tx2_3 = _wallet.Send(walletdatadir1,waddress1_2 ,address1, amounttosend,"localhost", nodeport)
+    _wallet.Send(walletdatadir1,waddress1_2 ,address1, amounttosend,"localhost", nodeport)
     
     amounttosend3 = "%.8f" % round(float(amounttosend2)/8, 8)
     
@@ -140,7 +141,7 @@ def test(testfilter):
     _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
     _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
     _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
-    _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
+    tx2_3 = _wallet.Send(walletdatadir1,waddress1_2, address1_2 ,amounttosend3,"localhost", nodeport)
     
     blocks = _blocks.WaitBlocks(datadir, blockslen + 3)
     _lib.FatalAssert(len(blocks) == blockslen + 3, "Expected "+str(blockslen + 3)+" blocks")
@@ -150,9 +151,6 @@ def test(testfilter):
     am1_expected = round(am1[1] - float(amounttosend) - float(amounttosend2),8)
     
     _lib.FatalAssert(am1_back[1] == am1_expected, "Expected balance after sending from wallet 1_1 is wrong: "+str(am1_back)+", expected "+str(am1_expected))
-    
-    # at this time wallet should have 0 funds
-    _wallet.SendTooMuch(walletdatadir1,waddress1_1, address1 ,"0.0002","localhost", nodeport)
     
     am2_back = _wallet.GetBalanceWallet(walletdatadir1, waddress1_2, "localhost", nodeport)
     
@@ -174,25 +172,34 @@ def test(testfilter):
     
     _lib.StartTestGroup("Unspent transactions")
     
-    wallet1_2_txs = [tx2_1,tx2_2,tx2_3]
-
     unspent = _wallet.GetUnspentNoNode(walletdatadir1,waddress1_2)
     
-    _lib.FatalAssert(len(unspent) == 1, "Expected 1 unspent transaction")
+    txunspent = []
     
-    _lib.FatalAssert(unspent[0][2] in wallet1_2_txs, "Unspent TX in not in array of expected")
+    for i in unspent:
+        txunspent.append(i[2])
+        
+    _lib.FatalAssert(tx2_3 in txunspent, "Unspent TX in not in array of expected")
     
-    unspent = _wallet.GetUnspent(walletdatadir2,waddress1_2,"localhost", nodeport)
+    unspent2 = _wallet.GetUnspent(walletdatadir2,waddress1_2,"localhost", nodeport)
 
-    _lib.FatalAssert(len(unspent) == 1, "Expected 1 unspent transaction. No config")
-    _lib.FatalAssert(unspent[0][2] in wallet1_2_txs, "Unspent TX in not in array of expected. No config")
+    _lib.FatalAssert(len(unspent) == len(unspent2), "NNNumber of unspent TXs should be same. No config")
+    
+    txunspent = []
+    
+    for i in unspent2:
+        txunspent.append(i[2])
+    
+    _lib.FatalAssert(tx2_3 in txunspent, "Unspent TX in not in array of expected. No config")
     
     _lib.StartTestGroup("Get wallet history")
     
     history = _wallet.GetHistoryNoNode(walletdatadir1,waddress1_2)
-    _lib.FatalAssert(len(history) == 3, "Expected 3 records in a history")
+    
+    _lib.FatalAssert(len(history) == 12, "Expected 3 records in a history")
     
     history = _wallet.GetHistory(walletdatadir2,waddress2_2,"localhost", nodeport)
+    
     _lib.FatalAssert(len(history) == 1, "Expected 1 record in a history")
     
     _lib.StartTestGroup("Pending balance")
@@ -215,8 +222,8 @@ def test(testfilter):
     _lib.FatalAssert(am3[1] == am3_2[1], "Approved balance should be unchanged")
     _lib.FatalAssert(am3[0] - float(amounttosend2) == am3_2[0] , "Total balance should be changed")
     _lib.FatalAssert(am3[2] - float(amounttosend2) == am3_2[2], "Pending balance should be changed")
-    
-    _lib.FatalAssert(addb1_2_2[2] - addb1_2[2] == am3[2] - am3_2[2], "Pending difference should be same")
+
+    _lib.FatalAssert(round(addb1_2_2[2] - addb1_2[2],8) == round(am3[2] - am3_2[2],8), "Pending difference should be same")
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
     

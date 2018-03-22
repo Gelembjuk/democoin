@@ -67,16 +67,19 @@ def test(testfilter):
     
     waddress1_1 = _wallet.CreateWallet(walletdatadir1);
     waddress1_2 = _wallet.CreateWallet(walletdatadir1);
+    waddress1_3 = _wallet.CreateWallet(walletdatadir1);
     
     waddress2_1 = _wallet.CreateWallet(walletdatadir2);
     waddress2_2 = _wallet.CreateWallet(walletdatadir2);
     
     #send some funds to all that wallets
     amounttosend = "%.8f" % round(bal1[0]/5,8)
+    amounttosend3 = "%.8f" % round(bal1_3[0]/5,8)
     
     _transfers.Send(datadir,address1, waddress1_1 ,amounttosend)
     _transfers.Send(datadir,address1, waddress1_2 ,amounttosend)
     _transfers.Send(datadir,address1, waddress2_1 ,amounttosend)
+    _transfers.Send(datadir,address1_3, waddress1_3 ,amounttosend3)
     
     # we control how blocks are created. here we wait on a block started and then send another 3 TX
     # we will get 2 more blocks here
@@ -86,6 +89,9 @@ def test(testfilter):
     amounttosend2 = "%.8f" % round(bal1_2[0]/5,8)
     _transfers.Send(datadir,address1_2, waddress1_1 ,amounttosend2)
     _transfers.Send(datadir,address1_2, waddress1_2 ,amounttosend2)
+    
+    _transfers.Send(datadir,address1_3, waddress1_3 ,amounttosend3)
+    _transfers.Send(datadir,address1_3, waddress1_3 ,amounttosend3)
     
     # wait to complete blocks 
     blocks = _blocks.WaitBlocks(datadir,6)

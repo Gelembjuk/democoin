@@ -47,7 +47,7 @@ def GetGroupBalance(datadir):
     
     _lib.FatalAssertSubstr(res,"Balance for all addresses:","Balance result not printed")
     
-    regex = ur"([a-z0-9A-Z]+): ([0-9.]+) .Approved - ([0-9.]+), Pending - ([0-9.]+)"
+    regex = ur"([a-z0-9A-Z]+): ([0-9.]+) .Approved - ([0-9.]+), Pending - ([0-9.-]+)"
 
     balancesres = re.findall(regex, res)
     balances = {}
@@ -80,3 +80,9 @@ def SendTooMuch(datadir,fromaddr,to,amount):
     res = _lib.ExecuteNode(['send','-datadir',datadir,'-from',fromaddr,'-to',to,'-amount',str(amount)])
     
     _lib.FatalAssertSubstr(res,"No anough funds","Sending of money didn't gail as expected")
+    
+def ReindexUTXO(datadir):
+    _lib.StartTest("Reindex Unspent Transactions")
+    res = _lib.ExecuteNode(['reindexunspent','-datadir',datadir])
+    _lib.FatalAssertSubstr(res,"Done!","No correct response on reindex")
+    

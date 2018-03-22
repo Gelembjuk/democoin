@@ -439,7 +439,7 @@ func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*Block) error {
  */
 func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 	db := u.Blockchain.db
-	u.Logger.Trace.Printf("Update UTXO n block removed %x", block.Hash) //REM
+
 	err := db.Update(func(txdb *bolt.Tx) error {
 		b := u.getBucket(txdb)
 
@@ -460,7 +460,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 					if txi == nil {
 						// TX is not found in current BC . no sense to add it to unspent
 						u.Logger.Trace.Printf("tx not found in current BC") //REM
-						return nil
+						break
 					}
 
 					u.Logger.Trace.Printf("found tx in block %x", blockHash) //REM

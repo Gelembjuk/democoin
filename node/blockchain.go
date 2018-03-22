@@ -854,6 +854,10 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 		bc.Logger.Trace.Printf("parallel %x vs %x", sideblock.Hash, topblock.Hash)
 
 		if bytes.Compare(sideblock.Hash, topblock.Hash) == 0 {
+
+			ReverseBlocksSlice(sideBlocks)
+			ReverseBlocksSlice(mainBlocks)
+
 			return sideBlocks, mainBlocks, sideblock, nil
 		}
 		sideBlocks = append(sideBlocks, sideblock)

@@ -1,1 +1,1 @@
-{"MinterAddress":"1MrX9Z1ydesGWEXWwLYDVsEJ1kr1v3L2TP","Port": 30001,"Nodes":[{"Host": "localhost","Port":30002}, {"Host": "localhost","Port":30003}]}
+{"MinterAddress":"1FnwDHasMm4cdzGbjz1dU2CR65h6ksMKoU","Port": 30001,"Nodes":[{"Host": "localhost","Port":30002}, {"Host": "localhost","Port":30003}]}
