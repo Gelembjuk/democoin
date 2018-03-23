@@ -15,7 +15,6 @@ import (
 	"net"
 
 	"github.com/gelembjuk/democoin/lib"
-	"github.com/gelembjuk/democoin/lib/transaction"
 )
 
 type NodeClient struct {
@@ -66,7 +65,7 @@ type ComGetWalletBalance struct {
 // New Transaction command. Is used by lite wallets
 type ComNewTransaction struct {
 	Address string
-	TX      *transaction.Transaction
+	TX      []byte
 }
 
 // To Request new transaction by wallet.
@@ -82,7 +81,7 @@ type ComRequestTransaction struct {
 // Response on prepare transaction request. Returns transaction without signs
 // and data to sign
 type ComRequestTransactionData struct {
-	TX         transaction.Transaction
+	TX         []byte
 	DataToSign [][]byte
 }
 
@@ -322,33 +321,33 @@ func (c *NodeClient) SendGetHistory(addr lib.NodeAddr, address string) ([]ComHis
 }
 
 // Send new transaction from a wallet to a node
-func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx *transaction.Transaction) ([]byte, error) {
+func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx []byte) ([]byte, error) {
 	data := ComNewTransaction{}
 	data.Address = from
 	data.TX = tx
 
 	request, err := c.BuildCommandData("txfull", &data)
 
-	NewTX := transaction.Transaction{}
+	NewTX := []byte{}
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.SendDataWaitResponse(addr, request, &NewTX)
+	err = c.SendDataWaitResponse(addr, request, NewTX)
 
 	if err != nil {
 		return nil, err
 	}
 	// no data are returned. only success or not
-	return NewTX.ID, nil
+	return NewTX, nil
 }
 
 // Request to prepare new transaction by wallet.
 // It returns a transaction without signature.
 // Wallet has to sign it and then use SendNewTransaction to send completed transaction
 func (c *NodeClient) SendRequestNewTransaction(addr lib.NodeAddr,
-	PubKey []byte, to string, amount float64) (*transaction.Transaction, [][]byte, error) {
+	PubKey []byte, to string, amount float64) ([]byte, [][]byte, error) {
 
 	data := ComRequestTransaction{}
 	data.PubKey = PubKey
@@ -369,7 +368,7 @@ func (c *NodeClient) SendRequestNewTransaction(addr lib.NodeAddr,
 		return nil, nil, err
 	}
 
-	return &datapayload.TX, datapayload.DataToSign, nil
+	return datapayload.TX, datapayload.DataToSign, nil
 }
 
 // Request for list of unspent transactions outputs

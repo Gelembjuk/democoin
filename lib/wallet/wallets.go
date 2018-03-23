@@ -19,6 +19,8 @@ type Wallets struct {
 	Wallets map[string]*Wallet
 
 	Logger *lib.LoggerMan
+
+	WalletsFile string
 }
 
 type WalletsFile struct {
@@ -64,7 +66,13 @@ func (ws Wallets) GetWallet(address string) (Wallet, error) {
 
 // LoadFromFile loads wallets from the file
 func (ws *Wallets) LoadFromFile() error {
-	walletFile := ws.DataDir + walletFile
+	var walletFile string
+
+	if ws.WalletsFile != "" {
+		walletFile = ws.WalletsFile
+	} else {
+		walletFile = ws.DataDir + walletFile
+	}
 
 	_, err := os.Stat(walletFile)
 

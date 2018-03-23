@@ -11,20 +11,22 @@ import transactions
 #    print "after test"
 def test(testfilter):
     _lib.StartTestGroup("Blocks making")
-
+	
+    nodeport = '30010'
+	
     _lib.CleanTestFolders()
     datadir = _lib.CreateTestFolder()
 
     startnode.StartNodeWithoutBlockchain(datadir)
     address = startnode.InitBockchain(datadir)
-    startnode.StartNode(datadir, address, '30000')
+    startnode.StartNode(datadir, address, nodeport)
     startnode.StopNode(datadir)
     
     # create another 3 addresses
     address2 = transactions.CreateWallet(datadir)
     address3 = transactions.CreateWallet(datadir)
 
-    startnode.StartNode(datadir, address, '30000')
+    startnode.StartNode(datadir, address, nodeport)
 
     _lib.StartTestGroup("Do transactions")
 

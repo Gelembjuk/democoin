@@ -176,8 +176,9 @@ func (s *NodeServerRequest) handleTxFull() error {
 	if err != nil {
 		return err
 	}
-
-	err = s.Node.NodeTX.ReceivedNewTransaction(payload.TX)
+	TX := transaction.Transaction{}
+	TX.DeserializeTransaction(payload.TX)
+	err = s.Node.NodeTX.ReceivedNewTransaction(&TX)
 
 	if err != nil {
 		return err
@@ -187,7 +188,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 
 	// send internal command to try to mine new block
 
-	s.S.TryToMakeNewBlock(payload.TX.ID)
+	s.S.TryToMakeNewBlock(TX.ID)
 
 	s.Response, err = lib.GobEncode(payload.TX)
 
@@ -222,7 +223,7 @@ func (s *NodeServerRequest) handleTxRequest() error {
 	}
 
 	result.DataToSign = DataToSign
-	result.TX = *TX
+	result.TX, _ = TX.Serialize()
 
 	s.Response, err = lib.GobEncode(result)
 
@@ -230,7 +231,7 @@ func (s *NodeServerRequest) handleTxRequest() error {
 		return err
 	}
 	address, _ := lib.PubKeyToAddres(payload.PubKey)
-	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", result.TX.ID, address)
+	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", TX.ID, address)
 
 	return nil
 }

@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -289,15 +287,15 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 	tx := transaction.Transaction{nil, inputs, outputs, 0}
 	tx.TimeNow()
 	// REM
-	n.Logger.Trace.Println("Prepare sign data")
+	n.Logger.Trace.Printf("Prepare sign data to send by %s", from)
 	txbytes, _ := tx.Serialize()
 	n.Logger.Trace.Printf("TX %x", txbytes)
 
 	var encoded bytes.Buffer
 	enc := gob.NewEncoder(&encoded)
 	enc.Encode(inputTXs)
-	n.Logger.Trace.Println(inputTXs)
-	n.Logger.Trace.Printf("%x", encoded.Bytes())
+
+	n.Logger.Trace.Printf("input TXS %x", encoded.Bytes())
 
 	signdata, err := tx.PrepareSignData(inputTXs)
 
@@ -333,20 +331,6 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	if err != nil {
 		return nil, err
 	}
-
-	n.Logger.Trace.Println(NewTX)
-	curve := elliptic.P256()
-	x := big.Int{}
-	y := big.Int{}
-	keyLen := len(PubKey)
-	x.SetBytes(PubKey[:(keyLen / 2)])
-	y.SetBytes(PubKey[(keyLen / 2):])
-
-	rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-
-	n.Logger.Trace.Printf("PubKey: %x", PubKey)
-
-	n.Logger.Trace.Printf("rawPubKey: %x", rawPubKey)
 
 	n.Logger.Trace.Println("Data to sign")
 	for _, d := range DataToSign {

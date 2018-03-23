@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"io"
 	"math"
 	"math/big"
 	"strings"
 	"time"
 
 	"encoding/gob"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -67,100 +68,6 @@ func (tx *Transaction) Hash() ([]byte, error) {
 
 	tx.ID = hash[:]
 	return tx.ID, nil
-}
-
-// Sign signs each input of a Transaction
-func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) error {
-	if tx.IsCoinbase() {
-		return nil
-	}
-
-	for _, vin := range tx.Vin {
-		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
-			return errors.New("Previous transaction is not correct")
-		}
-	}
-
-	txCopy := tx.TrimmedCopy()
-
-	for inID, vin := range txCopy.Vin {
-		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
-		txCopy.Vin[inID].Signature = nil
-		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
-
-		dataToSign := fmt.Sprintf("%x\n", txCopy)
-
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
-		if err != nil {
-			return err
-		}
-		signature := append(r.Bytes(), s.Bytes()...)
-
-		tx.Vin[inID].Signature = signature
-		txCopy.Vin[inID].PubKey = nil
-	}
-	return nil
-}
-
-// prepare data to sign as part of transaction
-// this return slice of slices. Every of them must be signed for each TX Input
-func (tx *Transaction) PrepareSignData(prevTXs map[int]*Transaction) ([][]byte, error) {
-	if tx.IsCoinbase() {
-		return nil, nil
-	}
-
-	for vinInd, vin := range tx.Vin {
-		if _, ok := prevTXs[vinInd]; !ok {
-			return nil, errors.New("Previous transaction is not correct")
-		}
-		if bytes.Compare(prevTXs[vinInd].ID, vin.Txid) != 0 {
-			return nil, errors.New("Previous transaction is not correct")
-		}
-	}
-
-	signdata := make([][]byte, len(tx.Vin))
-
-	txCopy := tx.TrimmedCopy()
-	txCopy.ID = []byte{}
-
-	for inID, vin := range txCopy.Vin {
-		prevTx := prevTXs[inID]
-		txCopy.Vin[inID].Signature = nil
-		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
-
-		dataToSign := fmt.Sprintf("%x\n", txCopy)
-
-		signdata[inID] = []byte(dataToSign)
-
-		txCopy.Vin[inID].PubKey = nil
-	}
-
-	return signdata, nil
-}
-
-// Sign Inouts for transaction
-// DataToSign is output of the function PrepareSignData
-func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) error {
-	if tx.IsCoinbase() {
-		return nil
-	}
-
-	for inID, _ := range tx.Vin {
-		dataToSign := DataToSign[inID]
-
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, dataToSign)
-
-		if err != nil {
-			return err
-		}
-		signature := append(r.Bytes(), s.Bytes()...)
-
-		tx.Vin[inID].Signature = signature
-	}
-	// when transaction i complete, we can add ID to it
-	tx.Hash()
-
-	return nil
 }
 
 // String returns a human-readable representation of a transaction
@@ -240,6 +147,73 @@ func (tx *Transaction) Copy() (Transaction, error) {
 	return txCopy, nil
 }
 
+// prepare data to sign as part of transaction
+// this return slice of slices. Every of them must be signed for each TX Input
+func (tx *Transaction) PrepareSignData(prevTXs map[int]*Transaction) ([][]byte, error) {
+	if tx.IsCoinbase() {
+		return nil, nil
+	}
+
+	for vinInd, vin := range tx.Vin {
+		if _, ok := prevTXs[vinInd]; !ok {
+			return nil, errors.New("Previous transaction is not correct")
+		}
+		if bytes.Compare(prevTXs[vinInd].ID, vin.Txid) != 0 {
+			return nil, errors.New("Previous transaction is not correct")
+		}
+	}
+
+	signdata := make([][]byte, len(tx.Vin))
+
+	txCopy := tx.TrimmedCopy()
+	txCopy.ID = []byte{}
+
+	for inID, _ := range txCopy.Vin {
+		txCopy.Vin[inID].Signature = nil
+	}
+
+	for inID, vin := range txCopy.Vin {
+		prevTx := prevTXs[inID]
+
+		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
+
+		h := md5.New()
+		io.WriteString(h, fmt.Sprintf("%x\n", txCopy))
+		dataToSign := h.Sum(nil)
+
+		signdata[inID] = dataToSign
+
+		txCopy.Vin[inID].PubKey = nil
+	}
+
+	return signdata, nil
+}
+
+// Sign Inouts for transaction
+// DataToSign is output of the function PrepareSignData
+func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+
+	for inID, _ := range tx.Vin {
+		dataToSign := DataToSign[inID]
+
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, dataToSign)
+
+		if err != nil {
+			return err
+		}
+		signature := append(r.Bytes(), s.Bytes()...)
+
+		tx.Vin[inID].Signature = signature
+	}
+	// when transaction i complete, we can add ID to it
+	tx.Hash()
+
+	return nil
+}
+
 // Verify verifies signatures of Transaction inputs
 // And total amount of inputs and outputs
 func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
@@ -269,6 +243,10 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 
 	curve := elliptic.P256()
 
+	for inID, _ := range tx.Vin {
+		txCopy.Vin[inID].Signature = nil
+		txCopy.Vin[inID].PubKey = nil
+	}
 	for inID, vin := range tx.Vin {
 		// full input transaction
 		prevTx := prevTXs[inID]
@@ -280,7 +258,6 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 			return errors.New(fmt.Sprintf("Sign Key Hash for input %x is different from output hash", vin.Txid))
 		}
 
-		txCopy.Vin[inID].Signature = nil
 		// replace pub key with its hash. same was done when signing
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
@@ -297,12 +274,14 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		x.SetBytes(vin.PubKey[:(keyLen / 2)])
 		y.SetBytes(vin.PubKey[(keyLen / 2):])
 
-		dataToVerify := fmt.Sprintf("%x\n", txCopy)
+		h := md5.New()
+		io.WriteString(h, fmt.Sprintf("%x\n", txCopy))
+		dataToVerify := h.Sum(nil)
 
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 
-		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
-			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . \nData to verify %x\nPubKey: %x", vin.Txid, dataToVerify, rawPubKey))
+		if ecdsa.Verify(&rawPubKey, dataToVerify, &r, &s) == false {
+			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . \nData to verify %x\nPubKey: %x", vin.Txid, dataToVerify, vin.PubKey))
 		}
 		txCopy.Vin[inID].PubKey = nil
 	}

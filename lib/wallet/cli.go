@@ -1,9 +1,6 @@
 package wallet
 
 import (
-	"bytes"
-	"crypto/elliptic"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,6 +8,7 @@ import (
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
+	"github.com/gelembjuk/democoin/lib/transaction"
 )
 
 const walletFile = "wallet.dat"
@@ -266,24 +264,21 @@ func (wc *WalletCLI) commandSend() error {
 
 	// Prepares new transaction without signatures
 	// This is just request to a node and it returns prepared transaction
-	TX, DataToSign, err := wc.NodeCLI.SendRequestNewTransaction(wc.Node,
+	TXBytes, DataToSign, err := wc.NodeCLI.SendRequestNewTransaction(wc.Node,
 		walletobj.GetPublicKey(), wc.Input.ToAddress, wc.Input.Amount)
 
 	if err != nil {
 		return err
 	}
-	var encoded bytes.Buffer
-	gob.Register(elliptic.P256())
-	enc := gob.NewEncoder(&encoded)
-	enc.Encode(walletobj.PrivateKey)
 
-	wc.Logger.Trace.Printf("Wallet Pub: %x", walletobj.GetPublicKey())
-	wc.Logger.Trace.Printf("Wallet Pri: %x", encoded.Bytes())
+	TX := transaction.Transaction{}
+	TX.DeserializeTransaction(TXBytes)
 	// Sign transaction.
 	TX.SignData(walletobj.GetPrivateKey(), DataToSign)
 
 	// Sends final complete transaction
-	txID, err := wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TX)
+	TXBytes, _ = TX.Serialize()
+	txID, err := wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TXBytes)
 
 	if err != nil {
 		return err
