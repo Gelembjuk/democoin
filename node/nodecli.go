@@ -41,7 +41,7 @@ func getNodeCLI(input AppInput) NodeCLI {
 	nd.DataDir = cli.DataDir
 	nd.Logger = cli.Logger
 
-	_, port, authstr, err := nd.loadPIDFile()
+	_, port, authstr, _, err := nd.loadPIDFile()
 
 	if err == nil && port > 0 {
 		cli.AlreadyRunningPort = port

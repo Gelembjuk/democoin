@@ -259,12 +259,14 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 /*
 * Starts a server for node. It listens TPC port and communicates with other nodes and lite clients
  */
-func (s *NodeServer) StartServer() error {
+func (s *NodeServer) StartServer(serverStartResult chan string) error {
 	s.Logger.Trace.Println("Prepare server to start ", s.NodeAddress.NodeAddrToString())
 
 	ln, err := net.Listen(lib.Protocol, ":"+strconv.Itoa(s.NodeAddress.Port))
 
 	if err != nil {
+		serverStartResult <- err.Error()
+
 		close(s.StopMainConfirmChan)
 		s.Logger.Trace.Println("Fail to start port listening ", err.Error())
 		return err
@@ -281,6 +283,8 @@ func (s *NodeServer) StartServer() error {
 	// we set buffer to 100 transactions.
 	// we don't expect more 100 TX will be received while building a block. if yes, we will skip
 	// adding a signal. this will not be a problem
+
+	serverStartResult <- ""
 
 	go s.BlockBuilder()
 

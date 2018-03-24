@@ -3,14 +3,10 @@ package transaction
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"io"
 	"math"
-	"math/big"
 	"strings"
 	"time"
 
@@ -177,11 +173,9 @@ func (tx *Transaction) PrepareSignData(prevTXs map[int]*Transaction) ([][]byte, 
 
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
-		h := md5.New()
-		io.WriteString(h, fmt.Sprintf("%x\n", txCopy))
-		dataToSign := h.Sum(nil)
+		dataToSign := fmt.Sprintf("%x\n", txCopy)
 
-		signdata[inID] = dataToSign
+		signdata[inID] = []byte(dataToSign)
 
 		txCopy.Vin[inID].PubKey = nil
 	}
@@ -191,7 +185,7 @@ func (tx *Transaction) PrepareSignData(prevTXs map[int]*Transaction) ([][]byte, 
 
 // Sign Inouts for transaction
 // DataToSign is output of the function PrepareSignData
-func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) error {
+func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, PubKey []byte, DataToSign [][]byte) error {
 	if tx.IsCoinbase() {
 		return nil
 	}
@@ -199,12 +193,34 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, DataToSign [][]byte) e
 	for inID, _ := range tx.Vin {
 		dataToSign := DataToSign[inID]
 
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, dataToSign)
+		attempt := 1
 
-		if err != nil {
-			return err
+		var signature []byte
+		var err error
+
+		for {
+			signature, err = lib.SignData(privKey, dataToSign)
+
+			if err != nil {
+				return err
+			}
+
+			attempt = attempt + 1
+
+			v, err := lib.VerifySignature(signature, dataToSign, PubKey)
+
+			if err != nil {
+				return err
+			}
+
+			if v {
+				break
+			}
+
+			if attempt > 10 {
+				break
+			}
 		}
-		signature := append(r.Bytes(), s.Bytes()...)
 
 		tx.Vin[inID].Signature = signature
 	}
@@ -241,8 +257,6 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 	txCopy := tx.TrimmedCopy()
 	txCopy.ID = []byte{}
 
-	curve := elliptic.P256()
-
 	for inID, _ := range tx.Vin {
 		txCopy.Vin[inID].Signature = nil
 		txCopy.Vin[inID].PubKey = nil
@@ -261,26 +275,15 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		// replace pub key with its hash. same was done when signing
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
 
-		// build key and verify data
-		r := big.Int{}
-		s := big.Int{}
-		sigLen := len(vin.Signature)
-		r.SetBytes(vin.Signature[:(sigLen / 2)])
-		s.SetBytes(vin.Signature[(sigLen / 2):])
+		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 
-		x := big.Int{}
-		y := big.Int{}
-		keyLen := len(vin.PubKey)
-		x.SetBytes(vin.PubKey[:(keyLen / 2)])
-		y.SetBytes(vin.PubKey[(keyLen / 2):])
+		v, err := lib.VerifySignature(vin.Signature, []byte(dataToVerify), vin.PubKey)
 
-		h := md5.New()
-		io.WriteString(h, fmt.Sprintf("%x\n", txCopy))
-		dataToVerify := h.Sum(nil)
+		if err != nil {
+			return err
+		}
 
-		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-
-		if ecdsa.Verify(&rawPubKey, dataToVerify, &r, &s) == false {
+		if !v {
 			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . \nData to verify %x\nPubKey: %x", vin.Txid, dataToVerify, vin.PubKey))
 		}
 		txCopy.Vin[inID].PubKey = nil

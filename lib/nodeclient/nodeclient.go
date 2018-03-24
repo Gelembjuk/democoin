@@ -334,7 +334,7 @@ func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx []byt
 		return nil, err
 	}
 
-	err = c.SendDataWaitResponse(addr, request, NewTX)
+	err = c.SendDataWaitResponse(addr, request, &NewTX)
 
 	if err != nil {
 		return nil, err

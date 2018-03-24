@@ -60,6 +60,7 @@ func (wc *WalletCLI) initWallets() error {
 	err := wallets.LoadFromFile()
 
 	if err != nil && !os.IsNotExist(err) {
+
 		return err
 	}
 
@@ -274,7 +275,7 @@ func (wc *WalletCLI) commandSend() error {
 	TX := transaction.Transaction{}
 	TX.DeserializeTransaction(TXBytes)
 	// Sign transaction.
-	TX.SignData(walletobj.GetPrivateKey(), DataToSign)
+	TX.SignData(walletobj.GetPrivateKey(), walletobj.GetPublicKey(), DataToSign)
 
 	// Sends final complete transaction
 	TXBytes, _ = TX.Serialize()

@@ -66,21 +66,21 @@ func (ws Wallets) GetWallet(address string) (Wallet, error) {
 
 // LoadFromFile loads wallets from the file
 func (ws *Wallets) LoadFromFile() error {
-	var walletFile string
+	var walletsFile string
 
 	if ws.WalletsFile != "" {
-		walletFile = ws.WalletsFile
+		walletsFile = ws.WalletsFile
 	} else {
-		walletFile = ws.DataDir + walletFile
+		walletsFile = ws.DataDir + walletFile
 	}
 
-	_, err := os.Stat(walletFile)
+	_, err := os.Stat(walletsFile)
 
 	if err != nil {
 		return err
 	}
 
-	fileContent, err := ioutil.ReadFile(walletFile)
+	fileContent, err := ioutil.ReadFile(walletsFile)
 	if err != nil {
 		return err
 	}
@@ -90,6 +90,7 @@ func (ws *Wallets) LoadFromFile() error {
 	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
 	err = decoder.Decode(&wallets)
 	if err != nil {
+
 		return err
 	}
 
@@ -101,7 +102,7 @@ func (ws *Wallets) LoadFromFile() error {
 // SaveToFile saves wallets to a file
 func (ws Wallets) SaveToFile() error {
 	var content bytes.Buffer
-	walletFile := ws.DataDir + walletFile
+	walletsFile := ws.DataDir + walletFile
 
 	gob.Register(elliptic.P256())
 
@@ -114,7 +115,7 @@ func (ws Wallets) SaveToFile() error {
 		return err
 	}
 
-	err = ioutil.WriteFile(walletFile, content.Bytes(), 0644)
+	err = ioutil.WriteFile(walletsFile, content.Bytes(), 0644)
 	if err != nil {
 		return err
 	}

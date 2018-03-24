@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
@@ -178,10 +179,11 @@ func (s *NodeServerRequest) handleTxFull() error {
 	}
 	TX := transaction.Transaction{}
 	TX.DeserializeTransaction(payload.TX)
+
 	err = s.Node.NodeTX.ReceivedNewTransaction(&TX)
 
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("Transaction accepting error: %s", err.Error()))
 	}
 
 	s.Logger.Trace.Printf("Acceppted new transaction from %s\n", payload.Address)
@@ -193,7 +195,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 	s.Response, err = lib.GobEncode(payload.TX)
 
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("TXFull Response Error: %s", err.Error()))
 	}
 	return nil
 }

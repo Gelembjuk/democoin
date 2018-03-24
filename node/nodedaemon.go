@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/wallet"
@@ -75,7 +76,7 @@ func (n *NodeDaemon) checkPIDFile() error {
 
 		isfine := true
 		// check if process is really running
-		ProcessID, _, _, err := n.loadPIDFile()
+		ProcessID, _, _, _, err := n.loadPIDFile()
 
 		if err == nil && ProcessID > 0 {
 
@@ -166,7 +167,26 @@ func (n *NodeDaemon) StartServer() error {
 		"-host="+n.Host)
 	cmd.Start()
 	n.Logger.Trace.Println("Daemon process ID is : ", cmd.Process.Pid)
-	n.savePIDFile(cmd.Process.Pid, n.Port)
+	n.savePIDFile(cmd.Process.Pid, n.Port, "", "n")
+
+	i := 0
+
+	for {
+		time.Sleep(1 * time.Second)
+
+		_, _, _, ready, err := n.loadPIDFile()
+
+		if err != nil {
+			break
+		}
+		if ready {
+			n.Logger.Trace.Println("server ready")
+		}
+		if ready || i > 10 {
+			break
+		}
+		i++
+	}
 
 	return nil
 }
@@ -192,7 +212,7 @@ func (n *NodeDaemon) StartServerInteractive() error {
 
 	n.Logger.Trace.Println("Process ID is : ", pid)
 
-	authstr, err := n.savePIDFile(pid, n.Port)
+	authstr, err := n.savePIDFile(pid, n.Port, "", "y")
 
 	if err != nil {
 		return err
@@ -215,7 +235,7 @@ func (n *NodeDaemon) StartServerInteractive() error {
 * Stops a node daemon. Finds a process and kills it.
  */
 func (n *NodeDaemon) StopServer() error {
-	ProcessID, _, _, err := n.loadPIDFile()
+	ProcessID, _, _, _, err := n.loadPIDFile()
 
 	if err == nil && ProcessID > 0 {
 
@@ -255,7 +275,7 @@ func (n *NodeDaemon) StopServer() error {
 func (n *NodeDaemon) DaemonizeServer() error {
 	n.Logger.Trace.Println("Daemon process runs")
 
-	_, _, authstr, _ := n.loadPIDFile()
+	_, _, authstr, _, _ := n.loadPIDFile()
 
 	n.Server.NodeAuthStr = authstr
 
@@ -306,7 +326,11 @@ func (n *NodeDaemon) DaemonizeServer() error {
 	}(n.Server)
 	n.Logger.Trace.Println("Starting server")
 
-	n.Server.StartServer()
+	serverStartResult := make(chan string)
+
+	go n.waitServerStarted(serverStartResult)
+
+	n.Server.StartServer(serverStartResult)
 
 	<-theendchan
 
@@ -314,11 +338,25 @@ func (n *NodeDaemon) DaemonizeServer() error {
 
 	return nil
 }
+func (n *NodeDaemon) waitServerStarted(serverStartResult chan string) {
+
+	result := <-serverStartResult
+
+	if result == "" {
+
+		pid, port, authstring, _, err := n.loadPIDFile()
+
+		if err == nil {
+			// save status to know when server started
+			n.savePIDFile(pid, port, authstring, "y")
+		}
+	}
+}
 
 /*
 * Save PID file for a process
  */
-func (n *NodeDaemon) savePIDFile(pid int, port int) (string, error) {
+func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, ready string) (string, error) {
 
 	file, err := os.Create(n.getServerPidFile())
 
@@ -330,9 +368,11 @@ func (n *NodeDaemon) savePIDFile(pid int, port int) (string, error) {
 	defer file.Close()
 
 	// generate some random string. it will be used to auth local network requests
-	authstr := lib.RandString(lib.CommandLength) // we use same length as for network commands, but this is not related
+	if authstr == "" {
+		authstr = lib.RandString(lib.CommandLength) // we use same length as for network commands, but this is not related
+	}
 
-	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port) + " " + authstr)
+	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port) + " " + authstr + " " + ready)
 
 	if err != nil {
 		n.Logger.Error.Printf("Unable to create pid file : %v\n", err)
@@ -347,49 +387,50 @@ func (n *NodeDaemon) savePIDFile(pid int, port int) (string, error) {
 /*
 * Laads PID file.
  */
-func (n *NodeDaemon) loadPIDFile() (int, int, string, error) {
+func (n *NodeDaemon) loadPIDFile() (int, int, string, bool, error) {
 
 	if _, err := os.Stat(n.getServerPidFile()); err == nil {
 		// get running port from pid file
 		pidfilecontentsbytes, err := ioutil.ReadFile(n.getServerPidFile())
 
 		if err != nil {
-			return 0, 0, "", err
+			return 0, 0, "", false, err
 		}
 
 		pidfilecontents := string(pidfilecontentsbytes)
 
 		parts := strings.Split(pidfilecontents, " ") // port is after pid and space in this text
 
-		if len(parts) == 3 {
+		if len(parts) == 4 {
 			portstring := parts[1]
 			pidstring := parts[0]
 			authstring := parts[2]
+			ready := bool(parts[3] == "y")
 
 			port, err := strconv.Atoi(portstring)
 			if err != nil {
-				return 0, 0, "", err
+				return 0, 0, "", false, err
 			}
 
 			pid, errp := strconv.Atoi(pidstring)
 
 			if errp != nil {
-				return 0, 0, "", errp
+				return 0, 0, "", false, errp
 			}
 
-			return pid, port, authstring, nil
+			return pid, port, authstring, ready, nil
 		}
-		return 0, 0, "", errors.New("PID file wrong format")
+		return 0, 0, "", false, errors.New("PID file wrong format")
 	}
 
-	return -1, 0, "", nil
+	return -1, 0, "", false, nil
 }
 
 /*
 * Returns state of a server. Detects if it is running
  */
 func (n *NodeDaemon) GetServerState() (bool, int, int, error) {
-	ProcessID, Port, _, err := n.loadPIDFile()
+	ProcessID, Port, _, _, err := n.loadPIDFile()
 
 	if err == nil && ProcessID > 0 {
 

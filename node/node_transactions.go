@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -147,13 +145,6 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 		}
 	}
 	// verify signatures
-	// REM
-	var encoded bytes.Buffer
-
-	enc := gob.NewEncoder(&encoded)
-	enc.Encode(inputTXs)
-	n.Logger.Trace.Println(inputTXs)
-	n.Logger.Trace.Printf("TX list %x", encoded.Bytes())
 
 	err = tx.Verify(inputTXs)
 
@@ -286,16 +277,6 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 
 	tx := transaction.Transaction{nil, inputs, outputs, 0}
 	tx.TimeNow()
-	// REM
-	n.Logger.Trace.Printf("Prepare sign data to send by %s", from)
-	txbytes, _ := tx.Serialize()
-	n.Logger.Trace.Printf("TX %x", txbytes)
-
-	var encoded bytes.Buffer
-	enc := gob.NewEncoder(&encoded)
-	enc.Encode(inputTXs)
-
-	n.Logger.Trace.Printf("input TXS %x", encoded.Bytes())
 
 	signdata, err := tx.PrepareSignData(inputTXs)
 
@@ -329,24 +310,19 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	NewTX, DataToSign, err := n.PrepareNewTransaction(PubKey, to, amount)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Prepare error: %s", err.Error()))
 	}
 
-	n.Logger.Trace.Println("Data to sign")
-	for _, d := range DataToSign {
-		n.Logger.Trace.Printf("%x", d)
-	}
-
-	err = NewTX.SignData(privKey, DataToSign)
+	err = NewTX.SignData(privKey, PubKey, DataToSign)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Sign error: %s", err.Error()))
 	}
 	err = n.ReceivedNewTransaction(NewTX)
 
 	if err != nil {
 		n.Logger.Trace.Printf("Sending Error for %x: %s", NewTX.ID, err.Error())
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Final ading TX error: %s", err.Error()))
 	}
 
 	return NewTX, nil
