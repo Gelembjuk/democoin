@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -174,15 +175,17 @@ func (n *NodeDaemon) StartServer() error {
 	for {
 		time.Sleep(1 * time.Second)
 
-		_, _, _, ready, err := n.loadPIDFile()
+		_, _, _, startres, err := n.loadPIDFile()
 
 		if err != nil {
 			break
 		}
-		if ready {
-			n.Logger.Trace.Println("server ready")
+		if startres != "y" && startres != "n" {
+			n.Logger.Trace.Println("STart error: " + startres)
+			return errors.New(startres)
 		}
-		if ready || i > 10 {
+
+		if startres == "y" || i > 10 {
 			break
 		}
 		i++
@@ -290,7 +293,6 @@ func (n *NodeDaemon) DaemonizeServer() error {
 		signalType := <-ch
 		signal.Stop(ch)
 
-		n.Logger.Trace.Println("Exit command received. Exiting...")
 		// before terminating.
 		n.Logger.Trace.Println("Received signal type : ", signalType)
 
@@ -328,11 +330,21 @@ func (n *NodeDaemon) DaemonizeServer() error {
 
 	serverStartResult := make(chan string)
 
+	// this function wil wait to confirm server started
 	go n.waitServerStarted(serverStartResult)
 
-	n.Server.StartServer(serverStartResult)
+	err := n.Server.StartServer(serverStartResult)
 
-	<-theendchan
+	if err == nil {
+		<-theendchan
+	} else {
+		// if server returned error it means it was not correct closing.
+		// so ending channel was not filled
+		n.Logger.Trace.Println("Server stopped with error: " + err.Error())
+	}
+
+	// white while response from server si read in "wait" function
+	<-serverStartResult
 
 	n.Logger.Trace.Println("Node Server Stopped")
 
@@ -343,20 +355,23 @@ func (n *NodeDaemon) waitServerStarted(serverStartResult chan string) {
 	result := <-serverStartResult
 
 	if result == "" {
-
-		pid, port, authstring, _, err := n.loadPIDFile()
-
-		if err == nil {
-			// save status to know when server started
-			n.savePIDFile(pid, port, authstring, "y")
-		}
+		result = "y"
 	}
+	pid, port, authstring, _, err := n.loadPIDFile()
+
+	if err == nil {
+
+		// save status to know when server started
+		n.savePIDFile(pid, port, authstring, result)
+	}
+
+	close(serverStartResult)
 }
 
 /*
 * Save PID file for a process
  */
-func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, ready string) (string, error) {
+func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, startresult string) (string, error) {
 
 	file, err := os.Create(n.getServerPidFile())
 
@@ -372,7 +387,11 @@ func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, ready string
 		authstr = lib.RandString(lib.CommandLength) // we use same length as for network commands, but this is not related
 	}
 
-	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port) + " " + authstr + " " + ready)
+	if len(startresult) > 1 {
+		startresult = base64.StdEncoding.EncodeToString([]byte(startresult))
+	}
+
+	_, err = file.WriteString(strconv.Itoa(pid) + " " + strconv.Itoa(port) + " " + authstr + " " + startresult)
 
 	if err != nil {
 		n.Logger.Error.Printf("Unable to create pid file : %v\n", err)
@@ -387,14 +406,14 @@ func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, ready string
 /*
 * Laads PID file.
  */
-func (n *NodeDaemon) loadPIDFile() (int, int, string, bool, error) {
+func (n *NodeDaemon) loadPIDFile() (int, int, string, string, error) {
 
 	if _, err := os.Stat(n.getServerPidFile()); err == nil {
 		// get running port from pid file
 		pidfilecontentsbytes, err := ioutil.ReadFile(n.getServerPidFile())
 
 		if err != nil {
-			return 0, 0, "", false, err
+			return 0, 0, "", "", err
 		}
 
 		pidfilecontents := string(pidfilecontentsbytes)
@@ -405,25 +424,30 @@ func (n *NodeDaemon) loadPIDFile() (int, int, string, bool, error) {
 			portstring := parts[1]
 			pidstring := parts[0]
 			authstring := parts[2]
-			ready := bool(parts[3] == "y")
+			startresult := parts[3]
+
+			if len(startresult) > 1 {
+				sDec, _ := base64.StdEncoding.DecodeString(startresult)
+				startresult = string(sDec)
+			}
 
 			port, err := strconv.Atoi(portstring)
 			if err != nil {
-				return 0, 0, "", false, err
+				return 0, 0, "", "", err
 			}
 
 			pid, errp := strconv.Atoi(pidstring)
 
 			if errp != nil {
-				return 0, 0, "", false, errp
+				return 0, 0, "", "", errp
 			}
 
-			return pid, port, authstring, ready, nil
+			return pid, port, authstring, startresult, nil
 		}
-		return 0, 0, "", false, errors.New("PID file wrong format")
+		return 0, 0, "", "", errors.New("PID file wrong format")
 	}
 
-	return -1, 0, "", false, nil
+	return -1, 0, "", "", nil
 }
 
 /*

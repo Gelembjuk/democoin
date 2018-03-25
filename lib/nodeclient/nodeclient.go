@@ -562,7 +562,7 @@ func (c *NodeClient) SendDataWaitResponse(addr lib.NodeAddr, data []byte, datapa
 	}
 	defer conn.Close()
 
-	c.Logger.Trace.Println("Sending %d bytes ", len(data))
+	c.Logger.Trace.Printf("Sending %d bytes ", len(data))
 	// send command bytes
 	_, err = io.Copy(conn, bytes.NewReader(data))
 

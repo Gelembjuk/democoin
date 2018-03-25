@@ -284,6 +284,7 @@ func (s *NodeServer) StartServer(serverStartResult chan string) error {
 	// we don't expect more 100 TX will be received while building a block. if yes, we will skip
 	// adding a signal. this will not be a problem
 
+	// notify daemon about server started fine
 	serverStartResult <- ""
 
 	go s.BlockBuilder()

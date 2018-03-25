@@ -279,13 +279,16 @@ func (wc *WalletCLI) commandSend() error {
 
 	// Sends final complete transaction
 	TXBytes, _ = TX.Serialize()
-	txID, err := wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TXBytes)
+	TXBytes, err = wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TXBytes)
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Success. New transaction: %x\n", txID)
+	TX = transaction.Transaction{}
+	TX.DeserializeTransaction(TXBytes)
+
+	fmt.Printf("Success. New transaction: %x\n", TX.ID)
 
 	return nil
 }

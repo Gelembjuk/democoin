@@ -43,7 +43,7 @@ def test(testfilter):
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
     
     #block making will be started now 
-    time.sleep(4)
+    time.sleep(5)
         
     txid2 = _transfers.Send(datadir,address,address3,amount2)
     
