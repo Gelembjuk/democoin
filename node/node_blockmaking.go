@@ -85,7 +85,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 
 		for _, tx := range txlist {
 			n.Logger.Trace.Printf("Minting: Go to verify: %x\n", tx.ID)
-			n.Logger.Trace.Println(tx)
+
 			// we need to verify each transaction
 			// we will do full deep check of transaction
 			// also, a transaction can have input from other transaction from thi block
