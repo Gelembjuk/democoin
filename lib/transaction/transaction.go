@@ -199,6 +199,8 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, PubKey []byte, DataToS
 		var err error
 
 		for {
+			// we can do more 1 attempt to sign. we found some cases where verification of signature fails
+			// we don't know the reason
 			signature, err = lib.SignData(privKey, dataToSign)
 
 			if err != nil {
@@ -284,7 +286,7 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		}
 
 		if !v {
-			return errors.New(fmt.Sprintf("Signatire doe not match for TX %x . \nData to verify %x\nPubKey: %x", vin.Txid, dataToVerify, vin.PubKey))
+			return errors.New(fmt.Sprintf("Signatire doe not match for input TX %x.", vin.Txid))
 		}
 		txCopy.Vin[inID].PubKey = nil
 	}
