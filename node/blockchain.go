@@ -855,7 +855,6 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 
 		if bytes.Compare(sideblock.Hash, topblock.Hash) == 0 {
 
-			ReverseBlocksSlice(sideBlocks)
 			ReverseBlocksSlice(mainBlocks)
 
 			return sideBlocks, mainBlocks, sideblock, nil
@@ -863,6 +862,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 		// side blocks are returned in same order asthey are
 		// main blocks must be reversed to add them in correct order
 		mainBlocks = append(mainBlocks, topblock)
+		sideBlocks = append(sideBlocks, sideblock)
 
 		if len(sideblock.PrevBlockHash) == 0 || len(topblock.PrevBlockHash) == 0 {
 			return nil, nil, nil, errors.New("No connect with main blockchain")

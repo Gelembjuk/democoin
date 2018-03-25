@@ -89,7 +89,7 @@ def test(testfilter):
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
     
-    time.sleep(1)
+    time.sleep(3)
     
     # and now get transactions from second node
     txlist = transactions.GetUnapprovedTransactions(datadir2)
@@ -110,6 +110,7 @@ def test(testfilter):
     AddNode(datadir3, "localhost",'30001')
     
     time.sleep(2)# wait while nodes exchange addresses
+    
     nodes = GetNodes(datadir1)
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 1")
     
@@ -121,8 +122,9 @@ def test(testfilter):
     
     txid1 = _transfers.Send(datadir1,address,address3,'4') 
     
-    txlist1 = transactions.GetUnapprovedTransactions(datadir1)
     transactions.GetUnapprovedTransactionsEmpty(datadir3)
+    
+    txlist1 = transactions.GetUnapprovedTransactions(datadir1)
     
     time.sleep(3) # we need to give a chance to sync all
     

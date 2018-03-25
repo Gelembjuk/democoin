@@ -59,6 +59,8 @@ def test(testfilter):
 
     addresses = _wallet.GetGroupBalanceWallet(walletdatadir,"localhost",nodeport)
 
+    _lib.StartTestGroup("Do transactions")
+
     for i in range(1,6):
         for address in addresses.keys():
             bal = addresses[address][0]
@@ -68,7 +70,7 @@ def test(testfilter):
         
             to = random.choice(addresses.keys())
         
-            amount = "%.8f" % round(bal/2,8)
+            amount = "%.8f" % round(bal/20,8)
         
             tx = _wallet.Send(walletdatadir,address,to,amount,"localhost",nodeport)
 
