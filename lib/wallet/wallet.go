@@ -11,6 +11,8 @@ import (
 	"github.com/gelembjuk/democoin/lib"
 )
 
+const keysTestString = "this is the test string to use for new keys. to know that sign and verify works fine"
+
 // Wallet stores private and public keys
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey
@@ -25,7 +27,38 @@ type WalletBalance struct {
 
 // MakeWallet creates Wallet. It generates new keys pair and assign to the object
 func (w *Wallet) MakeWallet() {
-	private, public := w.newKeyPair()
+	var private ecdsa.PrivateKey
+	var public []byte
+
+	i := 0
+
+	for {
+		if i > 1000 {
+			// we were not able to find good keys in 1000 attempts.
+			// somethign must be very wrong here
+			break
+		}
+		private, public = w.newKeyPair()
+
+		signature, err := lib.SignData(private, []byte(keysTestString))
+
+		i++
+
+		if err != nil {
+			continue
+		}
+
+		vr, err := lib.VerifySignature(signature, []byte(keysTestString), public)
+
+		if err != nil {
+			continue
+		}
+
+		if vr {
+			break
+		}
+	}
+
 	w.PrivateKey = private
 	w.PublicKey = public
 }

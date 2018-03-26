@@ -57,11 +57,13 @@ def test(testfilter):
     
     _lib.FatalAssert(initialbalance[0] == balances[mainaddress][0], "Balance of the first wallet should be same as posted to it")
 
-    addresses = _wallet.GetGroupBalanceWallet(walletdatadir,"localhost",nodeport)
-
     _lib.StartTestGroup("Do transactions")
 
-    for i in range(1,6):
+    for i in range(1,100):
+        _lib.StartTestGroup("Iteration "+str(i))
+        
+        addresses = _wallet.GetGroupBalanceWallet(walletdatadir,"localhost",nodeport)
+        
         for address in addresses.keys():
             bal = addresses[address][0]
         
@@ -70,7 +72,7 @@ def test(testfilter):
         
             to = random.choice(addresses.keys())
         
-            amount = "%.8f" % round(bal/20,8)
+            amount = "%.8f" % round(bal/2,8)
         
             tx = _wallet.Send(walletdatadir,address,to,amount,"localhost",nodeport)
 
