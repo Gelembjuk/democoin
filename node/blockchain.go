@@ -112,7 +112,7 @@ func (bc *Blockchain) Init(datadir string) error {
 		return err
 	}
 
-	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: 10 * time.Second})
 
 	if err != nil {
 		bc.Logger.Trace.Println("Error opening BC " + err.Error())

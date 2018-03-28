@@ -24,6 +24,7 @@ def test(testfilter):
     
     nodeport = '30000'
     
+    _lib.CleanTestFolders()
     _lib.StartTestGroup("Init Blockchain")
     
     datadir_tmp = _lib.CreateTestFolder()
@@ -75,6 +76,9 @@ def test(testfilter):
             amount = "%.8f" % round(bal/2,8)
         
             tx = _wallet.Send(walletdatadir,address,to,amount,"localhost",nodeport)
+            
+        blocks = _blocks.GetBlocksExt(datadir)
+        print "\t\tNumer of blocks %d"%(len(blocks))
 
         
     startnode.StopNode(datadir)

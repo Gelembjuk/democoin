@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
@@ -126,12 +127,15 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 * handle received data. It can be one way command or a request for some data
  */
 func (s *NodeServer) handleConnection(conn net.Conn) {
+	starttime := time.Now().UnixNano()
+
 	s.Logger.Trace.Printf("New command. Start reading\n")
 
 	command, request, authstring, err := s.readRequest(conn)
 
 	if err != nil {
-		s.Logger.Error.Println("Network Data Reading Error: ", err.Error())
+		s.sendErrorBack(conn, errors.New("Network Data Reading Error: "+err.Error()))
+		conn.Close()
 		return
 	}
 
@@ -150,7 +154,8 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	err = requestobj.Node.OpenBlockchain()
 
 	if err != nil {
-		s.Logger.Error.Println("Can not open blockchain: ", err.Error())
+		s.sendErrorBack(conn, errors.New("Blockchain open Error: "+err.Error()))
+		conn.Close()
 		return
 	}
 
@@ -222,20 +227,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		if requestobj.HasResponse {
 			// return error to the client
 			// first byte is bool false to indicate there was error
-			payload, err := lib.GobEncode(rerr.Error())
-
-			if err == nil {
-				dataresponse := append([]byte{0}, payload...)
-
-				s.Logger.Trace.Printf("Responding %d bytes as error message\n", len(dataresponse))
-
-				_, err := conn.Write(dataresponse)
-
-				if err != nil {
-					s.Logger.Error.Println("Sending response error: ", err.Error())
-				}
-			}
-
+			s.sendErrorBack(conn, rerr)
 		}
 	}
 
@@ -252,8 +244,27 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 			s.Logger.Error.Println("Sending response error: ", err.Error())
 		}
 	}
-	s.Logger.Trace.Printf("Complete processing %s command\n", command)
+	duration := time.Since(time.Unix(0, starttime))
+	ms := duration.Nanoseconds() / int64(time.Millisecond)
+	s.Logger.Trace.Printf("Complete processing %s command. Time: %d ms\n", command, ms)
 	conn.Close()
+}
+func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
+	s.Logger.Error.Println("Sending back error message: ", err.Error())
+
+	payload, err := lib.GobEncode(err.Error())
+
+	if err == nil {
+		dataresponse := append([]byte{0}, payload...)
+
+		s.Logger.Trace.Printf("Responding %d bytes as error message\n", len(dataresponse))
+
+		_, err = conn.Write(dataresponse)
+
+		if err != nil {
+			s.Logger.Error.Println("Sending response error: ", err.Error())
+		}
+	}
 }
 
 /*
