@@ -88,14 +88,13 @@ def test(testfilter):
     txlist = transactions.GetUnapprovedTransactions(datadir1)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction")
-    
-    time.sleep(3)
-    
+
     # and now get transactions from second node
-    txlist = transactions.GetUnapprovedTransactions(datadir2)
+    txlist = _transfers.WaitUnapprovedTransactions(datadir2,1)
     
     _lib.FatalAssert(len(txlist) == 1,"Should be 1 unapproved transaction on second node")
-    
+    #print txid1
+    #print txlist
     if txid1 not in txlist.keys():
         _lib.Fatal("Transaction 1 is not in the list of transactions on second node")
     

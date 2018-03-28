@@ -316,6 +316,7 @@ func (s *NodeServerRequest) handleBlock() error {
 	if err != nil {
 		return err
 	}
+
 	blockstate, addstate, block, err := s.Node.ReceivedFullBlockFromOtherNode(payload.Block)
 	s.Logger.Trace.Printf("adding new block %d, %d", blockstate, addstate)
 	// state of this adding we don't check. not interesting in this place

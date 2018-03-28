@@ -552,8 +552,16 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 		if blockData == nil {
 			return errors.New("Block is not found.")
 		}
-		block = Block{}
-		return block.DeserializeBlock(blockData)
+		blocktmp := Block{}
+		err := blocktmp.DeserializeBlock(blockData)
+
+		if err != nil {
+			return err
+		}
+
+		block = *blocktmp.Copy()
+
+		return nil
 	})
 	if err != nil {
 		return block, err
@@ -733,8 +741,8 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	if err != nil {
 		return nil, -1, err
 	}
-
-	return lastHash, lastHeight, nil
+	lastHashFinal := lib.CopyBytes(lastHash)
+	return lastHashFinal, lastHeight, nil
 }
 
 // Verifies transaction inputs and their signatures

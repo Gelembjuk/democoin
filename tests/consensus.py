@@ -45,6 +45,7 @@ def test(testfilter):
         #txlist = transactions.GetUnapprovedTransactions(d)
         #print txlist
         #start this node 
+        #print os.path.basename(d)
         startnode.StartNodeConfig(d)
         
         i = i + 1

@@ -396,15 +396,28 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 // Verify a block against blockchain
 // RULES
 // 0. Verification is done agains blockchain branch starting from prevblock, not current top branch
-// 1. There can be only 1 block make reward transaction
+// 1. There can be only 1 transaction make reward per block
 // 2. number of transactions must be in correct ranges (reward transaction is not calculated)
 // 3. transactions can have as input other transaction from this block and it must be listed BEFORE
 //   (output must be before input in same block)
 // 4. all inputs must be in blockchain (correct unspent inputs)
 // 5. Additionally verify each transaction agains signatures, total amount, balance etc
+// 6. Verify hash is correc agains rules
 func (n *NodeBlockchain) VerifyBlock(block *Block) error {
-	//TODO
+	//6. Verify hash
 
+	pow := NewProofOfWork(block)
+
+	valid, err := pow.Validate()
+
+	if err != nil {
+		return err
+	}
+
+	if !valid {
+		return errors.New("Block hash is not valid")
+	}
+	n.Logger.Trace.Println("block hash verified")
 	// 2. check number of TX
 	txnum := len(block.Transactions) - 1 /*minus coinbase TX*/
 
@@ -446,6 +459,7 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 
 		prevTXs = append(prevTXs, tx)
 	}
+	// 1.
 	if !coinbaseused {
 		return errors.New("No coinbase TX in the block")
 	}

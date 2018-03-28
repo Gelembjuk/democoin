@@ -76,10 +76,29 @@ func (b *Block) GetShortCopy() *BlockShort {
 
 // Creates copy of a block
 func (b *Block) Copy() *Block {
-	data, _ := b.Serialize()
-
 	bc := Block{}
-	bc.DeserializeBlock(data)
+	bc.Timestamp = b.Timestamp
+	bc.Transactions = []*transaction.Transaction{}
+
+	bc.PrevBlockHash = make([]byte, len(b.PrevBlockHash))
+
+	if len(b.PrevBlockHash) > 0 {
+		copy(bc.PrevBlockHash, b.PrevBlockHash)
+	}
+
+	bc.Hash = make([]byte, len(b.Hash))
+
+	if len(b.Hash) > 0 {
+		copy(bc.Hash, b.Hash)
+	}
+
+	bc.Nonce = b.Nonce
+	bc.Height = b.Height
+
+	for _, t := range b.Transactions {
+		tc, _ := t.Copy()
+		bc.Transactions = append(bc.Transactions, &tc)
+	}
 	return &bc
 }
 
@@ -87,7 +106,13 @@ func (b *Block) Copy() *Block {
 func (b *Block) PrepareNewBlock(transactions []*transaction.Transaction, prevBlockHash []byte, height int) error {
 	b.Timestamp = time.Now().Unix()
 	b.Transactions = transactions[:]
-	b.PrevBlockHash = prevBlockHash[:]
+
+	b.PrevBlockHash = make([]byte, len(prevBlockHash))
+
+	if len(prevBlockHash) > 0 {
+		copy(b.PrevBlockHash, prevBlockHash)
+	}
+
 	b.Hash = []byte{}
 	b.Nonce = 0
 	b.Height = height
@@ -100,7 +125,7 @@ func (b *Block) HashTransactions() ([]byte, error) {
 	var transactions [][]byte
 
 	for _, tx := range b.Transactions {
-		txser, err := tx.Serialize()
+		txser, err := tx.ToBytes()
 
 		if err != nil {
 			return nil, err

@@ -175,6 +175,7 @@ func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
 	starttime := time.Now()
 
 	pow := NewProofOfWork(b)
+
 	nonce, hash, err := pow.Run()
 
 	if err != nil {
@@ -216,7 +217,14 @@ func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transactio
 	}
 
 	transactions = append(transactions, cbTx)
+	/*
+		txlist := []*transaction.Transaction{}
 
+		for _, t := range transactions {
+			tx, _ := t.Copy()
+			txlist = append(txlist, &tx)
+		}
+	*/
 	newblock := Block{}
 	err = newblock.PrepareNewBlock(transactions, lastHash[:], lastHeight+1)
 

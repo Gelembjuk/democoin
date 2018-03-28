@@ -173,3 +173,14 @@ func RandString(n int) string {
 	}
 	return string(b)
 }
+
+func CopyBytes(source []byte) []byte {
+	if len(source) > 0 {
+		d := make([]byte, len(source))
+
+		copy(d, source)
+
+		return d
+	}
+	return []byte{}
+}

@@ -1,5 +1,6 @@
 import _lib
 import re
+import time
 
 def GetBalance(datadir, address):
     _lib.StartTest("Request balance for a node wallet "+address)
@@ -85,4 +86,65 @@ def ReindexUTXO(datadir):
     _lib.StartTest("Reindex Unspent Transactions")
     res = _lib.ExecuteNode(['reindexunspent','-datadir',datadir])
     _lib.FatalAssertSubstr(res,"Done!","No correct response on reindex")
+    
+def WaitUnapprovedTransactionsEmpty(datadir, maxseconds = 10):
+    c = 0
+    
+    while True:
+        _lib.StartTest("Get unapproved transactions")
+        res = _lib.ExecuteNode(['unapprovedtransactions','-datadir',datadir])
+        
+        if "Total transactions: 0" in res:
+            break
+        
+        c=c+1
+        
+        if c > maxseconds:
+            break
+        
+        time.sleep(1)
+    
+    _lib.FatalAssertSubstr(res,"Total transactions: 0","Output should not contains list of transactions")
+
+def WaitUnapprovedTransactions(datadir, count, maxseconds = 10):
+    c = 0
+    
+    while True:
+        _lib.StartTest("Get unapproved transactions")
+        res = _lib.ExecuteNode(['unapprovedtransactions','-datadir',datadir])
+        
+        c=c+1
+        
+        if "============ Transaction" not in res:
+            if c > maxseconds:
+                break
+            
+            time.sleep(1)
+            
+            continue
+
+        regex = ur"--- Transaction ([^:]+):"
+
+        transactions = re.findall(regex, res)
+
+        regex = ur"FROM ([A-Za-z0-9]+) TO ([A-Za-z0-9]+) VALUE ([0-9.]+)"
+        
+        txinfo = re.findall(regex, res)
+        
+        if len(txinfo) >= count:
+            break
+        
+        if c > maxseconds:
+            break
+
+        time.sleep(1)
+    
+    _lib.FatalAssertSubstr(res,"============ Transaction","Output should contains list of transactions")
+    
+    txlist={}
+    
+    for i in range(len(transactions)):
+        txlist[transactions[i]] = txinfo[i]
+    
+    return txlist
     

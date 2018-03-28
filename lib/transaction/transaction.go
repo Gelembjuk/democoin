@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"math"
 	"strings"
@@ -27,19 +28,6 @@ type Transaction struct {
 // IsCoinbase checks whether the transaction is coinbase
 func (tx Transaction) IsCoinbase() bool {
 	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
-}
-
-// Serialize returns a serialized Transaction
-func (tx Transaction) Serialize() ([]byte, error) {
-	var encoded bytes.Buffer
-
-	enc := gob.NewEncoder(&encoded)
-	err := enc.Encode(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return encoded.Bytes(), nil
 }
 
 // Hash returns the hash of the Transaction
@@ -117,29 +105,42 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	}
 
 	for _, vout := range tx.Vout {
-		outputs = append(outputs, TXOutput{vout.Value, vout.PubKeyHash})
-	}
+		pkh := lib.CopyBytes(vout.PubKeyHash)
 
-	txCopy := Transaction{tx.ID, inputs, outputs, tx.Time}
+		outputs = append(outputs, TXOutput{vout.Value, pkh})
+	}
+	txID := lib.CopyBytes(tx.ID)
+	txCopy := Transaction{txID, inputs, outputs, tx.Time}
 
 	return txCopy
 }
 
 // TrimmedCopy creates a trimmed copy of Transaction to be used in signing
 func (tx *Transaction) Copy() (Transaction, error) {
-	txCopy := Transaction{}
+	//if tx.IsCoinbase() {
+	//	return *tx, nil
+	//}
+	var inputs []TXInput
+	var outputs []TXOutput
 
-	d, err := tx.Serialize()
+	for _, vin := range tx.Vin {
+		sig := lib.CopyBytes(vin.Signature)
 
-	if err != nil {
-		return txCopy, err
+		pk := lib.CopyBytes(vin.PubKey)
+
+		inputs = append(inputs, TXInput{vin.Txid, vin.Vout, sig, pk})
 	}
 
-	err = txCopy.DeserializeTransaction(d)
+	for _, vout := range tx.Vout {
+		pkh := lib.CopyBytes(vout.PubKeyHash)
 
-	if err != nil {
-		return txCopy, err
+		outputs = append(outputs, TXOutput{vout.Value, pkh})
 	}
+
+	txID := lib.CopyBytes(tx.ID)
+
+	txCopy := Transaction{txID, inputs, outputs, tx.Time}
+
 	return txCopy, nil
 }
 
@@ -333,6 +334,23 @@ func (tx *Transaction) MakeCoinbaseTX(to, data string) error {
 	return nil
 }
 
+// Serialize returns a serialized Transaction
+func (tx Transaction) Serialize() ([]byte, error) {
+	// to remove any references to other ponters
+	// do full copy of the TX
+	txCopy, _ := tx.Copy()
+
+	var encoded bytes.Buffer
+
+	enc := gob.NewEncoder(&encoded)
+	err := enc.Encode(&txCopy)
+	if err != nil {
+		return nil, err
+	}
+
+	return encoded.Bytes(), nil
+}
+
 // DeserializeTransaction deserializes a transaction
 func (tx *Transaction) DeserializeTransaction(data []byte) error {
 	decoder := gob.NewDecoder(bytes.NewReader(data))
@@ -343,6 +361,59 @@ func (tx *Transaction) DeserializeTransaction(data []byte) error {
 	}
 
 	return nil
+}
+
+// converts transaction to slice of bytes
+// this will be used to do a hash of transactions
+func (tx Transaction) ToBytes() ([]byte, error) {
+	buff := new(bytes.Buffer)
+
+	err := binary.Write(buff, binary.BigEndian, tx.ID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vin := range tx.Vin {
+		err = binary.Write(buff, binary.BigEndian, vin.Txid)
+		if err != nil {
+			return nil, err
+		}
+
+		err = binary.Write(buff, binary.BigEndian, int32(vin.Vout))
+		if err != nil {
+			return nil, err
+		}
+
+		err = binary.Write(buff, binary.BigEndian, vin.Signature)
+		if err != nil {
+			return nil, err
+		}
+
+		err = binary.Write(buff, binary.BigEndian, vin.PubKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, vout := range tx.Vout {
+		err = binary.Write(buff, binary.BigEndian, vout.Value)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Write(buff, binary.BigEndian, vout.PubKeyHash)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = binary.Write(buff, binary.BigEndian, tx.Time)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
 }
 
 // Sorting of transactions slice

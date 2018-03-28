@@ -408,6 +408,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		n.Logger.Trace.Printf("Prepared new block with %d transactions", len(block.Transactions))
 
 		// this will do MINING of a block
+
 		err := Minter.CompleteBlock(block)
 
 		if err != nil {
