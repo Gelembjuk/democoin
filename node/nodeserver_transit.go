@@ -7,8 +7,9 @@ import (
 )
 
 type NodeTransit struct {
-	Blocks map[string][][]byte
-	Logger *lib.LoggerMan
+	Blocks        map[string][][]byte
+	MaxKnownHeigh int
+	Logger        *lib.LoggerMan
 }
 
 func (t *NodeTransit) Init(l *lib.LoggerMan) error {

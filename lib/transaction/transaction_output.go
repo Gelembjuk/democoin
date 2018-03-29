@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"log"
@@ -103,4 +104,19 @@ func (output TXOutput) String() string {
 	lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
 
 	return strings.Join(lines, "\n")
+}
+
+func (output TXOutput) ToBytes() ([]byte, error) {
+	buff := new(bytes.Buffer)
+
+	err := binary.Write(buff, binary.BigEndian, output.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(buff, binary.BigEndian, output.PubKeyHash)
+	if err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -38,66 +39,45 @@ func (s *NodeServer) GetClient() *nodeclient.NodeClient {
 // Reads and parses request from network data
 func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) {
 	// 1. Read command
-	commandbuffer := make([]byte, lib.CommandLength)
-	read, err := conn.Read(commandbuffer)
+	commandbuffer, err := s.readFromConnection(conn, lib.CommandLength)
 
 	if err != nil {
 		return "", nil, "", err
-	}
-
-	if read != lib.CommandLength {
-		return "", nil, "", errors.New("Wrong number of bytes received for a request")
 	}
 
 	command := lib.BytesToCommand(commandbuffer)
 
 	// 2. Get length of command data
 
-	lengthbuffer := make([]byte, 4)
-
-	read, err = conn.Read(lengthbuffer)
+	lengthbuffer, err := s.readFromConnection(conn, 4)
 
 	if err != nil {
 		return "", nil, "", err
-	}
-
-	if read != 4 {
-		return "", nil, "", errors.New("Wrong number of bytes received for a request")
 	}
 
 	var datalength uint32
 	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &datalength)
 
-	// TODO 3 and 4 are similar. can be new func made
 	// 3. Get length of extra data
-	lengthbuffer = make([]byte, 4)
-
-	read, err = conn.Read(lengthbuffer)
+	lengthbuffer, err = s.readFromConnection(conn, 4)
 
 	if err != nil {
 		return "", nil, "", err
 	}
 
-	if read != 4 {
-		return "", nil, "", errors.New("Wrong number of bytes received for a request")
-	}
 	var extradatalength uint32
 	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &extradatalength)
 
 	// 4. read command data by length
 	//s.Logger.Trace.Printf("Before read data %d bytes", datalength)
 
-	databuffer := make([]byte, datalength)
+	databuffer := []byte{}
 
 	if datalength > 0 {
-		read, err = conn.Read(databuffer)
+		databuffer, err = s.readFromConnection(conn, int(datalength))
 
 		if err != nil {
 			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of request: %s", datalength, err.Error()))
-		}
-
-		if uint32(read) != datalength {
-			return "", nil, "", errors.New(fmt.Sprintf("Expected %d bytes, but received %d", datalength, read))
 		}
 	}
 
@@ -106,26 +86,65 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 	authstr := ""
 	//s.Logger.Trace.Printf("Before read extra data %d bytes. ", extradatalength)
 	if extradatalength > 0 {
-		extradatabuffer := make([]byte, extradatalength)
-
-		read, err = conn.Read(extradatabuffer)
+		extradatabuffer, err := s.readFromConnection(conn, int(extradatalength))
 
 		if err != nil {
 			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of extra data: %s", extradatalength, err.Error()))
 		}
 
-		if uint32(read) != extradatalength {
-			return "", nil, "", errors.New(fmt.Sprintf("Expected %d bytes, but received %d", extradatalength, read))
-		}
 		authstr = lib.BytesToCommand(extradatabuffer)
 	}
 	//s.Logger.Trace.Printf("All read")
 	return command, databuffer, authstr, nil
 }
 
-/*
-* handle received data. It can be one way command or a request for some data
- */
+func (s *NodeServer) readFromConnection(conn net.Conn, countofbytes int) ([]byte, error) {
+	buff := new(bytes.Buffer)
+
+	pauses := 0
+
+	for {
+
+		tmpbuffer := make([]byte, countofbytes-buff.Len())
+
+		read, err := conn.Read(tmpbuffer)
+
+		if read > 0 {
+			buff.Write(tmpbuffer[:read])
+
+			if buff.Len() == countofbytes {
+				break
+			}
+			pauses = 0
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if read == 0 {
+			if pauses > 30 {
+				break
+			}
+			time.Sleep(1 * time.Second)
+			pauses++
+		}
+	}
+
+	if buff.Len() < countofbytes {
+		return nil,
+			errors.New(fmt.Sprintf("Wrong number of bytes received for a request. Expected - %d, read - %d", countofbytes, buff.Len()))
+	}
+
+	return buff.Bytes(), nil
+}
+
+// handle received data. It can be one way command or a request for some data
+
 func (s *NodeServer) handleConnection(conn net.Conn) {
 	starttime := time.Now().UnixNano()
 
@@ -251,6 +270,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 }
 func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
 	s.Logger.Error.Println("Sending back error message: ", err.Error())
+	s.Logger.Trace.Println("Sending back error message: ", err.Error())
 
 	payload, err := lib.GobEncode(err.Error())
 

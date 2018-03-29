@@ -235,9 +235,10 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	n.OpenBlockchain()
 
 	MH := block.Height
-
+	starttime := time.Now().UnixNano()
 	if len(result.Blocks) > 1 {
 		// add all blocks
+
 		skip := true
 		for _, blockdata := range result.Blocks {
 			if skip {
@@ -257,12 +258,21 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 			if err != nil {
 				return false, err
 			}
+			duration := time.Since(time.Unix(0, starttime))
+			ms := duration.Nanoseconds() / int64(time.Millisecond)
+			n.Logger.Trace.Printf("Imported block %x , h: %d, in %d ms", block.Hash, block.Height, ms)
+
 			MH = block.Height
 		}
 	}
 
 	// init DB for unspent and unapproved transactions
 	n.NodeTX.UnspentTXs.Reindex()
+
+	duration := time.Since(time.Unix(0, starttime))
+	ms := duration.Nanoseconds() / int64(time.Millisecond)
+	n.Logger.Trace.Printf("Imported blocks and reindexed - %d ms", ms)
+
 	n.NodeTX.UnapprovedTXs.InitDB()
 
 	n.CloseBlockchain()

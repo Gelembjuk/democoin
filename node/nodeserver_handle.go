@@ -247,7 +247,7 @@ func (s *NodeServerRequest) handleGetFirstBlocks() error {
 
 	result := nodeclient.ComGetFirstBlocksData{}
 
-	blocks, height, err := s.Node.NodeBC.BC.GetFirstBlocks(100)
+	blocks, height, err := s.Node.NodeBC.BC.GetFirstBlocks(10)
 
 	if err != nil {
 		return err

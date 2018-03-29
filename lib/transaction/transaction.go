@@ -375,33 +375,23 @@ func (tx Transaction) ToBytes() ([]byte, error) {
 	}
 
 	for _, vin := range tx.Vin {
-		err = binary.Write(buff, binary.BigEndian, vin.Txid)
+		b, err := vin.ToBytes()
 		if err != nil {
 			return nil, err
 		}
 
-		err = binary.Write(buff, binary.BigEndian, int32(vin.Vout))
-		if err != nil {
-			return nil, err
-		}
-
-		err = binary.Write(buff, binary.BigEndian, vin.Signature)
-		if err != nil {
-			return nil, err
-		}
-
-		err = binary.Write(buff, binary.BigEndian, vin.PubKey)
+		err = binary.Write(buff, binary.BigEndian, b)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	for _, vout := range tx.Vout {
-		err = binary.Write(buff, binary.BigEndian, vout.Value)
+		b, err := vout.ToBytes()
 		if err != nil {
 			return nil, err
 		}
-		err = binary.Write(buff, binary.BigEndian, vout.PubKeyHash)
+		err = binary.Write(buff, binary.BigEndian, b)
 		if err != nil {
 			return nil, err
 		}

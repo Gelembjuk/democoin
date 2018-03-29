@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"strings"
 )
@@ -31,4 +32,29 @@ func (input TXInput) String() string {
 	lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PubKey))
 
 	return strings.Join(lines, "\n")
+}
+
+func (input TXInput) ToBytes() ([]byte, error) {
+	buff := new(bytes.Buffer)
+
+	err := binary.Write(buff, binary.BigEndian, input.Txid)
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(buff, binary.BigEndian, int32(input.Vout))
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(buff, binary.BigEndian, input.Signature)
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Write(buff, binary.BigEndian, input.PubKey)
+	if err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), nil
 }

@@ -33,13 +33,13 @@ def GetBlocksExt(datadir):
     
     return blocksr
 
-def WaitBlocks(datadir, explen):
+def WaitBlocks(datadir, explen, maxtime = 10):
     blocks = []
     i = 0
     while True:
         blocks = GetBlocks(datadir)
         
-        if len(blocks) >= explen or i >= 10:
+        if len(blocks) >= explen or i >= maxtime:
             break
         time.sleep(1)
         i = i + 1

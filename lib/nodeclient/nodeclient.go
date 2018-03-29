@@ -145,6 +145,14 @@ type ComManageNode struct {
 	Node lib.NodeAddr
 }
 
+// To get node state
+type ComGetNodeState struct {
+	Host               string
+	BlocksNumber       int
+	ExpectingBlocks    int
+	TransactionsCached int
+}
+
 // Check if node address looks fine
 func (c *NodeClient) SetAuthStr(auth string) {
 	c.NodeAuthStr = auth
@@ -450,6 +458,21 @@ func (c *NodeClient) SendRemoveNode(node lib.NodeAddr) error {
 	return nil
 }
 
+// Request to remove a node from contacts
+func (c *NodeClient) SendGetState(node lib.NodeAddr) (ComGetNodeState, error) {
+	request, err := c.BuildCommandDataWithAuth("getstate", nil)
+
+	data := ComGetNodeState{}
+
+	err = c.SendDataWaitResponse(c.NodeAddress, request, &data)
+
+	if err != nil {
+		return data, errors.New(fmt.Sprintf("gettig state error: %s", err.Error()))
+	}
+
+	return data, nil
+}
+
 // Builds a command data. It prepares a slice of bytes from given data
 func (c *NodeClient) BuildCommandDataWithAuth(command string, data interface{}) ([]byte, error) {
 	authbytes := lib.CommandToBytes(c.NodeAuthStr)
@@ -506,7 +529,7 @@ func (c *NodeClient) SendData(addr lib.NodeAddr, data []byte) error {
 		return err
 	}
 
-	c.Logger.Trace.Println("Sending data to " + addr.NodeAddrToString())
+	c.Logger.Trace.Printf("Sending %d bytes to %s", len(data), addr.NodeAddrToString())
 	conn, err := net.Dial(lib.Protocol, addr.NodeAddrToString())
 
 	if err != nil {
