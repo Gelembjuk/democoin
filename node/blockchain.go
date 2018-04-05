@@ -29,10 +29,12 @@ const (
 * Structure to work with blockchain DB
  */
 type Blockchain struct {
-	tip     []byte
-	db      *bolt.DB
-	datadir string
-	Logger  *lib.LoggerMan
+	tip             []byte
+	db              *bolt.DB
+	datadir         string
+	Logger          *lib.LoggerMan
+	HashCache       map[string]int
+	LastHashInCache []byte
 }
 
 // CreateBlockchain creates a new blockchain DB. Genesis block is received as argument
@@ -55,7 +57,7 @@ func (bc *Blockchain) CreateBlockchain(datadir string, genesis *Block) error {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucket([]byte(blocksBucket))
+		b, err := tx.CreateBucket([]byte(BlocksBucket))
 		if err != nil {
 			return err
 		}
@@ -86,7 +88,7 @@ func (bc *Blockchain) CreateBlockchain(datadir string, genesis *Block) error {
 		return err
 	}
 
-	bc.tip = tip
+	bc.tip = lib.CopyBytes(tip)
 	bc.db = db
 	bc.datadir = datadir
 
@@ -111,6 +113,10 @@ func (bc *Blockchain) Init(datadir string) error {
 	if err != nil {
 		return err
 	}
+	// we will clean this all time when DB is opened
+	// the cache will  work only for current session
+	bc.HashCache = make(map[string]int)
+	bc.LastHashInCache = []byte{}
 
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: 10 * time.Second})
 
@@ -120,7 +126,7 @@ func (bc *Blockchain) Init(datadir string) error {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+		b := tx.Bucket([]byte(BlocksBucket))
 		tip = b.Get([]byte("l"))
 
 		return nil
@@ -129,7 +135,7 @@ func (bc *Blockchain) Init(datadir string) error {
 		bc.Logger.Trace.Println("BC read error: " + err.Error())
 		return err
 	}
-	bc.tip = tip
+	bc.tip = lib.CopyBytes(tip)
 	bc.db = db
 	bc.datadir = datadir
 
@@ -184,6 +190,7 @@ func (bc *Blockchain) unLockDB() {
 func (bc *Blockchain) Close() {
 	bc.db.Close()
 	bc.db = nil
+	bc.HashCache = nil
 	bc.unLockDB()
 }
 
@@ -202,8 +209,8 @@ func (bc *Blockchain) AddBlock(block *Block) (uint, error) {
 
 	addstatus := uint(BCBAddState_error)
 
-	err := bc.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+	err := bc.db.Update(func(txDB *bolt.Tx) error {
+		b := txDB.Bucket([]byte(BlocksBucket))
 		blockInDb := b.Get(block.Hash)
 
 		if blockInDb != nil {
@@ -287,8 +294,8 @@ func (bc *Blockchain) AddBlock(block *Block) (uint, error) {
  */
 func (bc *Blockchain) DeleteBlock() (*Block, error) {
 	var block *Block
-	err := bc.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+	err := bc.db.Update(func(txDB *bolt.Tx) error {
+		b := txDB.Bucket([]byte(BlocksBucket))
 		blockInDb := b.Get(bc.tip)
 
 		if blockInDb == nil {
@@ -337,7 +344,7 @@ func (bc *Blockchain) FindTransaction(ID []byte, tip []byte) (*transaction.Trans
 	txo := map[int][]byte{}
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		for _, tx := range block.Transactions {
 			if bytes.Compare(tx.ID, ID) == 0 {
@@ -392,7 +399,7 @@ func (bc *Blockchain) FindUnspentTransactions() map[string][]transaction.TXOutpu
 	bci := bc.Iterator()
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		for _, tx := range block.Transactions {
 			txID := hex.EncodeToString(tx.ID)
@@ -454,7 +461,9 @@ func (bc *Blockchain) FindUnspentTransactions() map[string][]transaction.TXOutpu
 * Iterator returns a BlockchainIterator . Can be used to do something with blockchain from outside
  */
 func (bc *Blockchain) Iterator() *BlockchainIterator {
-	bci := &BlockchainIterator{bc.tip, bc.db}
+	starttip := lib.CopyBytes(bc.tip)
+	bc.Logger.Trace.Printf("Init iteraor starting from %x", starttip)
+	bci := &BlockchainIterator{starttip, bc.db}
 
 	return bci
 }
@@ -477,7 +486,7 @@ func (bc *Blockchain) GetBlockAtHeight(height int) (*Block, error) {
 	bci := bc.Iterator()
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		if block.Height == height {
 			return block, nil
@@ -501,7 +510,7 @@ func (bc *Blockchain) GetBestHeight() (int, error) {
 	var lastBlock Block
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+		b := tx.Bucket([]byte(BlocksBucket))
 		lastHash := b.Get([]byte("l"))
 		blockData := b.Get(lastHash)
 
@@ -522,7 +531,7 @@ func (bc *Blockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 	exists := false
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+		b := tx.Bucket([]byte(BlocksBucket))
 
 		blockData := b.Get(blockHash)
 
@@ -545,7 +554,7 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	var block Block
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+		b := tx.Bucket([]byte(BlocksBucket))
 
 		blockData := b.Get(blockHash)
 
@@ -579,7 +588,7 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 	bci := bc.Iterator()
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		blocks = append(blocks, block.Hash)
 
@@ -605,7 +614,7 @@ func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*Bloc
 	}
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 		bs := block.GetShortCopy()
 
 		blocks = append(blocks, bs)
@@ -635,7 +644,7 @@ func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*BlockShort {
 	found := false
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		if bytes.Compare(block.Hash, startfrom) == 0 {
 			found = true
@@ -695,7 +704,7 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*Block, int, error) {
 	blocks := []*Block{}
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		blocks = append([]*Block{block}, blocks...)
 
@@ -715,7 +724,7 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	var lastHeight int
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
+		b := tx.Bucket([]byte(BlocksBucket))
 		lastHash = b.Get([]byte("l"))
 
 		if lastHash == nil {
@@ -743,51 +752,6 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	}
 	lastHashFinal := lib.CopyBytes(lastHash)
 	return lastHashFinal, lastHeight, nil
-}
-
-// Verifies transaction inputs and their signatures
-// Is some transaction is not in blockchain, returns nil pointer in map and this input in separate map
-// Missed inputs can be some unconfirmed transactions
-// Returns: map of previous transactions (full info about input TX). map by input index
-// next map is wrong input, where a TX is not found.
-// TODO this function is not really good. it iterates over blockchain
-func (bc *Blockchain) GetInputTransactionsState(tx *transaction.Transaction, tip []byte) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
-	prevTXs := make(map[int]*transaction.Transaction)
-	badinputs := make(map[int]transaction.TXInput)
-
-	if tx.IsCoinbase() {
-		return prevTXs, badinputs, nil
-	}
-
-	for vind, vin := range tx.Vin {
-		prevTX, spentouts, _, err := bc.FindTransaction(vin.Txid, tip)
-
-		if err != nil {
-			return prevTXs, badinputs, err
-		}
-
-		if prevTX == nil {
-			// transaction not found
-			badinputs[vind] = vin
-			prevTXs[vind] = nil
-		} else {
-			if len(spentouts) > 0 {
-				// someone already spent this transaction
-				// check if it was this pubkey or some other
-				for vout, _ := range spentouts {
-					if vout == vin.Vout {
-						// this out was already spent before!!!
-						// TODO should we check also pub key here? or vout is enough to check?
-						return prevTXs, badinputs, errors.New("Transaction input was already spent before")
-					}
-				}
-			}
-			// the transaction out was not yet spent
-			prevTXs[vind] = prevTX
-		}
-	}
-
-	return prevTXs, badinputs, nil
 }
 
 // Returns a chain of blocks starting from a hash and till
@@ -828,7 +792,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 		bci := bc.IteratorFrom(sideblock.Hash)
 
 		for {
-			block := bci.Next()
+			block, _ := bci.Next()
 			bc.Logger.Trace.Printf("next side %x", block.Hash)
 			if block.Height == topblock.Height {
 				sideblock = block
@@ -841,7 +805,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 		bci := bc.IteratorFrom(topblock.Hash)
 
 		for {
-			block := bci.Next()
+			block, _ := bci.Next()
 			bc.Logger.Trace.Printf("next top %x", block.Hash)
 			if block.Height == sideblock.Height {
 				topblock = block
@@ -856,8 +820,8 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 	bcit := bc.IteratorFrom(topblock.Hash)
 
 	for {
-		sideblock = bcis.Next()
-		topblock = bcit.Next()
+		sideblock, _ = bcis.Next()
+		topblock, _ = bcit.Next()
 
 		bc.Logger.Trace.Printf("parallel %x vs %x", sideblock.Hash, topblock.Hash)
 
@@ -919,4 +883,51 @@ func (bc *Blockchain) dbExists(dbFile string) bool {
 	}
 
 	return true
+}
+
+// Check block is in the chain
+func (bc *Blockchain) GetBlockInTheChain(blockHash []byte, tip []byte) (int, error) {
+	itertorstart := []byte{}
+
+	if len(tip) == 0 {
+		if val, ok := bc.HashCache[hex.EncodeToString(blockHash)]; ok {
+			return val, nil
+		}
+
+		if len(bc.HashCache) > 0 && len(bc.LastHashInCache) == 0 {
+			return -1, nil
+		}
+		if len(bc.HashCache) > 0 && len(bc.LastHashInCache) > 0 {
+			itertorstart = bc.LastHashInCache[:]
+		}
+	} else {
+		itertorstart = tip[:]
+	}
+
+	var bci *BlockchainIterator
+
+	if len(itertorstart) > 0 {
+		bci = bc.IteratorFrom(itertorstart)
+	} else {
+		bci = bc.Iterator()
+	}
+
+	for {
+		block, _ := bci.Next()
+
+		if len(tip) == 0 {
+			bc.HashCache[hex.EncodeToString(block.Hash)] = block.Height
+
+			bc.LastHashInCache = block.PrevBlockHash[:]
+		}
+
+		if bytes.Compare(block.Hash, blockHash) == 0 {
+			return block.Height, nil
+		}
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+	return -1, nil
 }

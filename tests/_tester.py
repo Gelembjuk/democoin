@@ -47,6 +47,11 @@ for testname in tests:
         
         methods = dir(test_module)
 
+        if "allowgrouprun" in methods and test == "all":
+            if not test_module.allowgrouprun():
+                continue
+            
+
         if "beforetest" in methods:
             test_module.beforetest(testname)
         

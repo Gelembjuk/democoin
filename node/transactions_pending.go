@@ -22,14 +22,12 @@ func (u *UnApprovedTransactions) SetBlockchain(bc *Blockchain) {
 	u.Blockchain = bc
 }
 
-/*
-* Returns a bucket where we keep unapproved transactions
- */
+// Returns a bucket where we keep unapproved transactions
 func (u *UnApprovedTransactions) getBucket(tx *bolt.Tx) *bolt.Bucket {
 
-	tx.CreateBucketIfNotExists([]byte(transactionsBucket))
+	tx.CreateBucketIfNotExists([]byte(UnapprovedTransactionsBucket))
 
-	return tx.Bucket([]byte(transactionsBucket))
+	return tx.Bucket([]byte(UnapprovedTransactionsBucket))
 }
 
 /*

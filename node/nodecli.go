@@ -87,7 +87,7 @@ func (c NodeCLI) isInteractiveMode() bool {
 		"initblockchain",
 		"printchain",
 		"makeblock",
-		"reindexunspent",
+		"reindexcache",
 		"send",
 		"getbalance",
 		"getbalances",
@@ -151,8 +151,8 @@ func (c NodeCLI) ExecuteCommand() error {
 	} else if c.Command == "printchain" {
 		return c.commandPrintChain()
 
-	} else if c.Command == "reindexunspent" {
-		return c.commandReindexUTXO()
+	} else if c.Command == "reindexcache" {
+		return c.commandReindexCache()
 
 	} else if c.Command == "getbalance" {
 		return c.commandGetBalance()
@@ -618,15 +618,21 @@ func (c *NodeCLI) commandSend() error {
 }
 
 /*
-* Reindex DB of unspent transactions
+* Reindex DB of unspent transactions and transaction pointers
  */
-func (c *NodeCLI) commandReindexUTXO() error {
+func (c *NodeCLI) commandReindexCache() error {
 	err := c.Node.OpenBlockchain()
 
 	if err != nil {
 		return err
 	}
 	defer c.Node.CloseBlockchain()
+
+	err = c.Node.NodeTX.TXCache.Reindex()
+
+	if err != nil {
+		return err
+	}
 
 	count, err := c.Node.NodeTX.UnspentTXs.Reindex()
 

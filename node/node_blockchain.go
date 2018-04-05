@@ -42,7 +42,7 @@ type BlocksIterator struct {
 
 // Returns next block in iterator. First will be the top block
 func (bci *BlocksIterator) Next() BlockInfo {
-	block := bci.BCI.Next()
+	block, _ := bci.BCI.Next()
 
 	Block := BlockInfo{}
 	Block.Hash = block.Hash
@@ -227,7 +227,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 	pubKeyHash, _ := lib.AddresToPubKeyHash(address)
 
 	for {
-		block := bci.Next()
+		block, _ := bci.Next()
 
 		for _, tx := range block.Transactions {
 

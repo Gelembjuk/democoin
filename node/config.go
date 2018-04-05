@@ -147,7 +147,7 @@ func (c AppInput) printUsage() {
 	fmt.Println("  printchain [-view short|long]\n\t- Print all the blocks of the blockchain. Default view is long")
 	fmt.Println("  makeblock [-minter ADDRESS]\n\t- Try to mine new block if there are enough transactions")
 	fmt.Println("  dropblock\n\t- Delete last block fro the block chain. All transaction are returned back to unapproved state")
-	fmt.Println("  reindexunspent\n\t- Rebuilds the database of unspent transactions outputs")
+	fmt.Println("  reindexcache\n\t- Rebuilds the database of unspent transactions outputs and transaction pointers")
 	fmt.Println("  showunspent -address ADDRESS\n\t- Print the list of all unspent transactions and balance")
 	fmt.Println("  unapprovedtransactions\n\t- Print the list of transactions not included in any block yet")
 

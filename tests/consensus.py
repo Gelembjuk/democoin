@@ -53,7 +53,7 @@ def test(testfilter):
         
     #check nodes on each node is correct 
     for node in nodes:
-        #print os.path.basename(node['datadir'])
+        print os.path.basename(node['datadir'])
         nodeslist = managenodes.GetNodes(node['datadir'])
         _lib.FatalAssert(len(nodeslist) == 2,"Should be 2 nodes on "+node["title"])
         

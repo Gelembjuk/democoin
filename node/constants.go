@@ -25,9 +25,11 @@ const dbFileLock = "blockchain.lock"
 const pidFileName = "server.pid"
 
 // DB settings.
-const blocksBucket = "blocks"
-const transactionsBucket = "unapprovedtransactions"
-const utxoBucket = "chainstate"
+const BlocksBucket = "blocks"
+const TransactionsBucket = "transactions"
+const TransactionsOutputsBucket = "transactionsoutputs"
+const UnapprovedTransactionsBucket = "unapprovedtransactions"
+const UnspentTransactionsBucket = "unspentoutputstransactions"
 
 // other internal constant
 const daemonprocesscommandline = "daemonnode"

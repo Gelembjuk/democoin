@@ -24,7 +24,7 @@ type UnspentTransactions struct {
  */
 func (u *UnspentTransactions) getBucket(tx *bolt.Tx) *bolt.Bucket {
 	// bucket is created when blockchain file inited. so, it must alway exist
-	return tx.Bucket([]byte(utxoBucket))
+	return tx.Bucket([]byte(UnspentTransactionsBucket))
 }
 
 func (u *UnspentTransactions) SetBlockchain(bc *Blockchain) {
@@ -274,7 +274,7 @@ func (u UnspentTransactions) CountUnspentOutputs() (int, error) {
  */
 func (u UnspentTransactions) Reindex() (int, error) {
 	db := u.Blockchain.db
-	bucketName := []byte(utxoBucket)
+	bucketName := []byte(UnspentTransactionsBucket)
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		err := tx.DeleteBucket(bucketName)

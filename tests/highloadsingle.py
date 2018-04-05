@@ -13,6 +13,9 @@ import transactions
 
 datadir = ""
 
+def allowgrouprun():
+    return False
+
 def aftertest(testfilter):
     global datadir
     

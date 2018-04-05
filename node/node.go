@@ -39,6 +39,7 @@ func (n *Node) Init() {
 	n.NodeTX.Logger = n.Logger
 	n.NodeTX.UnapprovedTXs.Logger = n.Logger
 	n.NodeTX.UnspentTXs.Logger = n.Logger
+	n.NodeTX.TXCache.Logger = n.Logger
 
 	n.NodeBC.DataDir = n.DataDir
 	n.NodeBC.MinterAddress = n.MinterAddress
@@ -111,6 +112,7 @@ func (n *Node) OpenBlockchain() error {
 	n.NodeTX.BC = n.NodeBC.BC
 	n.NodeTX.UnspentTXs.SetBlockchain(n.NodeBC.BC)
 	n.NodeTX.UnapprovedTXs.SetBlockchain(n.NodeBC.BC)
+	n.NodeTX.TXCache.SetBlockchain(n.NodeBC.BC)
 
 	return nil
 }
@@ -123,6 +125,7 @@ func (n *Node) CloseBlockchain() {
 
 	n.NodeTX.UnspentTXs.SetBlockchain(nil)
 	n.NodeTX.UnapprovedTXs.SetBlockchain(nil)
+	n.NodeTX.TXCache.SetBlockchain(nil)
 	n.NodeTX.BC = nil
 }
 
@@ -183,6 +186,7 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	n.OpenBlockchain()
 	n.NodeTX.UnspentTXs.Reindex()
 	n.NodeTX.UnapprovedTXs.InitDB()
+	n.NodeTX.TXCache.Reindex()
 	n.CloseBlockchain()
 
 	n.Logger.Trace.Printf("Blockchain ready!\n")
@@ -234,6 +238,8 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	// open block chain now
 	n.OpenBlockchain()
 
+	n.NodeTX.TXCache.Reindex()
+
 	MH := block.Height
 
 	if len(result.Blocks) > 1 {
@@ -259,6 +265,8 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 				return false, err
 			}
 
+			n.NodeTX.TXCache.BlockAdded(block)
+
 			MH = block.Height
 		}
 	}
@@ -279,6 +287,9 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 	n.Logger.Trace.Printf("Send transaction to %d nodes", len(n.NodeNet.Nodes))
 
 	for _, node := range n.NodeNet.Nodes {
+		if node.CompareToAddress(n.NodeClient.NodeAddress) {
+			continue
+		}
 		n.Logger.Trace.Printf("Send TX %x to %s", tx.ID, node.NodeAddrToString())
 		n.NodeClient.SendInv(node, "tx", [][]byte{tx.ID})
 	}
@@ -291,6 +302,9 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 // Address from where we get it will be skipped
 func (n *Node) SendBlockToAll(newBlock *Block, skipaddr lib.NodeAddr) {
 	for _, node := range n.NodeNet.Nodes {
+		if node.CompareToAddress(n.NodeClient.NodeAddress) {
+			continue
+		}
 		blockshortdata, err := newBlock.GetShortCopy().Serialize()
 		if err == nil {
 			n.NodeClient.SendInv(node, "block", [][]byte{blockshortdata})
@@ -313,6 +327,9 @@ func (n *Node) SendVersionToNodes(nodes []lib.NodeAddr) {
 	}
 
 	for _, node := range nodes {
+		if node.CompareToAddress(n.NodeClient.NodeAddress) {
+			continue
+		}
 		n.NodeClient.SendVersion(node, bestHeight)
 	}
 }
@@ -463,6 +480,14 @@ func (n *Node) AddBlock(block *Block) (uint, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	if addstate == BCBAddState_addedToTop ||
+		addstate == BCBAddState_addedToParallelTop ||
+		addstate == BCBAddState_addedToParallel {
+		// block was added. add transactions to caches
+		n.NodeTX.TXCache.BlockAdded(block)
+	}
+
 	if addstate == BCBAddState_addedToTop {
 		// only if a block was really added
 		// delete block transaction from list of unapproved
