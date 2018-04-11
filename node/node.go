@@ -619,3 +619,43 @@ func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *Blo
 	}
 	return blockstate, addstate, block, nil
 }
+
+// Get node state
+
+func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
+	result := nodeclient.ComGetNodeState{}
+
+	result.ExpectingBlocksHeight = 0
+
+	err := n.OpenBlockchain("ShowState")
+
+	if err != nil {
+		return result, err
+	}
+	defer n.CloseBlockchain()
+
+	bh, err := n.NodeBC.GetBestHeight()
+
+	if err != nil {
+		return result, err
+	}
+	result.BlocksNumber = bh + 1
+
+	unappr, err := n.NodeTX.UnapprovedTXs.GetCount()
+
+	if err != nil {
+		return result, err
+	}
+
+	result.TransactionsCached = unappr
+
+	unspent, err := n.NodeTX.UnspentTXs.CountUnspentOutputs()
+
+	if err != nil {
+		return result, err
+	}
+
+	result.UnspentOutputs = unspent
+
+	return result, nil
+}

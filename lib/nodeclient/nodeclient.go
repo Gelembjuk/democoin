@@ -147,10 +147,11 @@ type ComManageNode struct {
 
 // To get node state
 type ComGetNodeState struct {
-	Host               string
-	BlocksNumber       int
-	ExpectingBlocks    int
-	TransactionsCached int
+	Host                  string
+	BlocksNumber          int
+	ExpectingBlocksHeight int
+	TransactionsCached    int
+	UnspentOutputs        int
 }
 
 // Check if node address looks fine
@@ -459,7 +460,7 @@ func (c *NodeClient) SendRemoveNode(node lib.NodeAddr) error {
 }
 
 // Request to remove a node from contacts
-func (c *NodeClient) SendGetState(node lib.NodeAddr) (ComGetNodeState, error) {
+func (c *NodeClient) SendGetState() (ComGetNodeState, error) {
 	request, err := c.BuildCommandDataWithAuth("getstate", nil)
 
 	data := ComGetNodeState{}

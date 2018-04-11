@@ -734,44 +734,37 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 
 	fmt.Println("Node Server State:")
 
+	var info nodeclient.ComGetNodeState
+
 	if Runnning {
 		fmt.Printf("Server is running. Process: %d, listening on the port %d\n", ProcessID, Port)
+
+		// request state from the node
+		nc := c.getLocalNetworkClient()
+
+		info, err = nc.SendGetState()
+
 	} else {
 		fmt.Println("Server is not running")
-	}
 
-	err = c.Node.OpenBlockchain("ShowState")
+		info, err = c.Node.GetNodeState()
+	}
 
 	if err != nil {
 		return err
 	}
-	defer c.Node.CloseBlockchain()
 
 	fmt.Println("Blockchain state:")
 
-	bh, err := c.Node.NodeBC.GetBestHeight()
+	fmt.Printf("  Number of blocks - %d\n", info.BlocksNumber)
 
-	if err != nil {
-		return err
+	if info.ExpectingBlocksHeight > info.BlocksNumber {
+		fmt.Printf("  Loaded %d of %d blocks\n", info.BlocksNumber, info.ExpectingBlocksHeight+1)
 	}
 
-	fmt.Printf("  Number of blocks - %d\n", bh+1)
+	fmt.Printf("  Number of unapproved transactions - %d\n", info.TransactionsCached)
 
-	unappr, err := c.Node.NodeTX.UnapprovedTXs.GetCount()
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("  Number of unapproved transactions - %d\n", unappr)
-
-	unspent, err := c.Node.NodeTX.UnspentTXs.CountUnspentOutputs()
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("  Number of unspent transactions outputs - %d\n", unspent)
+	fmt.Printf("  Number of unspent transactions outputs - %d\n", info.UnspentOutputs)
 
 	return nil
 }

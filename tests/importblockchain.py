@@ -1,6 +1,7 @@
 import _lib
 import _transfers
 import _blocks
+import _node
 import re
 import os
 import time
@@ -59,6 +60,10 @@ def test(testfilter):
     #managenodes.AddNode(datadir1, "localhost",'30001')
     
     blocks1 = _blocks.GetBlocks(datadir1)
+    
+    state = _node.NodeState(datadir1);
+    
+    _node.WaitBlocksInState(datadir2,len(blocks1), 120)
     
     blocks2 = _blocks.WaitBlocks(datadir2,len(blocks1), 120)
     

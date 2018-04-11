@@ -679,6 +679,10 @@ func (s *NodeServerRequest) handleVersion() error {
 	if myBestHeight < foreignerBestHeight {
 		s.Logger.Trace.Printf("Request blocks from %s\n", payload.AddrFrom.NodeAddrToString())
 
+		if foreignerBestHeight > s.S.Transit.MaxKnownHeigh {
+			s.S.Transit.MaxKnownHeigh = foreignerBestHeight
+		}
+
 		s.Node.NodeClient.SendGetBlocksUpper(payload.AddrFrom, topHash)
 
 	} else if myBestHeight > foreignerBestHeight {
@@ -764,5 +768,29 @@ func (s *NodeServerRequest) handleRemoveNode() error {
 
 	s.Response = []byte{}
 
+	return nil
+}
+
+// Return node state, including pending blocks to load
+func (s *NodeServerRequest) handleGetState() error {
+	if !s.NodeAuthStrIsGood {
+		return errors.New("Local Network Auth is required")
+	}
+
+	s.HasResponse = true
+
+	info, err := s.Node.GetNodeState()
+
+	if err != nil {
+		return err
+	}
+
+	info.ExpectingBlocksHeight = s.S.Transit.MaxKnownHeigh
+
+	s.Response, err = lib.GobEncode(&info)
+
+	if err != nil {
+		return err
+	}
 	return nil
 }

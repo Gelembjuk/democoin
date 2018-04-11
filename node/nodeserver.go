@@ -231,6 +231,9 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	case "removenode":
 		rerr = requestobj.handleRemoveNode()
 
+	case "getstate":
+		rerr = requestobj.handleGetState()
+
 	case "version":
 		rerr = requestobj.handleVersion()
 	default:
