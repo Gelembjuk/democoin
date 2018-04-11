@@ -192,18 +192,18 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction,
 	tip []byte) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
 
-	n.Logger.Trace.Printf("get state %x , tip %x", tx.ID, tip)
+	//n.Logger.Trace.Printf("get state %x , tip %x", tx.ID, tip)
 
 	prevTXs := make(map[int]*transaction.Transaction)
 	badinputs := make(map[int]transaction.TXInput)
 
 	if tx.IsCoinbase() {
-		n.Logger.Trace.Printf("Return coni base")
+
 		return prevTXs, badinputs, nil
 	}
 
 	for vind, vin := range tx.Vin {
-		n.Logger.Trace.Printf("Load in tx %x", vin.Txid)
+		//n.Logger.Trace.Printf("Load in tx %x", vin.Txid)
 		txBockHash, err := n.TXCache.GetTranactionBlock(vin.Txid)
 
 		if err != nil {
@@ -214,11 +214,11 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 		var prevTX *transaction.Transaction
 
 		if txBockHash == nil {
-			n.Logger.Trace.Printf("Not found TX")
+			//n.Logger.Trace.Printf("Not found TX")
 			prevTX = nil
 		} else {
 
-			n.Logger.Trace.Printf("tx block hash %x %x", vin.Txid, txBockHash)
+			//n.Logger.Trace.Printf("tx block hash %x %x", vin.Txid, txBockHash)
 			// check this block is part of chain
 			heigh, err := n.BC.GetBlockInTheChain(txBockHash, tip)
 
@@ -228,7 +228,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 
 			if heigh >= 0 {
 				// if block is in this chain
-				n.Logger.Trace.Printf("block height %d", heigh)
+				//n.Logger.Trace.Printf("block height %d", heigh)
 				prevTX, err = n.BC.FindTransactionByBlock(vin.Txid, txBockHash)
 
 				if err != nil {
@@ -237,7 +237,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 			} else {
 				// TX is in some other block that is in other chain. we want to include it in new block
 				// so, we consider this TX as missed from blocks (unapproved)
-				n.Logger.Trace.Printf("Not found TX . type 2")
+				//n.Logger.Trace.Printf("Not found TX . type 2")
 				prevTX = nil
 			}
 		}
@@ -246,20 +246,18 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 			// transaction not found
 			badinputs[vind] = vin
 			prevTXs[vind] = nil
-			n.Logger.Trace.Printf("tx is not in blocks")
+			//n.Logger.Trace.Printf("tx is not in blocks")
 		} else {
-			n.Logger.Trace.Printf("tx found")
+			//n.Logger.Trace.Printf("tx found")
 			// check if this input was not yet spent somewhere
 			spentouts, err := n.TXCache.GetTranactionOutputsSpent(vin.Txid)
 
 			if err != nil {
 				return nil, nil, err
 			}
-			n.Logger.Trace.Printf("spending of tx count %d", len(spentouts))
+			//n.Logger.Trace.Printf("spending of tx count %d", len(spentouts))
 			if len(spentouts) > 0 {
-				for k, v := range spentouts {
-					n.Logger.Trace.Printf("%d - %x", k, v)
-				}
+
 				for _, o := range spentouts {
 					if o.OutInd == vin.Vout {
 						heigh, err := n.BC.GetBlockInTheChain(o.BlockHash, tip)

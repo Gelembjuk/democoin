@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,6 +28,24 @@ func (n NodeAddr) NodeAddrToString() string {
 // Compare to other node address if is same
 func (n NodeAddr) CompareToAddress(addr NodeAddr) bool {
 	return (strings.Trim(addr.Host, " ") == strings.Trim(n.Host, " ") && addr.Port == n.Port)
+}
+
+// Parse from string
+func (n *NodeAddr) LoadFromString(addr string) error {
+	parts := strings.SplitN(addr, ":", 2)
+
+	if len(parts) < 2 {
+		return errors.New("Wrong address")
+	}
+	n.Host = parts[0]
+
+	port, err := strconv.Atoi(parts[1])
+
+	if err != nil {
+		return err
+	}
+	n.Port = port
+	return nil
 }
 
 // Converts a command to bytes in fixed length

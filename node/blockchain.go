@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -99,7 +102,7 @@ func (bc *Blockchain) CreateBlockchain(datadir string, genesis *Block) error {
 
 // Inits blockchain existent DB
 // It just opens a DB. DB access is locked to this process since open
-func (bc *Blockchain) Init(datadir string) error {
+func (bc *Blockchain) Init(datadir string, reason string) error {
 	dbFile := datadir + dbFile
 
 	if bc.dbExists(dbFile) == false {
@@ -108,7 +111,7 @@ func (bc *Blockchain) Init(datadir string) error {
 
 	var tip []byte
 
-	err := bc.lockDB(datadir)
+	err := bc.lockDB(datadir, reason)
 
 	if err != nil {
 		return err
@@ -143,7 +146,7 @@ func (bc *Blockchain) Init(datadir string) error {
 }
 
 // Creates a lock file for DB access. We need this to controll parallel access to the DB
-func (bc *Blockchain) lockDB(datadir string) error {
+func (bc *Blockchain) lockDB(datadir string, reason string) error {
 	lockfile := datadir + dbFileLock
 
 	i := 0
@@ -165,7 +168,11 @@ func (bc *Blockchain) lockDB(datadir string) error {
 
 	defer file.Close()
 
-	_, err = file.WriteString("1")
+	starttime := time.Now().UTC().UnixNano()
+
+	bc.Logger.Trace.Printf("Locked for %s", reason)
+
+	_, err = file.WriteString(strconv.Itoa(int(starttime)) + " " + reason)
 
 	if err != nil {
 		return err
@@ -181,6 +188,23 @@ func (bc *Blockchain) unLockDB() {
 	lockfile := bc.datadir + dbFileLock
 
 	if bc.dbExists(lockfile) != false {
+		lockinfobytes, err := ioutil.ReadFile(lockfile)
+
+		if err == nil {
+			lockinfo := string(lockinfobytes)
+
+			parts := strings.SplitN(lockinfo, " ", 2)
+
+			reason := parts[1]
+
+			starttime, err := strconv.Atoi(parts[0])
+
+			if err == nil {
+				duration := time.Since(time.Unix(0, int64(starttime)))
+				ms := duration.Nanoseconds() / int64(time.Millisecond)
+				bc.Logger.Trace.Printf("UnLocked for %s after %d ms", reason, ms)
+			}
+		}
 		os.Remove(lockfile)
 	}
 }
@@ -462,7 +486,7 @@ func (bc *Blockchain) FindUnspentTransactions() map[string][]transaction.TXOutpu
  */
 func (bc *Blockchain) Iterator() *BlockchainIterator {
 	starttip := lib.CopyBytes(bc.tip)
-	bc.Logger.Trace.Printf("Init iteraor starting from %x", starttip)
+
 	bci := &BlockchainIterator{starttip, bc.db}
 
 	return bci
@@ -930,4 +954,52 @@ func (bc *Blockchain) GetBlockInTheChain(blockHash []byte, tip []byte) (int, err
 		}
 	}
 	return -1, nil
+}
+
+// Returns geneesis block hash
+func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
+	var hash []byte
+
+	err := bc.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(BlocksBucket))
+		hash = b.Get([]byte("f"))
+
+		if hash != nil {
+			hash = lib.CopyBytes(hash)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if hash != nil {
+		return hash, nil
+	}
+	bci := bc.Iterator()
+
+	for {
+		block, _ := bci.Next()
+
+		if len(block.PrevBlockHash) == 0 {
+			hash = lib.CopyBytes(block.Hash)
+			break
+		}
+	}
+
+	if hash == nil {
+		return nil, errors.New("Genesis block is not found")
+	}
+
+	err = bc.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(BlocksBucket))
+
+		return b.Put([]byte("f"), hash)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return hash, nil
 }

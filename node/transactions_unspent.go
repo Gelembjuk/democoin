@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
+	"sort"
 
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib"
@@ -132,6 +133,8 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 		b := u.getBucket(tx)
 		c := b.Cursor()
 
+		// get all possible outputs
+
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			outs := u.DeserializeOutputs(v)
 
@@ -151,11 +154,6 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 					}
 					accumulated += out.Value
 					unspentOutputs = append(unspentOutputs, out)
-
-					if accumulated >= amount {
-						// found enough transactions. stop the process and return
-						return nil
-					}
 				}
 			}
 		}
@@ -164,6 +162,26 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 	})
 	if err != nil {
 		return 0, nil, err
+	}
+
+	if accumulated >= amount {
+		// choose longest number of outputs to spent. it must be outs with smallest amounts
+		sort.Sort(transaction.TXOutputIndependentList(unspentOutputs))
+
+		accumulated = 0
+		uo := []transaction.TXOutputIndependent{}
+
+		for _, out := range unspentOutputs {
+
+			accumulated += out.Value
+			uo = append(uo, out)
+
+			if accumulated >= amount {
+				break
+			}
+		}
+
+		unspentOutputs = uo
 	}
 
 	return accumulated, unspentOutputs, nil

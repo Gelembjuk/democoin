@@ -47,7 +47,9 @@ def test(testfilter):
 
     address2 = initblockchain.ImportBockchain(datadir2,"localhost",'30000')
     
-    RemoveAllNodes(datadir1)
+    #RemoveAllNodes(datadir1)
+    nodes = GetNodes(datadir1)
+    _lib.FatalAssert(len(nodes) == 0,"Should be 0 nodes in output")
     
     AddNode(datadir1, "localhost",'30001')
     
@@ -61,12 +63,20 @@ def test(testfilter):
     
     startnode.StartNode(datadir2, address2,'30001', "Server 2")
     
-    RemoveAllNodes(datadir2)
+    #RemoveAllNodes(datadir2)
     
-    AddNode(datadir1, "localhost",'30001')
+    #AddNode(datadir1, "localhost",'30001')
     
     nodes = GetNodes(datadir1)
     _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
+    
+    startnode.StopNode(datadir2,"Server 2")
+    
+    startnode.StartNode(datadir2, address2,'30001', "Server 2")
+    
+    nodes = GetNodes(datadir1)
+    _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
+    _lib.FatalAssert(nodes.keys()[0] == "localhost:30001","Wrong node in the list")
     
     # check transactions work fine between nodes
     _transfers.Send(datadir1,address,address2,'3')
@@ -104,9 +114,9 @@ def test(testfilter):
     
     startnode.StartNode(datadir3, address3,'30002', "Server 3")
     
-    RemoveAllNodes(datadir3)
+    #RemoveAllNodes(datadir3)
     
-    AddNode(datadir3, "localhost",'30001')
+    #AddNode(datadir3, "localhost",'30001')
     
     time.sleep(2)# wait while nodes exchange addresses
     
@@ -114,6 +124,7 @@ def test(testfilter):
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 1")
     
     nodes = GetNodes(datadir2)
+    
     _lib.FatalAssert(len(nodes) == 2,"Should be 2 nodes in output of 2")
     
     nodes = GetNodes(datadir3)

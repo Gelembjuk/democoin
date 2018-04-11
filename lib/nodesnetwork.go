@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -11,10 +12,10 @@ import (
 // TODO
 // This is not used yet
 type NodeNetworkStorage interface {
-	LoadNodes(nodeslist *[]NodeAddr) error
+	GetNodes() ([]NodeAddr, error)
 	AddNodeToKnown(addr NodeAddr)
 	RemoveNodeFromKnown(addr NodeAddr)
-	GetCountOfKnownNodes() int
+	GetCountOfKnownNodes() (int, error)
 }
 
 // This manages list of known nodes by a node
@@ -25,7 +26,8 @@ type NodeNetwork struct {
 }
 
 type NodesListJSON struct {
-	Nodes []NodeAddr
+	Nodes   []NodeAddr
+	Genesis string
 }
 
 // Set extra storage for a nodes
@@ -33,8 +35,27 @@ func (n *NodeNetwork) SetExtraManager(storage NodeNetworkStorage) {
 	n.Storage = storage
 }
 
+// Loads list of nodes from storage
+func (n *NodeNetwork) LoadNodes() error {
+	if n.Storage == nil {
+		return nil
+	}
+
+	nodes, err := n.Storage.GetNodes()
+
+	if err != nil {
+		return err
+	}
+
+	for _, node := range nodes {
+		n.Nodes = append(n.Nodes, node)
+	}
+
+	return nil
+}
+
 // Set nodes list. This can be used to do initial nodes loading from  config or so
-func (n *NodeNetwork) LoadNodes(nodes []NodeAddr, replace bool) {
+func (n *NodeNetwork) SetNodes(nodes []NodeAddr, replace bool) {
 	if replace {
 		n.Nodes = nodes
 	} else {
@@ -46,12 +67,12 @@ func (n *NodeNetwork) LoadNodes(nodes []NodeAddr, replace bool) {
 		for _, node := range nodes {
 			n.Storage.AddNodeToKnown(node)
 		}
-		n.Storage.LoadNodes(&n.Nodes)
 	}
 }
 
 // If n any known nodes then it will be loaded from the url on a host
-func (n *NodeNetwork) LoadInitialNodes() error {
+// Accepts genesis block hash. It will be compared to the hash in JSON doc
+func (n *NodeNetwork) LoadInitialNodes(geenesisHash []byte) error {
 	response, err := http.Get(InitialNodesList)
 
 	if err != nil {
@@ -70,6 +91,15 @@ func (n *NodeNetwork) LoadInitialNodes() error {
 
 	if err != nil {
 		return err
+	}
+
+	if geenesisHash != nil && nodes.Genesis != "" {
+		gh := hex.EncodeToString(geenesisHash)
+
+		if gh != nodes.Genesis {
+			// don't add
+			return nil
+		}
 	}
 
 	n.Nodes = append(n.Nodes, nodes.Nodes...)
@@ -91,10 +121,6 @@ func (n *NodeNetwork) GetNodes() []NodeAddr {
 // Returns number of known nodes
 func (n *NodeNetwork) GetCountOfKnownNodes() int {
 	l := len(n.Nodes)
-
-	if n.Storage != nil {
-		l += n.Storage.GetCountOfKnownNodes()
-	}
 
 	return l
 }

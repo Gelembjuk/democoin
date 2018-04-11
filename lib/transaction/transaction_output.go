@@ -30,6 +30,8 @@ type TXOutputIndependent struct {
 	BlockHash      []byte
 }
 
+type TXOutputIndependentList []TXOutputIndependent
+
 // Lock signs the output
 func (out *TXOutput) Lock(address []byte) {
 	pubKeyHash := lib.Base58Decode(address)
@@ -120,3 +122,7 @@ func (output TXOutput) ToBytes() ([]byte, error) {
 	}
 	return buff.Bytes(), nil
 }
+
+func (a TXOutputIndependentList) Len() int           { return len(a) }
+func (a TXOutputIndependentList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a TXOutputIndependentList) Less(i, j int) bool { return a[i].Value < a[j].Value }

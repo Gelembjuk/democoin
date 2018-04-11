@@ -43,8 +43,11 @@ func (n *Node) Init() {
 
 	n.NodeBC.DataDir = n.DataDir
 	n.NodeBC.MinterAddress = n.MinterAddress
+
+	// Nodes list storage
+	n.NodeNet.SetExtraManager(NodesListStorage{n.DataDir})
 	// load list of nodes from config
-	n.NodeNet.LoadNodes([]lib.NodeAddr{}, true)
+	n.NodeNet.SetNodes([]lib.NodeAddr{}, true)
 
 	n.NodeBC.NodeTX = &n.NodeTX
 
@@ -76,13 +79,21 @@ func (n *Node) InitClient() error {
  */
 func (n *Node) InitNodes(list []lib.NodeAddr, force bool) error {
 	if len(list) == 0 && !force {
-		if n.NodeNet.GetCountOfKnownNodes() == 0 {
+		n.NodeNet.LoadNodes()
+		// load nodes from local storage of nodes
+		if n.NodeNet.GetCountOfKnownNodes() == 0 && n.BlockchainExist() {
 			// there are no any known nodes.
-			// load them from some external resource
-			n.NodeNet.LoadInitialNodes()
+			n.OpenBlockchain("Check genesis block")
+			geenesisHash, err := n.NodeBC.BC.GetGenesisBlockHash()
+			n.CloseBlockchain()
+
+			if err == nil {
+				// load them from some external resource
+				n.NodeNet.LoadInitialNodes(geenesisHash)
+			}
 		}
 	} else {
-		n.NodeNet.LoadNodes(list, true)
+		n.NodeNet.SetNodes(list, true)
 	}
 	return nil
 }
@@ -103,8 +114,8 @@ func (n *Node) initBlockMaker() (*NodeBlockMaker, error) {
 
 // Open Blockchain  DB. This must be called before any operation with blockchain or cached data
 
-func (n *Node) OpenBlockchain() error {
-	err := n.NodeBC.OpenBlockchain()
+func (n *Node) OpenBlockchain(reason string) error {
+	err := n.NodeBC.OpenBlockchain(reason)
 
 	if err != nil {
 		return err
@@ -135,7 +146,7 @@ func (n *Node) CloseBlockchain() {
  */
 func (n *Node) BlockchainExist() bool {
 	if n.NodeBC.BC == nil {
-		err := n.OpenBlockchain()
+		err := n.OpenBlockchain("CheckBCExists")
 
 		if err != nil {
 			return false
@@ -183,7 +194,7 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	}
 	n.Logger.Trace.Printf("Prepare TX caches\n")
 
-	n.OpenBlockchain()
+	n.OpenBlockchain("InitAfterCreate")
 	n.NodeTX.UnspentTXs.Reindex()
 	n.NodeTX.UnapprovedTXs.InitDB()
 	n.NodeTX.TXCache.Reindex()
@@ -199,8 +210,11 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 
 func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	if host == "" {
+		// load node from special hardcoded url
+		n.NodeNet.LoadInitialNodes(nil)
 		// get node from known nodes
 		if len(n.NodeNet.Nodes) == 0 {
+
 			return false, errors.New("No known nodes to request a blockchain")
 		}
 		nd := n.NodeNet.Nodes[rand.Intn(len(n.NodeNet.Nodes))]
@@ -236,7 +250,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 		return false, err
 	}
 	// open block chain now
-	n.OpenBlockchain()
+	n.OpenBlockchain("InitAfterImport")
 
 	n.NodeTX.TXCache.Reindex()
 
@@ -276,6 +290,9 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	n.NodeTX.UnapprovedTXs.InitDB()
 
 	n.CloseBlockchain()
+
+	// add that node to list of known nodes.
+	n.NodeNet.AddNodeToKnown(addr)
 
 	return MH == result.Height, nil
 }
@@ -377,12 +394,12 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return nil, errors.New("Minter address is not provided")
 	}
 
-	err := n.OpenBlockchain()
+	err := n.OpenBlockchain("TryToMakeBlock1")
 
 	if err != nil {
 		return nil, err
 	}
-	n.Logger.Trace.Println("BC Opened")
+
 	defer n.CloseBlockchain()
 
 	n.Logger.Trace.Println("Create block maker")
@@ -437,7 +454,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		n.Logger.Trace.Printf("Add block to the blockchain. Hash %x\n", block.Hash)
 
 		// open BC DB again
-		n.OpenBlockchain()
+		n.OpenBlockchain("AddNewMadeBlock")
 		Minter.BC = n.NodeBC.BC
 
 		// final correction. while we did minting, there can be something changes

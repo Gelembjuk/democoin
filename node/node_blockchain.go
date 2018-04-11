@@ -72,7 +72,7 @@ func (n *NodeBlockchain) SetBlockchain(bc *Blockchain) {
 /*
 * Opens Blockchain DB
  */
-func (n *NodeBlockchain) OpenBlockchain() error {
+func (n *NodeBlockchain) OpenBlockchain(reason string) error {
 
 	if n.BC != nil {
 		return nil
@@ -81,7 +81,7 @@ func (n *NodeBlockchain) OpenBlockchain() error {
 
 	bc.Logger = n.Logger
 
-	err := bc.Init(n.DataDir)
+	err := bc.Init(n.DataDir, reason)
 
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func (n *NodeBlockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 // Returns height of the chain. Index of top block
 func (n *NodeBlockchain) GetBestHeight() (int, error) {
 	if n.BC == nil {
-		err := n.OpenBlockchain()
+		err := n.OpenBlockchain("GetBestHeight")
 
 		if err != nil {
 			return 0, err
@@ -213,7 +213,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 		return result, errors.New("Address is not valid")
 	}
 	if n.BC == nil {
-		err := n.OpenBlockchain()
+		err := n.OpenBlockchain("GetAddressHistory")
 
 		if err != nil {
 			return result, err

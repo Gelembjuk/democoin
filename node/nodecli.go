@@ -329,7 +329,7 @@ func (c *NodeCLI) commandCreateBlockchain() error {
  */
 func (c *NodeCLI) commandInitBlockchain() error {
 	// try to open existent BC to check if it exists
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("CheckIfExistsBeforeInit")
 
 	if err == nil {
 		c.Node.CloseBlockchain()
@@ -354,7 +354,7 @@ func (c *NodeCLI) commandInitBlockchain() error {
 * Print fulll blockchain
  */
 func (c *NodeCLI) commandPrintChain() error {
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("PrintChain")
 
 	if err != nil {
 		return err
@@ -417,7 +417,7 @@ func (c *NodeCLI) commandPrintChain() error {
 * Show contacts of a cache of unapproved transactions
  */
 func (c *NodeCLI) commandUnapprovedTransactions() error {
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("UnapprovedTransactions")
 
 	if err != nil {
 		return err
@@ -443,7 +443,7 @@ func (c *NodeCLI) commandAddressesBalance() error {
 		return c.forwardCommandToWallet()
 	}
 
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("AddressBalance")
 
 	if err != nil {
 		return err
@@ -481,7 +481,7 @@ func (c *NodeCLI) commandAddressHistory() error {
 		return c.forwardCommandToWallet()
 	}
 
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("AddressHistory")
 
 	if err != nil {
 		return err
@@ -515,7 +515,7 @@ func (c *NodeCLI) commandShowUnspent() error {
 		return c.forwardCommandToWallet()
 	}
 
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("ShowUnspent")
 
 	if err != nil {
 		return err
@@ -556,7 +556,7 @@ func (c *NodeCLI) commandGetBalance() error {
 		return c.forwardCommandToWallet()
 	}
 
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("GetBalance")
 
 	if err != nil {
 		return err
@@ -585,7 +585,7 @@ func (c *NodeCLI) commandSend() error {
 		return c.forwardCommandToWallet()
 	}
 	c.Logger.Trace.Println("Send with dirct access to DB ")
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("SendDirect")
 
 	if err != nil {
 		return err
@@ -621,7 +621,7 @@ func (c *NodeCLI) commandSend() error {
 * Reindex DB of unspent transactions and transaction pointers
  */
 func (c *NodeCLI) commandReindexCache() error {
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("ReindexCache")
 
 	if err != nil {
 		return err
@@ -667,7 +667,7 @@ func (c *NodeCLI) commandMakeBlock() error {
 * Cancel transaction if it is not yet in a block
  */
 func (c *NodeCLI) commandCancelTransaction() error {
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("CancelTransaction")
 
 	if err != nil {
 		return err
@@ -690,7 +690,7 @@ func (c *NodeCLI) commandCancelTransaction() error {
 * Drops last block from the top of blockchain
  */
 func (c *NodeCLI) commandDropBlock() error {
-	err := c.Node.OpenBlockchain()
+	err := c.Node.OpenBlockchain("DropBlock")
 
 	if err != nil {
 		return err
@@ -740,7 +740,7 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 		fmt.Println("Server is not running")
 	}
 
-	err = c.Node.OpenBlockchain()
+	err = c.Node.OpenBlockchain("ShowState")
 
 	if err != nil {
 		return err
@@ -764,6 +764,14 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 	}
 
 	fmt.Printf("  Number of unapproved transactions - %d\n", unappr)
+
+	unspent, err := c.Node.NodeTX.UnspentTXs.CountUnspentOutputs()
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("  Number of unspent transactions outputs - %d\n", unspent)
 
 	return nil
 }

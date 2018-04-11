@@ -170,7 +170,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	request = nil
 
 	// open blockchain. and close in the end ofthis function
-	err = requestobj.Node.OpenBlockchain()
+	err = requestobj.Node.OpenBlockchain("HandleCommand " + command)
 
 	if err != nil {
 		s.sendErrorBack(conn, errors.New("Blockchain open Error: "+err.Error()))
@@ -414,7 +414,7 @@ func (s *NodeServer) BlockBuilder() {
 			// block was not created and txID is real transaction ID
 			// send this transaction to all other nodes.
 			// blockchain should be closed in this place
-			NodeClone.OpenBlockchain()
+			NodeClone.OpenBlockchain("SendTxToAll")
 
 			tx, err := NodeClone.NodeTX.UnapprovedTXs.GetIfExists(txID)
 

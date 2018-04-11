@@ -50,13 +50,13 @@ def test(testfilter):
 
     address2 = initblockchain.ImportBockchain(datadir2,"localhost",'30000')
     
-    managenodes.RemoveAllNodes(datadir1)
+    #managenodes.RemoveAllNodes(datadir1)
     
     startnode.StartNode(datadir2, address2,'30001', "Server 2")
     
-    managenodes.RemoveAllNodes(datadir2)
+    #managenodes.RemoveAllNodes(datadir2)
     
-    managenodes.AddNode(datadir1, "localhost",'30001')
+    #managenodes.AddNode(datadir1, "localhost",'30001')
     
     blocks1 = _blocks.GetBlocks(datadir1)
     
