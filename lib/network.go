@@ -27,7 +27,17 @@ func (n NodeAddr) NodeAddrToString() string {
 
 // Compare to other node address if is same
 func (n NodeAddr) CompareToAddress(addr NodeAddr) bool {
-	return (strings.Trim(addr.Host, " ") == strings.Trim(n.Host, " ") && addr.Port == n.Port)
+	h1 := strings.Trim(addr.Host, " ")
+	h2 := strings.Trim(n.Host, " ")
+
+	if h1 == "localhost" {
+		h1 = "127.0.0.1"
+	}
+	if h2 == "localhost" {
+		h2 = "127.0.0.1"
+	}
+
+	return (h1 == h2 && addr.Port == n.Port)
 }
 
 // Parse from string

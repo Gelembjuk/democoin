@@ -82,10 +82,29 @@ func (wc *WalletCLI) initNodeClient() {
 
 	wc.NodeCLI = &client
 }
+func (wc *WalletCLI) checkNodeAddress() {
+	if wc.NodeMode {
+		return
+	}
+	// only if this is wallet mode
+	if wc.Node.Host == "" {
+		// if node address is not set, we can load it from special source
+		wc.NodeCLI.NodeNet.LoadInitialNodes(nil)
+
+		if wc.NodeCLI.NodeNet.GetCountOfKnownNodes() > 0 {
+			wc.Node = wc.NodeCLI.NodeNet.Nodes[0]
+		}
+	}
+}
 
 // Executes command based on input arguments
 func (wc *WalletCLI) ExecuteCommand() error {
 	wc.initNodeClient()
+
+	if wc.Input.Command != "createwallet" &&
+		wc.Input.Command != "listaddresses" {
+		wc.checkNodeAddress()
+	}
 
 	if wc.Input.Command == "createwallet" {
 		return wc.commandCreatewallet()

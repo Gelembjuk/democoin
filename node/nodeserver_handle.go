@@ -15,6 +15,7 @@ type NodeServerRequest struct {
 	Node              *Node
 	S                 *NodeServer
 	Request           []byte
+	RequestIP         string
 	Logger            *lib.LoggerMan
 	HasResponse       bool
 	Response          []byte
@@ -669,6 +670,10 @@ func (s *NodeServerRequest) handleVersion() error {
 
 	if err != nil {
 		return err
+	}
+
+	if payload.AddrFrom.Host == "localhost" {
+		payload.AddrFrom.Host = s.RequestIP
 	}
 
 	s.Logger.Trace.Printf("Received version from %s. Their heigh %d, our heigh %d\n",

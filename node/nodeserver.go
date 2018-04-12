@@ -167,6 +167,9 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	requestobj.NodeAuthStrIsGood = (s.NodeAuthStr == authstring && len(authstring) > 0)
 	requestobj.S = s
 
+	if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+		requestobj.RequestIP = addr.IP.String()
+	}
 	request = nil
 
 	// open blockchain. and close in the end ofthis function

@@ -75,8 +75,9 @@ def test(testfilter):
     startnode.StartNode(datadir2, address2,'30001', "Server 2")
     
     nodes = GetNodes(datadir1)
+    
     _lib.FatalAssert(len(nodes) == 1,"Should be 1 nodes in output")
-    _lib.FatalAssert(nodes.keys()[0] == "localhost:30001","Wrong node in the list")
+    _lib.FatalAssert(nodes.keys()[0] == "localhost:30001" or nodes.keys()[0] == "127.0.0.1:30001","Wrong node in the list")
     
     # check transactions work fine between nodes
     _transfers.Send(datadir1,address,address2,'3')

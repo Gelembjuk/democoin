@@ -37,6 +37,13 @@ type AppInput struct {
 	Args          AllPossibleArgs
 }
 
+type AppConfig struct {
+	Minter string
+	Port   int
+	Host   string
+	Nodes  []lib.NodeAddr
+}
+
 // Parses inout and config file. Command line arguments ovverride config file options
 func GetAppInput() (AppInput, error) {
 	input := AppInput{}
@@ -97,7 +104,7 @@ func GetAppInput() (AppInput, error) {
 		return input, errf
 	}
 	if errf == nil {
-		config := AppInput{}
+		config := AppConfig{}
 		// we open a file only if it exists. in other case options can be set with command line
 		decoder := json.NewDecoder(file)
 		err := decoder.Decode(&config)
@@ -106,8 +113,8 @@ func GetAppInput() (AppInput, error) {
 			return input, err
 		}
 
-		if input.MinterAddress == "" && config.MinterAddress != "" {
-			input.MinterAddress = config.MinterAddress
+		if input.MinterAddress == "" && config.Minter != "" {
+			input.MinterAddress = config.Minter
 		}
 
 		if input.Port < 1 && config.Port > 0 {
