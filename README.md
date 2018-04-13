@@ -134,8 +134,46 @@ go build
 
 Now, you can run ./node and ./wallet commands (or node.exe and wallet.exe on Windows)
 
+#### Your quick test scenario
 
-#### Your test scenario
+1. Init import of existent blockchain (DemoCoin cryptocurrency)
+
+```
+./node initblockchain
+DemoCoin - 0.1 alpha
+
+Done! First part of bockchain loaded. Next part will be loaded on background when node started
+```
+
+2. Create your wallet
+
+```
+./node createwallet
+DemoCoin - 0.1 alpha
+
+Your new address: 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT
+```
+
+3. Start your node. Use wallet you just created as minter address. Also, you must have public host name and port opened, so, other nodes can connect to you. 
+
+```
+./node startnode -minter 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT -port 20001 -host YOUR.EXTERNAL.IP.OR.HOSTNAME
+```
+
+4. Check your node state. You will see blocks are loaded from public blockchain called "DemoCoin".
+
+```
+./node nodestate
+Node Server State:
+Server is running. Process: 14058, listening on the port 20001
+Blockchain state:
+  Number of blocks - 15
+  Loaded 15 of 772 blocks
+  Number of unapproved transactions - 0
+  Number of unspent transactions outputs - 148
+```
+
+#### Your custom lockchain test scenario
 
 1. Create a first wallet. In your case a wallet addres will be different
 
