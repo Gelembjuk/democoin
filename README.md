@@ -195,7 +195,7 @@ Your new address: 18wTEuoYRjEWZZqPKdsJ5ZvBMbiueDGUtT
 2.B. Or connect to existent blockchain. You can provide a node address and port or just use defalt nodes to join the existent coin "DemoCoin"
 
 ```
-./node initblockchain
+./node initblockchain -nodehost HOST -nodeport PORT
 ```
 
 3. Display the blocks list
