@@ -6,9 +6,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/ripemd160"
 )
@@ -17,6 +19,7 @@ const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 // Structure to manage logs
 type LoggerMan struct {
+	State   map[string]bool
 	Trace   *log.Logger
 	Info    *log.Logger
 	Warning *log.Logger
@@ -27,60 +30,81 @@ type LoggerMan struct {
 func CreateLogger() *LoggerMan {
 	logger := LoggerMan{}
 
-	logger.Trace = log.New(os.Stdout,
+	logger.State = map[string]bool{"trace": false, "error": false, "info": false, "warning": false}
+
+	logger.Trace = log.New(ioutil.Discard,
 		"TRACE: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
 
-	logger.Info = log.New(os.Stdout,
+	logger.Info = log.New(ioutil.Discard,
 		"INFO: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
 
-	logger.Warning = log.New(os.Stdout,
+	logger.Warning = log.New(ioutil.Discard,
 		"WARNING: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
 
-	logger.Error = log.New(os.Stdout,
+	logger.Error = log.New(ioutil.Discard,
 		"ERROR: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
 
 	return &logger
 }
+func (logger *LoggerMan) EnableLogs(logs string) {
+	l := strings.Split(logs, ",")
+
+	for _, lv := range l {
+		logger.State[lv] = true
+	}
+}
 
 // Changes logging to files
 func (logger *LoggerMan) LogToFiles(datadir, trace, info, warning, errorname string) error {
+	if logger.State["trace"] {
+		f1, err1 := os.OpenFile(datadir+trace, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
-	f1, err1 := os.OpenFile(datadir+trace, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-	if err1 == nil {
-		logger.Trace.SetOutput(f1)
+		if err1 == nil {
+			logger.Trace.SetOutput(f1)
+		}
 	}
+	if logger.State["info"] {
+		f2, err2 := os.OpenFile(datadir+info, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
-	f2, err2 := os.OpenFile(datadir+info, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-	if err2 == nil {
-		logger.Info.SetOutput(f2)
+		if err2 == nil {
+			logger.Info.SetOutput(f2)
+		}
 	}
+	if logger.State["warning"] {
+		f3, err3 := os.OpenFile(datadir+warning, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
-	f3, err3 := os.OpenFile(datadir+warning, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-	if err3 == nil {
-		logger.Warning.SetOutput(f3)
+		if err3 == nil {
+			logger.Warning.SetOutput(f3)
+		}
 	}
+	if logger.State["error"] {
+		f4, err4 := os.OpenFile(datadir+errorname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
-	f4, err4 := os.OpenFile(datadir+errorname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-	if err4 == nil {
-		logger.Error.SetOutput(f4)
+		if err4 == nil {
+			logger.Error.SetOutput(f4)
+		}
 	}
 	return nil
 }
 
 // Sets ogging to STDOUT
 func (logger *LoggerMan) LogToStdout() error {
-	logger.Trace.SetOutput(os.Stdout)
-	logger.Info.SetOutput(os.Stdout)
-	logger.Warning.SetOutput(os.Stdout)
-	logger.Error.SetOutput(os.Stdout)
+	if logger.State["trace"] {
+		logger.Trace.SetOutput(os.Stdout)
+	}
+	if logger.State["info"] {
+		logger.Info.SetOutput(os.Stdout)
+	}
+	if logger.State["warning"] {
+		logger.Warning.SetOutput(os.Stdout)
+	}
+	if logger.State["error"] {
+		logger.Error.SetOutput(os.Stdout)
+	}
 	return nil
 }
 

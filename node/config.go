@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/gelembjuk/democoin/lib"
 )
@@ -30,6 +31,7 @@ type AllPossibleArgs struct {
 type AppInput struct {
 	Command       string
 	MinterAddress string
+	Logs          string
 	Port          int
 	Host          string
 	DataDir       string
@@ -42,6 +44,7 @@ type AppConfig struct {
 	Port   int
 	Host   string
 	Nodes  []lib.NodeAddr
+	Logs   []string
 }
 
 // Parses inout and config file. Command line arguments ovverride config file options
@@ -58,6 +61,7 @@ func GetAppInput() (AppInput, error) {
 	cmd := flag.NewFlagSet(input.Command, flag.ExitOnError)
 
 	cmd.StringVar(&input.Args.Address, "address", "", "Address of operation")
+	cmd.StringVar(&input.Logs, "logs", "", "List of enabled logs groups")
 	cmd.StringVar(&input.MinterAddress, "minter", "", "Wallet address which signs blocks")
 	cmd.StringVar(&input.Args.Genesis, "genesis", "", "Genesis block text")
 	cmd.StringVar(&input.Args.Transaction, "transaction", "", "Transaction ID")
@@ -96,22 +100,12 @@ func GetAppInput() (AppInput, error) {
 	input.Host = input.Args.Host
 
 	// read config file . command line arguments are more important than a config
+	config, err := input.getConfig()
 
-	file, errf := os.Open(input.DataDir + "config.json")
-
-	if errf != nil && !os.IsNotExist(errf) {
-		// error is bad only if file exists but we can not open to read
-		return input, errf
+	if err != nil {
+		return input, err
 	}
-	if errf == nil {
-		config := AppConfig{}
-		// we open a file only if it exists. in other case options can be set with command line
-		decoder := json.NewDecoder(file)
-		err := decoder.Decode(&config)
-
-		if err != nil {
-			return input, err
-		}
+	if config != nil {
 
 		if input.MinterAddress == "" && config.Minter != "" {
 			input.MinterAddress = config.Minter
@@ -128,6 +122,10 @@ func GetAppInput() (AppInput, error) {
 		if len(config.Nodes) > 0 {
 			input.Nodes = config.Nodes
 		}
+
+		if input.Logs == "" && len(config.Logs) > 0 {
+			input.Logs = strings.Join(config.Logs, ",")
+		}
 	}
 
 	if input.Host == "" {
@@ -136,12 +134,116 @@ func GetAppInput() (AppInput, error) {
 
 	return input, nil
 }
+func (c AppInput) getConfig() (*AppConfig, error) {
+	file, errf := os.Open(c.DataDir + "config.json")
 
+	if errf != nil && !os.IsNotExist(errf) {
+		// error is bad only if file exists but we can not open to read
+		return nil, errf
+	}
+	if errf != nil {
+		return nil, nil
+	}
+
+	config := AppConfig{}
+	// we open a file only if it exists. in other case options can be set with command line
+	decoder := json.NewDecoder(file)
+	err := decoder.Decode(&config)
+
+	if err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
 func (c AppInput) checkNeedsHelp() bool {
 	if c.Command == "help" || c.Command == "" {
 		return true
 	}
 	return false
+}
+
+func (c AppInput) checkConfigUpdateNeeded() bool {
+	if c.Command == "updateconfig" {
+		return true
+	}
+	return false
+}
+
+func (c AppInput) updateConfig() error {
+
+	config, err := c.getConfig()
+
+	if err != nil {
+		return err
+	}
+
+	if config == nil {
+		config = &AppConfig{}
+	}
+
+	configfile := c.DataDir + "config.json"
+
+	if c.MinterAddress != "" {
+		config.Minter = c.MinterAddress
+	}
+	if c.Host != "" {
+		config.Host = c.Host
+	}
+	if c.Port > 0 {
+		config.Port = c.Port
+	}
+
+	if c.Args.NodeHost != "" && c.Args.NodePort > 0 {
+		node := lib.NodeAddr{c.Args.NodeHost, c.Args.NodePort}
+
+		used := false
+
+		for _, n := range config.Nodes {
+			if node.CompareToAddress(n) {
+				used = true
+				break
+			}
+		}
+
+		if !used {
+			config.Nodes = append(config.Nodes, node)
+		}
+	}
+
+	if config.Nodes == nil {
+		config.Nodes = []lib.NodeAddr{}
+	}
+
+	if c.Logs != "" {
+		if c.Logs == "no" {
+			config.Logs = []string{}
+		} else {
+			config.Logs = strings.Split(c.Logs, ",")
+		}
+
+	}
+
+	if config.Logs == nil {
+		config.Logs = []string{}
+	}
+
+	// convert back to JSON and save to config file
+	file, errf := os.OpenFile(configfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+
+	if errf != nil {
+		return errf
+	}
+
+	encoder := json.NewEncoder(file)
+
+	err = encoder.Encode(&config)
+
+	if err != nil {
+		return err
+	}
+
+	file.Close()
+	return nil
 }
 
 func (c AppInput) printUsage() {
@@ -170,6 +272,7 @@ func (c AppInput) printUsage() {
 	fmt.Println("  startintnode [-minter ADDRESS] [-port PORT]\n\t- Start a node server in interactive mode (no deamon). -minter defines minting address and -port - listening port")
 	fmt.Println("  stopnode\n\t- Stop runnning node")
 	fmt.Println("  nodestate\n\t- Print state of the node process")
+	fmt.Println("  updateconfig [-minter ADDRESS] [-host HOST] [-port PORT] [-nodehost HOST] [-nodeport PORT]\n\t- Update config file. Allows to set this node minter address, host and port and remote node host and port")
 
 	fmt.Println("  shownodes\n\t- Display list of nodes addresses, including inactive")
 	fmt.Println("  addnode -nodehost HOST -nodeport PORT\n\t- Adds new node to list of connections")

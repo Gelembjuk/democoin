@@ -165,23 +165,23 @@ def PrepareNodes():
     _lib.FatalAssert(len(blocks2) == blockslen + 2, "Expected "+str(blockslen +2)+" blocks for branch 2")
     
     #configs for cluster 1
-    configfile = "{\"MinterAddress\":\""+address1+"\",\"Port\": "+str(nodeport)+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+address1+"\",\"Port\": "+str(nodeport)+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
     _lib.SaveConfigFile(datadir, configfile)
     
-    configfile = "{\"MinterAddress\":\""+nodes[3]['address']+"\",\"Port\": "+str(nodes[3]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+nodes[3]['address']+"\",\"Port\": "+str(nodes[3]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[3]['datadir'], configfile)
     
-    configfile = "{\"MinterAddress\":\""+nodes[4]['address']+"\",\"Port\": "+str(nodes[4]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+nodes[4]['address']+"\",\"Port\": "+str(nodes[4]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[4]['datadir'], configfile)
     
     #config for cluster 2
-    configfile = "{\"MinterAddress\":\""+nodes[0]['address']+"\",\"Port\": "+str(nodes[0]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+nodes[0]['address']+"\",\"Port\": "+str(nodes[0]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[0]['datadir'], configfile)
     
-    configfile = "{\"MinterAddress\":\""+nodes[1]['address']+"\",\"Port\": "+str(nodes[1]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+nodes[1]['address']+"\",\"Port\": "+str(nodes[1]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[1]['datadir'], configfile)
     
-    configfile = "{\"MinterAddress\":\""+nodes[2]['address']+"\",\"Port\": "+str(nodes[2]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}]}"
+    configfile = "{\"Minter\":\""+nodes[2]['address']+"\",\"Port\": "+str(nodes[2]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}]}"
     _lib.SaveConfigFile(nodes[1]['datadir'], configfile)
     
     print os.path.basename(datadir)

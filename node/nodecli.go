@@ -31,8 +31,12 @@ func getNodeCLI(input AppInput) NodeCLI {
 
 	cli.Logger = lib.CreateLogger()
 
+	cli.Logger.EnableLogs(input.Logs)
+
 	if input.Args.LogDest != "stdout" {
 		cli.Logger.LogToFiles(cli.DataDir, "log_trace.txt", "log_info.txt", "log_warning.txt", "log_error.txt")
+	} else {
+		cli.Logger.LogToStdout()
 	}
 
 	cli.Node = nil

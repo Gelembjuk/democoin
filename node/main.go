@@ -23,6 +23,13 @@ func main() {
 		input.printUsage()
 		os.Exit(0)
 	}
+
+	if input.checkConfigUpdateNeeded() {
+		fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
+		// save config using input arguments
+		input.updateConfig()
+		os.Exit(0)
+	}
 	// create node client object
 	// this will create all other objects needed to execute a command
 	cli := getNodeCLI(input)
