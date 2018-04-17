@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gelembjuk/democoin/lib"
@@ -89,7 +90,12 @@ func GetAppInput() (AppInput, error) {
 		}
 	}
 	if input.DataDir == "" {
-		input.DataDir = "data/"
+		dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+
+		if err == nil {
+			input.DataDir = dir + "/data/"
+		}
+
 	}
 
 	if _, err := os.Stat(input.DataDir); os.IsNotExist(err) {
