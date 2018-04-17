@@ -8,6 +8,8 @@ This was created with education purposes. It can be used for learning of how cry
 
 The application has only command line interface. It has **no a GUI** yet. This project contains two apps - Node and Wallet
 
+Web site of the project http://democoin.gelembjuk.com/
+
 ### Node 
 
 This is the server that keeps blockchain and manages it. It is like "Bitcoin Core".
@@ -262,3 +264,5 @@ Balance for all addresses:
 ## Author
 
 Roman Gelembjuk , roman@gelembjuk.com 
+
+http://democoin.gelembjuk.com/
