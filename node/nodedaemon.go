@@ -81,9 +81,7 @@ func (n *NodeDaemon) checkPIDFile() error {
 
 		if err == nil && ProcessID > 0 {
 
-			_, err := os.FindProcess(ProcessID)
-
-			if err != nil {
+			if !n.checkProcessExists(ProcessID) {
 				// process is not found
 				// remove PID file
 				isfine = false
@@ -248,6 +246,7 @@ func (n *NodeDaemon) StopServer() error {
 			n.Logger.Error.Printf("Unable to find process ID [%v] with error %v \n", ProcessID, err)
 			return nil
 		}
+
 		// remove PID file
 		os.Remove(n.getServerPidFile())
 
@@ -458,12 +457,30 @@ func (n *NodeDaemon) GetServerState() (bool, int, int, error) {
 
 	if err == nil && ProcessID > 0 {
 
-		_, err := os.FindProcess(ProcessID)
+		if n.checkProcessExists(ProcessID) {
 
-		if err == nil {
 			return true, ProcessID, Port, nil // server is running
 		}
+
+		// remove pid file. no sense to keep it if process failed
+		os.Remove(n.getServerPidFile())
 	}
 
 	return false, 0, 0, nil
+}
+
+func (n *NodeDaemon) checkProcessExists(pid int) bool {
+	p, err := os.FindProcess(pid)
+
+	if err != nil {
+		return false
+	}
+
+	err = p.Signal(syscall.Signal(0))
+
+	if err == nil {
+		return true
+	}
+	return false
+
 }

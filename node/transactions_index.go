@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"log"
 
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib"
@@ -69,7 +68,6 @@ func (ti *TransactionsIndex) BlockAdded(block *Block) error {
 					outs, err = ti.DeserializeOutputs(to)
 
 					if err != nil {
-						log.Panic(err)
 						return err
 					}
 				}
@@ -154,8 +152,9 @@ func (ti *TransactionsIndex) BlockRemoved(block *Block) error {
 
 // Reindex cach of trsnactions pointers to block
 func (ti *TransactionsIndex) Reindex() error {
-
 	db := ti.Blockchain.db
+
+	ti.Logger.Trace.Println("TXCache.Reindex: Prepare to recreate bucket")
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		bucketName := []byte(TransactionsBucket)
@@ -185,8 +184,12 @@ func (ti *TransactionsIndex) Reindex() error {
 		return nil
 	})
 	if err != nil {
+
 		return err
 	}
+
+	ti.Logger.Trace.Println("TXCache.Reindex: Bucket created")
+
 	bci := ti.Blockchain.Iterator()
 
 	for {
@@ -196,6 +199,8 @@ func (ti *TransactionsIndex) Reindex() error {
 
 			return err
 		}
+
+		ti.Logger.Trace.Printf("TXCache.Reindex: Process block: %d, %x", block.Height, block.Hash)
 
 		err = ti.BlockAdded(block)
 
@@ -207,6 +212,7 @@ func (ti *TransactionsIndex) Reindex() error {
 			break
 		}
 	}
+	ti.Logger.Trace.Println("TXCache.Reindex: Done")
 	return nil
 }
 

@@ -596,3 +596,28 @@ func (u *UnApprovedTransactions) AddFromCanceled(txs []*transaction.Transaction)
 	return nil
 
 }
+func (u *UnApprovedTransactions) CleanUnapprovedCache() error {
+	u.Logger.Trace.Println("Clean Unapproved Transactions cache: Prepare")
+	db := u.Blockchain.db
+	bucketName := []byte(UnapprovedTransactionsBucket)
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		err := tx.DeleteBucket(bucketName)
+		if err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+
+		_, err = tx.CreateBucket(bucketName)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	u.Logger.Trace.Println("Clean Unapproved Transactions cache: Clean done")
+	return nil
+
+}

@@ -139,7 +139,8 @@ func (c NodeCLI) ExecuteCommand() error {
 	if c.Command != "createblockchain" &&
 		c.Command != "initblockchain" &&
 		c.Command != "createwallet" &&
-		c.Command != "listaddresses" {
+		c.Command != "listaddresses" &&
+		c.Command != "nodestate" {
 		// only these 3 addresses can be executed if no blockchain yet
 		if !c.Node.BlockchainExist() {
 			return errors.New("Blockchain is not found. Must be created or inited")
@@ -427,6 +428,12 @@ func (c *NodeCLI) commandUnapprovedTransactions() error {
 		return err
 	}
 	defer c.Node.CloseBlockchain()
+
+	if c.Input.Args.Clean {
+		// clean cache
+
+		return c.Node.NodeTX.CleanUnapprovedCache()
+	}
 
 	total, _ := c.Node.NodeTX.IterateUnapprovedTransactions(
 		func(txhash, txstr string) {

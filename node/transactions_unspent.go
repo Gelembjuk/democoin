@@ -291,6 +291,7 @@ func (u UnspentTransactions) CountUnspentOutputs() (int, error) {
 * Rebuilds the DB of unspent transactions
  */
 func (u UnspentTransactions) Reindex() (int, error) {
+	u.Logger.Trace.Println("Reindex UTXO: Prepare")
 	db := u.Blockchain.db
 	bucketName := []byte(UnspentTransactionsBucket)
 
@@ -310,13 +311,17 @@ func (u UnspentTransactions) Reindex() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	u.Logger.Trace.Println("Reindex UTXO: Prepare done")
 
-	UTXO := u.Blockchain.FindUnspentTransactions()
+	UTXO := u.FindUnspentTransactions()
+
+	u.Logger.Trace.Println("Reindex UTXO: Store records")
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketName)
 
 		for txID, outs := range UTXO {
+			u.Logger.Trace.Printf("Reindex UTXO: Save %s %d", txID, len(outs))
 
 			key, err := hex.DecodeString(txID)
 			if err != nil {
@@ -335,8 +340,91 @@ func (u UnspentTransactions) Reindex() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
+	u.Logger.Trace.Println("Reindex UTXO: Done. Return counts")
 	return u.CountUnspentOutputs()
+}
+
+/*
+* Returns full list of unspent transactions outputs
+* Iterates over full blockchain
+* TODO this will not work for big blockchain. It keeps data in memory
+ */
+func (u UnspentTransactions) FindUnspentTransactions() map[string][]transaction.TXOutputIndependent {
+	UTXO := make(map[string][]transaction.TXOutputIndependent)
+	spentTXOs := make(map[string][]int)
+
+	bci := u.Blockchain.Iterator()
+
+	u.Logger.Trace.Println("Get All UTXO: Start")
+
+	for {
+		block, _ := bci.Next()
+
+		for j := len(block.Transactions) - 1; j >= 0; j-- {
+			tx := block.Transactions[j]
+			txID := hex.EncodeToString(tx.ID)
+
+			sender := []byte{}
+
+			if tx.IsCoinbase() == false {
+				sender, _ = lib.HashPubKey(tx.Vin[0].PubKey)
+			}
+
+			var spent bool
+
+			for outIdx, out := range tx.Vout {
+				// Was the output spent?
+				spent = false
+
+				if list, ok := spentTXOs[txID]; ok {
+
+					for _, spentOutIdx := range list {
+
+						if spentOutIdx == outIdx {
+							// this output of the transaction was already spent
+							// go to next output of this transaction
+							spent = true
+							break
+						}
+					}
+				}
+				if spent {
+					continue
+				}
+				// add to unspent
+
+				if _, ok := UTXO[txID]; !ok {
+					UTXO[txID] = []transaction.TXOutputIndependent{}
+				}
+				outs := UTXO[txID]
+
+				oute := transaction.TXOutputIndependent{}
+				oute.LoadFromSimple(out, tx.ID, outIdx, sender, tx.IsCoinbase(), block.Hash)
+
+				outs = append(outs, oute)
+				UTXO[txID] = outs
+			}
+
+			if tx.IsCoinbase() {
+				continue
+			}
+			for _, in := range tx.Vin {
+				inTxID := hex.EncodeToString(in.Txid)
+
+				if _, ok := spentTXOs[inTxID]; !ok {
+					spentTXOs[inTxID] = []int{}
+				}
+				spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
+
+			}
+		}
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+	u.Logger.Trace.Printf("Get All UTXO: Return %d records", len(UTXO))
+	return UTXO
 }
 
 /*

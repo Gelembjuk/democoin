@@ -151,6 +151,17 @@ func (bc *Blockchain) lockDB(datadir string, reason string) error {
 
 	i := 0
 
+	info, err := os.Stat(lockfile)
+
+	if err == nil {
+		t := time.Since(info.ModTime())
+
+		// this is for case when something goes very wrong , process fails and lock is not removed
+		if t.Minutes() > 60 {
+			os.Remove(lockfile)
+		}
+	}
+
 	for bc.dbExists(lockfile) != false {
 		time.Sleep(1 * time.Second)
 		i++
@@ -410,75 +421,6 @@ func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*tran
 	}
 
 	return nil, errors.New("Transaction is not found")
-}
-
-/*
-* Returns full list of unspent transactions outputs
-* Iterates over full blockchain
-* TODO this will not work for big blockchain. It keeps data in memory
- */
-func (bc *Blockchain) FindUnspentTransactions() map[string][]transaction.TXOutputIndependent {
-	UTXO := make(map[string][]transaction.TXOutputIndependent)
-	spentTXOs := make(map[string][]int)
-	bci := bc.Iterator()
-
-	for {
-		block, _ := bci.Next()
-
-		for _, tx := range block.Transactions {
-			txID := hex.EncodeToString(tx.ID)
-
-			sender := []byte{}
-
-			if tx.IsCoinbase() == false {
-				sender, _ = lib.HashPubKey(tx.Vin[0].PubKey)
-			}
-
-			for outIdx, out := range tx.Vout {
-				// Was the output spent?
-
-				if spentTXOs[txID] != nil {
-					spent := false
-					for _, spentOutIdx := range spentTXOs[txID] {
-
-						if spentOutIdx == outIdx {
-							// this output of the transaction was already spent
-							// go to next output of this transaction
-							spent = true
-							break
-						}
-					}
-
-					if spent {
-						break
-					}
-				}
-
-				// add to unspent
-				outs := UTXO[txID]
-
-				oute := transaction.TXOutputIndependent{}
-				oute.LoadFromSimple(out, tx.ID, outIdx, sender, tx.IsCoinbase(), block.Hash)
-
-				outs = append(outs, oute)
-				UTXO[txID] = outs
-			}
-
-			if tx.IsCoinbase() == false {
-				for _, in := range tx.Vin {
-					inTxID := hex.EncodeToString(in.Txid)
-					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
-
-				}
-			}
-		}
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-
-	return UTXO
 }
 
 /*

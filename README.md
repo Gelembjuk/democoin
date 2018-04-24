@@ -18,7 +18,7 @@ The node can start own blockchain from beginning or can join to some existent bl
 
 ### Wallet 
 
-It is a lite client. It doesn't need to keep full blockchain. It can manage multiple wallets (addresses) and do money transfers. 
+It is a light client. It doesn't need to keep full blockchain. It can manage multiple wallets (addresses) and do money transfers. 
 
 It is possible to use only **Node** without a wallet client. A node has a wallet built in.
 

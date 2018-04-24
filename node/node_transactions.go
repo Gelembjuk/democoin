@@ -426,3 +426,7 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 
 	return NewTX, nil
 }
+
+func (n *NodeTransactions) CleanUnapprovedCache() error {
+	return n.UnapprovedTXs.CleanUnapprovedCache()
+}

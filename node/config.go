@@ -26,6 +26,7 @@ type AllPossibleArgs struct {
 	LogDest     string
 	Transaction string
 	View        string
+	Clean       bool
 }
 
 // Input summary
@@ -75,6 +76,7 @@ func GetAppInput() (AppInput, error) {
 	cmd.Float64Var(&input.Args.Amount, "amount", 0, "Amount money to send")
 	cmd.StringVar(&input.Args.LogDest, "logdest", "file", "Destination of logs. file or stdout")
 	cmd.StringVar(&input.Args.View, "view", "", "View format")
+	cmd.BoolVar(&input.Args.Clean, "clean", false, "Clean data/cache")
 
 	datadirPtr := cmd.String("datadir", "", "Location of data files, config, DB etc")
 	err := cmd.Parse(os.Args[2:])
@@ -264,7 +266,7 @@ func (c AppInput) printUsage() {
 	fmt.Println("  dropblock\n\t- Delete last block fro the block chain. All transaction are returned back to unapproved state")
 	fmt.Println("  reindexcache\n\t- Rebuilds the database of unspent transactions outputs and transaction pointers")
 	fmt.Println("  showunspent -address ADDRESS\n\t- Print the list of all unspent transactions and balance")
-	fmt.Println("  unapprovedtransactions\n\t- Print the list of transactions not included in any block yet")
+	fmt.Println("  unapprovedtransactions [-clean]\n\t- Print the list of transactions not included in any block yet. If the option -clean provided then cleans the cache")
 
 	fmt.Println("  getbalance -address ADDRESS\n\t- Get balance of ADDRESS")
 	fmt.Println("  listaddresses\n\t- Lists all addresses from the wallet file")
