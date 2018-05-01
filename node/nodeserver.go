@@ -10,19 +10,20 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib"
+	netlib "github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type NodeServer struct {
 	DataDir string
 	Node    *Node
 
-	NodeAddress lib.NodeAddr
+	NodeAddress netlib.NodeAddr
 
 	Transit NodeTransit
 
-	Logger *lib.LoggerMan
+	Logger *utils.LoggerMan
 	// Channels to manipulate roitunes
 	StopMainChan        chan struct{}
 	StopMainConfirmChan chan struct{}
@@ -39,13 +40,13 @@ func (s *NodeServer) GetClient() *nodeclient.NodeClient {
 // Reads and parses request from network data
 func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) {
 	// 1. Read command
-	commandbuffer, err := s.readFromConnection(conn, lib.CommandLength)
+	commandbuffer, err := s.readFromConnection(conn, netlib.CommandLength)
 
 	if err != nil {
 		return "", nil, "", err
 	}
 
-	command := lib.BytesToCommand(commandbuffer)
+	command := netlib.BytesToCommand(commandbuffer)
 
 	// 2. Get length of command data
 
@@ -92,7 +93,7 @@ func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) 
 			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of extra data: %s", extradatalength, err.Error()))
 		}
 
-		authstr = lib.BytesToCommand(extradatabuffer)
+		authstr = netlib.BytesToCommand(extradatabuffer)
 	}
 	//s.Logger.Trace.Printf("All read")
 	return command, databuffer, authstr, nil
@@ -278,7 +279,7 @@ func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
 	s.Logger.Error.Println("Sending back error message: ", err.Error())
 	s.Logger.Trace.Println("Sending back error message: ", err.Error())
 
-	payload, err := lib.GobEncode(err.Error())
+	payload, err := netlib.GobEncode(err.Error())
 
 	if err == nil {
 		dataresponse := append([]byte{0}, payload...)
@@ -299,7 +300,7 @@ func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
 func (s *NodeServer) StartServer(serverStartResult chan string) error {
 	s.Logger.Trace.Println("Prepare server to start ", s.NodeAddress.NodeAddrToString())
 
-	ln, err := net.Listen(lib.Protocol, ":"+strconv.Itoa(s.NodeAddress.Port))
+	ln, err := net.Listen(netlib.Protocol, ":"+strconv.Itoa(s.NodeAddress.Port))
 
 	if err != nil {
 		serverStartResult <- err.Error()
@@ -313,7 +314,7 @@ func (s *NodeServer) StartServer(serverStartResult chan string) error {
 	// client will use the address to include it in requests
 	s.Node.NodeClient.SetNodeAddress(s.NodeAddress)
 
-	s.Node.SendVersionToNodes([]lib.NodeAddr{})
+	s.Node.SendVersionToNodes([]netlib.NodeAddr{})
 
 	s.Logger.Trace.Println("Start block bilding routine")
 	s.BlockBilderChan = make(chan []byte, 100)

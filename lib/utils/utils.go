@@ -1,4 +1,4 @@
-package lib
+package utils
 
 import (
 	"bytes"
@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/ripemd160"
+
+	"github.com/gelembjuk/democoin/lib"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -141,7 +143,7 @@ func AddresToPubKeyHash(address string) ([]byte, error) {
 
 // Converts hash of pubkey to address as a string
 func PubKeyHashToAddres(pubKeyHash []byte) (string, error) {
-	versionedPayload := append([]byte{Version}, pubKeyHash...)
+	versionedPayload := append([]byte{lib.Version}, pubKeyHash...)
 
 	checksum := Checksum(versionedPayload)
 
@@ -158,7 +160,7 @@ func PubKeyToAddres(pubKey []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	versionedPayload := append([]byte{Version}, pubKeyHash...)
+	versionedPayload := append([]byte{lib.Version}, pubKeyHash...)
 
 	checksum := Checksum(versionedPayload)
 
@@ -173,7 +175,7 @@ func Checksum(payload []byte) []byte {
 	firstSHA := sha256.Sum256(payload)
 	secondSHA := sha256.Sum256(firstSHA[:])
 
-	return secondSHA[:AddressChecksumLen]
+	return secondSHA[:lib.AddressChecksumLen]
 }
 
 // HashPubKey hashes public key

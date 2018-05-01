@@ -9,15 +9,15 @@ import (
 	"sort"
 
 	"github.com/boltdb/bolt"
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
 // UnspentTransactions represents UTXO set
 type UnspentTransactions struct {
 	Blockchain *Blockchain //
-	Logger     *lib.LoggerMan
+	Logger     *utils.LoggerMan
 }
 
 /*
@@ -199,7 +199,7 @@ func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]tr
 	if !w.ValidateAddress(address) {
 		return nil, errors.New("Address is not valid")
 	}
-	pubKeyHash, err := lib.AddresToPubKeyHash(address)
+	pubKeyHash, err := utils.AddresToPubKeyHash(address)
 
 	if err != nil {
 		return nil, err
@@ -367,7 +367,7 @@ func (u UnspentTransactions) FindUnspentTransactions() map[string][]transaction.
 			sender := []byte{}
 
 			if tx.IsCoinbase() == false {
-				sender, _ = lib.HashPubKey(tx.Vin[0].PubKey)
+				sender, _ = utils.HashPubKey(tx.Vin[0].PubKey)
 			}
 
 			var spent bool
@@ -463,7 +463,7 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *Block) error {
 
 			if !tx.IsCoinbase() {
 				for _, vin := range tx.Vin {
-					sender, _ = lib.HashPubKey(vin.PubKey)
+					sender, _ = utils.HashPubKey(vin.PubKey)
 
 					outsBytes := b.Get(vin.Txid)
 
@@ -571,7 +571,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *Block) error {
 
 					u.Logger.Trace.Printf("found tx in block %x", blockHash) //REM
 
-					sender, _ := lib.HashPubKey(txi.Vin[0].PubKey)
+					sender, _ := utils.HashPubKey(txi.Vin[0].PubKey)
 
 					UnspentOuts := []transaction.TXOutputIndependent{}
 
@@ -614,7 +614,7 @@ func (u UnspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, a
 
 	inputs := []transaction.TXInput{}
 
-	pubKeyHash, _ := lib.HashPubKey(PubKey)
+	pubKeyHash, _ := utils.HashPubKey(PubKey)
 	totalamount, validOutputs, err := u.ChooseSpendableOutputs(pubKeyHash, amount, pendinguse)
 
 	if err != nil {

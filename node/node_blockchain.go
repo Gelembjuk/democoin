@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
 type NodeBlockchain struct {
-	Logger        *lib.LoggerMan
+	Logger        *utils.LoggerMan
 	DataDir       string
 	MinterAddress string
 	BC            *Blockchain
@@ -224,7 +224,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 
 	bci := bc.Iterator()
 
-	pubKeyHash, _ := lib.AddresToPubKeyHash(address)
+	pubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
 	for {
 		block, _ := bci.Next()
@@ -238,7 +238,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 
 			// we presume all inputs in tranaction are always from same wallet
 			for _, in := range tx.Vin {
-				spentaddress, _ = lib.PubKeyToAddres(in.PubKey)
+				spentaddress, _ = utils.PubKeyToAddres(in.PubKey)
 
 				if in.UsesKey(pubKeyHash) {
 					spent = true
@@ -258,7 +258,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 				for _, out := range tx.Vout {
 					if !out.IsLockedWithKey(pubKeyHash) {
 						spentvalue += out.Value
-						destaddress, _ = lib.PubKeyHashToAddres(out.PubKeyHash)
+						destaddress, _ = utils.PubKeyHashToAddres(out.PubKeyHash)
 					}
 				}
 

@@ -1,4 +1,4 @@
-package lib
+package utils
 
 import (
 	"github.com/btcsuite/btcutil/base58"

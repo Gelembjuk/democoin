@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type NodeBlockMaker struct {
-	Logger        *lib.LoggerMan
+	Logger        *utils.LoggerMan
 	BC            *Blockchain
 	NodeTX        *NodeTransactions
 	NodeBC        *NodeBlockchain

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 const walletFile = "wallet.dat"
@@ -21,24 +22,24 @@ type AppInput struct {
 	NodePort  int
 	NodeHost  string
 	DataDir   string
-	Nodes     []lib.NodeAddr
+	Nodes     []net.NodeAddr
 	LogDest   string
 }
 
 type WalletCLI struct {
 	Input      AppInput
-	Node       lib.NodeAddr
+	Node       net.NodeAddr
 	DataDir    string
-	Nodes      []lib.NodeAddr
+	Nodes      []net.NodeAddr
 	NodeCLI    *nodeclient.NodeClient
 	WalletsObj *Wallets
 	NodeMode   bool
-	Logger     *lib.LoggerMan
+	Logger     *utils.LoggerMan
 }
 
 // Init wallet client object. This will manage execution
 // of tasks related to a wallet
-func (wc *WalletCLI) Init(logger *lib.LoggerMan, input AppInput) {
+func (wc *WalletCLI) Init(logger *utils.LoggerMan, input AppInput) {
 	wc.Logger = logger
 	wc.Input = input
 	wc.DataDir = input.DataDir
@@ -77,7 +78,7 @@ func (wc *WalletCLI) initNodeClient() {
 	client := nodeclient.NodeClient{}
 
 	client.Logger = wc.Logger
-	nt := lib.NodeNetwork{}
+	nt := net.NodeNetwork{}
 	client.NodeNet = &nt
 
 	wc.NodeCLI = &client

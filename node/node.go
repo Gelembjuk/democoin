@@ -6,9 +6,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
@@ -19,12 +20,12 @@ import (
 type Node struct {
 	NodeBC        NodeBlockchain
 	NodeTX        NodeTransactions
-	NodeNet       lib.NodeNetwork
-	Logger        *lib.LoggerMan
+	NodeNet       net.NodeNetwork
+	Logger        *utils.LoggerMan
 	DataDir       string
 	MinterAddress string
 	NodeClient    *nodeclient.NodeClient
-	OtherNodes    []lib.NodeAddr
+	OtherNodes    []net.NodeAddr
 }
 
 /*
@@ -47,7 +48,7 @@ func (n *Node) Init() {
 	// Nodes list storage
 	n.NodeNet.SetExtraManager(NodesListStorage{n.DataDir})
 	// load list of nodes from config
-	n.NodeNet.SetNodes([]lib.NodeAddr{}, true)
+	n.NodeNet.SetNodes([]net.NodeAddr{}, true)
 
 	n.NodeBC.NodeTX = &n.NodeTX
 
@@ -77,7 +78,7 @@ func (n *Node) InitClient() error {
 /*
 * Load list of other nodes addresses
  */
-func (n *Node) InitNodes(list []lib.NodeAddr, force bool) error {
+func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 	if len(list) == 0 && !force {
 		n.NodeNet.LoadNodes()
 		// load nodes from local storage of nodes
@@ -222,7 +223,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 		host = nd.Host
 		port = nd.Port
 	}
-	addr := lib.NodeAddr{host, port}
+	addr := net.NodeAddr{host, port}
 	n.Logger.Trace.Printf("Try to init blockchain from %s:%d", addr.Host, addr.Port)
 
 	result, err := n.NodeClient.SendGetFirstBlocks(addr)
@@ -317,7 +318,7 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 // created by this node. We will notify our network about new block
 // But not send full block, only hash and previous hash. So, other can copy it
 // Address from where we get it will be skipped
-func (n *Node) SendBlockToAll(newBlock *Block, skipaddr lib.NodeAddr) {
+func (n *Node) SendBlockToAll(newBlock *Block, skipaddr net.NodeAddr) {
 	for _, node := range n.NodeNet.Nodes {
 		if node.CompareToAddress(n.NodeClient.NodeAddress) {
 			continue
@@ -332,7 +333,7 @@ func (n *Node) SendBlockToAll(newBlock *Block, skipaddr lib.NodeAddr) {
 /*
 * Send own version to all known nodes
  */
-func (n *Node) SendVersionToNodes(nodes []lib.NodeAddr) {
+func (n *Node) SendVersionToNodes(nodes []net.NodeAddr) {
 	bestHeight, err := n.NodeBC.GetBestHeight()
 
 	if err != nil {
@@ -355,7 +356,7 @@ func (n *Node) SendVersionToNodes(nodes []lib.NodeAddr) {
 * Check if the address is known . If not then add to known
 * and send list of all addresses to that node
  */
-func (n *Node) CheckAddressKnown(addr lib.NodeAddr) {
+func (n *Node) CheckAddressKnown(addr net.NodeAddr) {
 	if !n.NodeNet.CheckIsKnown(addr) {
 		// send him all addresses
 		n.Logger.Trace.Printf("sending list of address to %s , %s", addr.NodeAddrToString(), n.NodeNet.Nodes)
@@ -475,7 +476,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 			return nil, err
 		}
 		// send new block to all known nodes
-		n.SendBlockToAll(block, lib.NodeAddr{} /*nothing to skip*/)
+		n.SendBlockToAll(block, net.NodeAddr{} /*nothing to skip*/)
 
 		n.Logger.Trace.Println("Block done. Sent to all")
 
@@ -558,7 +559,7 @@ func (n *Node) DropBlock() error {
 // New block info received from oher node. It is only Hash and PrevHash, not full block
 // Check if this is new block and if previous block is fine
 // returns state of processing. if a block data was requested or exists or prev doesn't exist
-func (n *Node) ReceivedBlockFromOtherNode(addrfrom lib.NodeAddr, bsdata []byte) (int, error) {
+func (n *Node) ReceivedBlockFromOtherNode(addrfrom net.NodeAddr, bsdata []byte) (int, error) {
 
 	bs := &BlockShort{}
 	err := bs.DeserializeBlock(bsdata)

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 )
 
 // Thi is the struct with all possible command line arguments
@@ -37,7 +37,7 @@ type AppInput struct {
 	Port          int
 	Host          string
 	DataDir       string
-	Nodes         []lib.NodeAddr
+	Nodes         []net.NodeAddr
 	Args          AllPossibleArgs
 }
 
@@ -45,7 +45,7 @@ type AppConfig struct {
 	Minter string
 	Port   int
 	Host   string
-	Nodes  []lib.NodeAddr
+	Nodes  []net.NodeAddr
 	Logs   []string
 }
 
@@ -202,7 +202,7 @@ func (c AppInput) updateConfig() error {
 	}
 
 	if c.Args.NodeHost != "" && c.Args.NodePort > 0 {
-		node := lib.NodeAddr{c.Args.NodeHost, c.Args.NodePort}
+		node := net.NodeAddr{c.Args.NodeHost, c.Args.NodePort}
 
 		used := false
 
@@ -219,7 +219,7 @@ func (c AppInput) updateConfig() error {
 	}
 
 	if config.Nodes == nil {
-		config.Nodes = []lib.NodeAddr{}
+		config.Nodes = []net.NodeAddr{}
 	}
 
 	if c.Logs != "" {

@@ -14,26 +14,27 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/gelembjuk/democoin/lib"
+	netlib "github.com/gelembjuk/democoin/lib/net"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type NodeClient struct {
 	DataDir     string
-	NodeAddress lib.NodeAddr
+	NodeAddress netlib.NodeAddr
 	Address     string // wallet address
-	Logger      *lib.LoggerMan
-	NodeNet     *lib.NodeNetwork
+	Logger      *utils.LoggerMan
+	NodeNet     *netlib.NodeNetwork
 	NodeAuthStr string
 }
 
 type ComBlock struct {
-	AddrFrom lib.NodeAddr
+	AddrFrom netlib.NodeAddr
 	Block    []byte
 }
 
 // this struct can be used for 2 commands. to get blocks starting from some block to down or to up
 type ComGetBlocks struct {
-	AddrFrom  lib.NodeAddr
+	AddrFrom  netlib.NodeAddr
 	StartFrom []byte // has of block from which to start and go down or go up in case of Up command
 }
 
@@ -45,7 +46,7 @@ type ComGetFirstBlocksData struct {
 }
 
 type ComGetData struct {
-	AddrFrom lib.NodeAddr
+	AddrFrom netlib.NodeAddr
 	Type     string
 	ID       []byte
 }
@@ -122,14 +123,14 @@ type ComHistoryTransaction struct {
 
 // Request for inventory. It can be used to get blocks and transactions from other node
 type ComInv struct {
-	AddrFrom lib.NodeAddr
+	AddrFrom netlib.NodeAddr
 	Type     string
 	Items    [][]byte
 }
 
 // Transaction to send to other node
 type ComTx struct {
-	AddFrom     lib.NodeAddr
+	AddFrom     netlib.NodeAddr
 	Transaction []byte // Transaction serialised
 }
 
@@ -137,12 +138,12 @@ type ComTx struct {
 type ComVersion struct {
 	Version    int
 	BestHeight int
-	AddrFrom   lib.NodeAddr
+	AddrFrom   netlib.NodeAddr
 }
 
 // To send nodes manage command.
 type ComManageNode struct {
-	Node lib.NodeAddr
+	Node netlib.NodeAddr
 }
 
 // To get node state
@@ -160,7 +161,7 @@ func (c *NodeClient) SetAuthStr(auth string) {
 }
 
 // Check if node address looks fine
-func (c *NodeClient) CheckNodeAddress(address lib.NodeAddr) error {
+func (c *NodeClient) CheckNodeAddress(address netlib.NodeAddr) error {
 	if address.Port < 1024 {
 		return errors.New("Node Address Port has wrong value")
 	}
@@ -174,21 +175,21 @@ func (c *NodeClient) CheckNodeAddress(address lib.NodeAddr) error {
 }
 
 // Set currrent node address , to include itin requests to other nodes
-func (c *NodeClient) SetNodeAddress(address lib.NodeAddr) {
+func (c *NodeClient) SetNodeAddress(address netlib.NodeAddr) {
 	c.NodeAddress = address
 }
 
 // Send void commant to other node
 // It is used by a node to send to itself only when we want to stop a node
 // And unblock port listetining
-func (c *NodeClient) SendVoid(address lib.NodeAddr) error {
-	request := lib.CommandToBytes("viod")
+func (c *NodeClient) SendVoid(address netlib.NodeAddr) error {
+	request := netlib.CommandToBytes("viod")
 
 	return c.SendData(address, request)
 }
 
 // Send list of nodes addresses to other node
-func (c *NodeClient) SendAddrList(address lib.NodeAddr, addresses []lib.NodeAddr) error {
+func (c *NodeClient) SendAddrList(address netlib.NodeAddr, addresses []netlib.NodeAddr) error {
 	request, err := c.BuildCommandData("addr", &addresses)
 
 	if err != nil {
@@ -199,7 +200,7 @@ func (c *NodeClient) SendAddrList(address lib.NodeAddr, addresses []lib.NodeAddr
 }
 
 // Send block to other node
-func (c *NodeClient) SendBlock(addr lib.NodeAddr, BlockSerialised []byte) error {
+func (c *NodeClient) SendBlock(addr netlib.NodeAddr, BlockSerialised []byte) error {
 	data := ComBlock{c.NodeAddress, BlockSerialised}
 	request, err := c.BuildCommandData("block", &data)
 
@@ -211,7 +212,7 @@ func (c *NodeClient) SendBlock(addr lib.NodeAddr, BlockSerialised []byte) error 
 }
 
 // Send inventory. Blocks hashes or transactions IDs
-func (c *NodeClient) SendInv(address lib.NodeAddr, kind string, items [][]byte) error {
+func (c *NodeClient) SendInv(address netlib.NodeAddr, kind string, items [][]byte) error {
 	data := ComInv{c.NodeAddress, kind, items}
 
 	request, err := c.BuildCommandData("inv", &data)
@@ -224,7 +225,7 @@ func (c *NodeClient) SendInv(address lib.NodeAddr, kind string, items [][]byte) 
 }
 
 // Sedn request to get list of blocks on other node.
-func (c *NodeClient) SendGetBlocks(address lib.NodeAddr, startfrom []byte) error {
+func (c *NodeClient) SendGetBlocks(address netlib.NodeAddr, startfrom []byte) error {
 	data := ComGetBlocks{c.NodeAddress, startfrom}
 
 	request, err := c.BuildCommandData("getblocks", &data)
@@ -237,7 +238,7 @@ func (c *NodeClient) SendGetBlocks(address lib.NodeAddr, startfrom []byte) error
 }
 
 // Request for blocks but result must be upper from some starting block
-func (c *NodeClient) SendGetBlocksUpper(address lib.NodeAddr, startfrom []byte) error {
+func (c *NodeClient) SendGetBlocksUpper(address netlib.NodeAddr, startfrom []byte) error {
 	data := ComGetBlocks{c.NodeAddress, startfrom}
 
 	request, err := c.BuildCommandData("getblocksup", &data)
@@ -252,7 +253,7 @@ func (c *NodeClient) SendGetBlocksUpper(address lib.NodeAddr, startfrom []byte) 
 // Request for list of first blocks in blockchain.
 // This is used by new nodes
 // TODO we can use SendGetBlocksUpper and empty hash. This will e same
-func (c *NodeClient) SendGetFirstBlocks(address lib.NodeAddr) (*ComGetFirstBlocksData, error) {
+func (c *NodeClient) SendGetFirstBlocks(address netlib.NodeAddr) (*ComGetFirstBlocksData, error) {
 	request, err := c.BuildCommandData("getfblocks", nil)
 
 	if err != nil {
@@ -270,7 +271,7 @@ func (c *NodeClient) SendGetFirstBlocks(address lib.NodeAddr) (*ComGetFirstBlock
 }
 
 // Request for a transaction or a block to get full info by ID or Hash
-func (c *NodeClient) SendGetData(address lib.NodeAddr, kind string, id []byte) error {
+func (c *NodeClient) SendGetData(address netlib.NodeAddr, kind string, id []byte) error {
 
 	data := ComGetData{c.NodeAddress, kind, id}
 
@@ -284,7 +285,7 @@ func (c *NodeClient) SendGetData(address lib.NodeAddr, kind string, id []byte) e
 }
 
 // Send Transaction to other node
-func (c *NodeClient) SendTx(addr lib.NodeAddr, tnxserialised []byte) error {
+func (c *NodeClient) SendTx(addr netlib.NodeAddr, tnxserialised []byte) error {
 	data := ComTx{c.NodeAddress, tnxserialised}
 	request, err := c.BuildCommandData("tx", &data)
 
@@ -296,8 +297,8 @@ func (c *NodeClient) SendTx(addr lib.NodeAddr, tnxserialised []byte) error {
 }
 
 // Send own version and blockchain state to other node
-func (c *NodeClient) SendVersion(addr lib.NodeAddr, bestHeight int) error {
-	data := ComVersion{lib.NodeVersion, bestHeight, c.NodeAddress}
+func (c *NodeClient) SendVersion(addr netlib.NodeAddr, bestHeight int) error {
+	data := ComVersion{netlib.NodeVersion, bestHeight, c.NodeAddress}
 
 	request, err := c.BuildCommandData("version", &data)
 
@@ -309,7 +310,7 @@ func (c *NodeClient) SendVersion(addr lib.NodeAddr, bestHeight int) error {
 }
 
 // Request for history of transaction from a wallet
-func (c *NodeClient) SendGetHistory(addr lib.NodeAddr, address string) ([]ComHistoryTransaction, error) {
+func (c *NodeClient) SendGetHistory(addr netlib.NodeAddr, address string) ([]ComHistoryTransaction, error) {
 	data := ComGetHistoryTransactions{address}
 
 	request, err := c.BuildCommandData("gethistory", &data)
@@ -330,7 +331,7 @@ func (c *NodeClient) SendGetHistory(addr lib.NodeAddr, address string) ([]ComHis
 }
 
 // Send new transaction from a wallet to a node
-func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx []byte) ([]byte, error) {
+func (c *NodeClient) SendNewTransaction(addr netlib.NodeAddr, from string, tx []byte) ([]byte, error) {
 	data := ComNewTransaction{}
 	data.Address = from
 	data.TX = tx
@@ -355,7 +356,7 @@ func (c *NodeClient) SendNewTransaction(addr lib.NodeAddr, from string, tx []byt
 // Request to prepare new transaction by wallet.
 // It returns a transaction without signature.
 // Wallet has to sign it and then use SendNewTransaction to send completed transaction
-func (c *NodeClient) SendRequestNewTransaction(addr lib.NodeAddr,
+func (c *NodeClient) SendRequestNewTransaction(addr netlib.NodeAddr,
 	PubKey []byte, to string, amount float64) ([]byte, [][]byte, error) {
 
 	data := ComRequestTransaction{}
@@ -382,7 +383,7 @@ func (c *NodeClient) SendRequestNewTransaction(addr lib.NodeAddr,
 
 // Request for list of unspent transactions outputs
 // It can be used by wallet to see a state of balance
-func (c *NodeClient) SendGetUnspent(addr lib.NodeAddr, address string, chaintip []byte) (ComUnspentTransactions, error) {
+func (c *NodeClient) SendGetUnspent(addr netlib.NodeAddr, address string, chaintip []byte) (ComUnspentTransactions, error) {
 	data := ComGetUnspentTransactions{address, chaintip}
 
 	request, err := c.BuildCommandData("getunspent", &data)
@@ -400,7 +401,7 @@ func (c *NodeClient) SendGetUnspent(addr lib.NodeAddr, address string, chaintip 
 
 // Request for list of unspent transactions outputs
 // It can be used by wallet to see a state of balance
-func (c *NodeClient) SendGetBalance(addr lib.NodeAddr, address string) (ComWalletBalance, error) {
+func (c *NodeClient) SendGetBalance(addr netlib.NodeAddr, address string) (ComWalletBalance, error) {
 	data := ComGetWalletBalance{address}
 
 	request, err := c.BuildCommandData("getbalance", &data)
@@ -417,10 +418,10 @@ func (c *NodeClient) SendGetBalance(addr lib.NodeAddr, address string) (ComWalle
 }
 
 // Request for list of nodes in contacts
-func (c *NodeClient) SendGetNodes() ([]lib.NodeAddr, error) {
+func (c *NodeClient) SendGetNodes() ([]netlib.NodeAddr, error) {
 	request, err := c.BuildCommandData("getnodes", nil)
 
-	datapayload := []lib.NodeAddr{}
+	datapayload := []netlib.NodeAddr{}
 
 	err = c.SendDataWaitResponse(c.NodeAddress, request, &datapayload)
 
@@ -432,7 +433,7 @@ func (c *NodeClient) SendGetNodes() ([]lib.NodeAddr, error) {
 }
 
 // Request to add new node to contacts
-func (c *NodeClient) SendAddNode(node lib.NodeAddr) error {
+func (c *NodeClient) SendAddNode(node netlib.NodeAddr) error {
 	data := ComManageNode{node}
 	request, err := c.BuildCommandDataWithAuth("addnode", &data)
 
@@ -446,7 +447,7 @@ func (c *NodeClient) SendAddNode(node lib.NodeAddr) error {
 }
 
 // Request to remove a node from contacts
-func (c *NodeClient) SendRemoveNode(node lib.NodeAddr) error {
+func (c *NodeClient) SendRemoveNode(node netlib.NodeAddr) error {
 	data := ComManageNode{node}
 	request, err := c.BuildCommandDataWithAuth("removenode", &data)
 
@@ -476,7 +477,7 @@ func (c *NodeClient) SendGetState() (ComGetNodeState, error) {
 
 // Builds a command data. It prepares a slice of bytes from given data
 func (c *NodeClient) BuildCommandDataWithAuth(command string, data interface{}) ([]byte, error) {
-	authbytes := lib.CommandToBytes(c.NodeAuthStr)
+	authbytes := netlib.CommandToBytes(c.NodeAuthStr)
 	return c.doBuildCommandData(command, data, authbytes)
 }
 
@@ -491,7 +492,7 @@ func (c *NodeClient) doBuildCommandData(command string, data interface{}, extra 
 	var err error
 
 	if data != nil {
-		payload, err = lib.GobEncode(data)
+		payload, err = netlib.GobEncode(data)
 
 		if err != nil {
 			return nil, err
@@ -504,7 +505,7 @@ func (c *NodeClient) doBuildCommandData(command string, data interface{}, extra 
 	bs := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bs, payloadlength) // convert int to []byte
 
-	request := append(lib.CommandToBytes(command), bs...)
+	request := append(netlib.CommandToBytes(command), bs...)
 
 	// add length of extra data
 	payloadlength = uint32(len(extra))
@@ -523,7 +524,7 @@ func (c *NodeClient) doBuildCommandData(command string, data interface{}, extra 
 }
 
 // Sends prepared command to a node. This doesn't wait any response
-func (c *NodeClient) SendData(addr lib.NodeAddr, data []byte) error {
+func (c *NodeClient) SendData(addr netlib.NodeAddr, data []byte) error {
 	err := c.CheckNodeAddress(addr)
 
 	if err != nil {
@@ -531,7 +532,7 @@ func (c *NodeClient) SendData(addr lib.NodeAddr, data []byte) error {
 	}
 
 	c.Logger.Trace.Printf("Sending %d bytes to %s", len(data), addr.NodeAddrToString())
-	conn, err := net.Dial(lib.Protocol, addr.NodeAddrToString())
+	conn, err := net.Dial(netlib.Protocol, addr.NodeAddrToString())
 
 	if err != nil {
 		c.Logger.Error.Println(err.Error())
@@ -558,7 +559,7 @@ func (c *NodeClient) SendData(addr lib.NodeAddr, data []byte) error {
 }
 
 // Send data to a node and wait for response
-func (c *NodeClient) SendDataWaitResponse(addr lib.NodeAddr, data []byte, datapayload interface{}) error {
+func (c *NodeClient) SendDataWaitResponse(addr netlib.NodeAddr, data []byte, datapayload interface{}) error {
 
 	err := c.CheckNodeAddress(addr)
 
@@ -570,7 +571,7 @@ func (c *NodeClient) SendDataWaitResponse(addr lib.NodeAddr, data []byte, datapa
 	c.Logger.Trace.Println("Sending data to " + addr.NodeAddrToString() + " and waiting response")
 
 	// connect
-	conn, err := net.Dial(lib.Protocol, addr.NodeAddrToString())
+	conn, err := net.Dial(netlib.Protocol, addr.NodeAddrToString())
 
 	if err != nil {
 		c.Logger.Error.Println(err.Error())

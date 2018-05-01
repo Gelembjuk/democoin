@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type NodeServerRequest struct {
@@ -16,7 +17,7 @@ type NodeServerRequest struct {
 	S                 *NodeServer
 	Request           []byte
 	RequestIP         string
-	Logger            *lib.LoggerMan
+	Logger            *utils.LoggerMan
 	HasResponse       bool
 	Response          []byte
 	NodeAuthStrIsGood bool
@@ -74,12 +75,12 @@ func (s *NodeServerRequest) handleGetUnspent() error {
 		if t.IsBase {
 			ut.From = "Base Coin"
 		} else {
-			ut.From, _ = lib.PubKeyHashToAddres(t.SendPubKeyHash)
+			ut.From, _ = utils.PubKeyHashToAddres(t.SendPubKeyHash)
 		}
 		result.Transactions = append(result.Transactions, ut)
 	}
 
-	s.Response, err = lib.GobEncode(result)
+	s.Response, err = net.GobEncode(result)
 
 	if err != nil {
 		return err
@@ -122,7 +123,7 @@ func (s *NodeServerRequest) handleGetHistory() error {
 		result = append(result, ut)
 	}
 
-	s.Response, err = lib.GobEncode(result)
+	s.Response, err = net.GobEncode(result)
 
 	if err != nil {
 		return err
@@ -155,7 +156,7 @@ func (s *NodeServerRequest) handleGetBalance() error {
 	balance.Approved = balancen.Approved
 	balance.Pending = balancen.Pending
 
-	s.Response, err = lib.GobEncode(balance)
+	s.Response, err = net.GobEncode(balance)
 
 	if err != nil {
 		return err
@@ -193,7 +194,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 
 	s.S.TryToMakeNewBlock(TX.ID)
 
-	s.Response, err = lib.GobEncode(payload.TX)
+	s.Response, err = net.GobEncode(payload.TX)
 
 	if err != nil {
 		return errors.New(fmt.Sprintf("TXFull Response Error: %s", err.Error()))
@@ -228,12 +229,12 @@ func (s *NodeServerRequest) handleTxRequest() error {
 	result.DataToSign = DataToSign
 	result.TX, _ = TX.Serialize()
 
-	s.Response, err = lib.GobEncode(result)
+	s.Response, err = net.GobEncode(result)
 
 	if err != nil {
 		return err
 	}
-	address, _ := lib.PubKeyToAddres(payload.PubKey)
+	address, _ := utils.PubKeyToAddres(payload.PubKey)
 	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", TX.ID, address)
 
 	return nil
@@ -266,7 +267,7 @@ func (s *NodeServerRequest) handleGetFirstBlocks() error {
 		result.Blocks = append(result.Blocks, blockdata)
 	}
 
-	s.Response, err = lib.GobEncode(result)
+	s.Response, err = net.GobEncode(result)
 
 	if err != nil {
 		return err
@@ -279,13 +280,13 @@ func (s *NodeServerRequest) handleGetFirstBlocks() error {
 // Received the lst of nodes from some other node. add missed nodes to own nodes list
 
 func (s *NodeServerRequest) handleAddr() error {
-	var payload []lib.NodeAddr
+	var payload []net.NodeAddr
 	err := s.parseRequestData(&payload)
 
 	if err != nil {
 		return err
 	}
-	addednodes := []lib.NodeAddr{}
+	addednodes := []net.NodeAddr{}
 
 	s.Logger.Trace.Printf("Received nodes %s", payload)
 
@@ -713,7 +714,7 @@ func (s *NodeServerRequest) handleGetNodes() error {
 
 	var err error
 
-	s.Response, err = lib.GobEncode(&nodes)
+	s.Response, err = net.GobEncode(&nodes)
 
 	if err != nil {
 		return err
@@ -742,7 +743,7 @@ func (s *NodeServerRequest) handleAddNode() error {
 	if added {
 		s.Logger.Trace.Printf("Added node %s\n", payload.Node.NodeAddrToString())
 		// end version to this node
-		s.Node.SendVersionToNodes([]lib.NodeAddr{payload.Node})
+		s.Node.SendVersionToNodes([]net.NodeAddr{payload.Node})
 	}
 
 	s.Response = []byte{}
@@ -792,7 +793,7 @@ func (s *NodeServerRequest) handleGetState() error {
 
 	info.ExpectingBlocksHeight = s.S.Transit.MaxKnownHeigh
 
-	s.Response, err = lib.GobEncode(&info)
+	s.Response, err = net.GobEncode(&info)
 
 	if err != nil {
 		return err

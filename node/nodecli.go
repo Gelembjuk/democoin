@@ -5,14 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
 type NodeCLI struct {
 	Input              AppInput
-	Logger             *lib.LoggerMan
+	Logger             *utils.LoggerMan
 	DataDir            string
 	Command            string
 	AlreadyRunningPort int
@@ -29,7 +30,7 @@ func getNodeCLI(input AppInput) NodeCLI {
 	cli.DataDir = input.DataDir
 	cli.Command = input.Command
 
-	cli.Logger = lib.CreateLogger()
+	cli.Logger = utils.CreateLogger()
 
 	cli.Logger.EnableLogs(input.Logs)
 
@@ -544,7 +545,7 @@ func (c *NodeCLI) commandShowUnspent() error {
 	for _, rec := range result {
 		var addr string
 		if len(rec.SendPubKeyHash) > 0 {
-			addr, _ = lib.PubKeyHashToAddres(rec.SendPubKeyHash)
+			addr, _ = utils.PubKeyHashToAddres(rec.SendPubKeyHash)
 		} else {
 			addr = "Coint base"
 		}
@@ -782,7 +783,7 @@ func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
 
 // Displays list of nodes (connections)
 func (c *NodeCLI) commandShowNodes() error {
-	var nodes []lib.NodeAddr
+	var nodes []net.NodeAddr
 	var err error
 
 	if c.AlreadyRunningPort > 0 {
@@ -807,7 +808,7 @@ func (c *NodeCLI) commandShowNodes() error {
 
 // Add a node to connections
 func (c *NodeCLI) commandAddNode() error {
-	newaddr := lib.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
+	newaddr := net.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
 
 	if c.AlreadyRunningPort > 0 {
 		nc := c.getLocalNetworkClient()
@@ -828,7 +829,7 @@ func (c *NodeCLI) commandAddNode() error {
 
 // Remove a node from connections
 func (c *NodeCLI) commandRemoveNode() error {
-	remaddr := lib.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
+	remaddr := net.NodeAddr{c.Input.Args.NodeHost, c.Input.Args.NodePort}
 	fmt.Printf("Remove %s %d", c.Input.Args.NodeHost, c.Input.Args.NodePort)
 	fmt.Println(remaddr)
 

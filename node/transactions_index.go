@@ -5,12 +5,12 @@ import (
 	"encoding/gob"
 
 	"github.com/boltdb/bolt"
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type TransactionsIndex struct {
 	Blockchain *Blockchain
-	Logger     *lib.LoggerMan
+	Logger     *utils.LoggerMan
 }
 
 type TransactionsIndexSpentOutputs struct {

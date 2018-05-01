@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 const (
@@ -35,7 +35,7 @@ type Blockchain struct {
 	tip             []byte
 	db              *bolt.DB
 	datadir         string
-	Logger          *lib.LoggerMan
+	Logger          *utils.LoggerMan
 	HashCache       map[string]int
 	LastHashInCache []byte
 }
@@ -91,7 +91,7 @@ func (bc *Blockchain) CreateBlockchain(datadir string, genesis *Block) error {
 		return err
 	}
 
-	bc.tip = lib.CopyBytes(tip)
+	bc.tip = utils.CopyBytes(tip)
 	bc.db = db
 	bc.datadir = datadir
 
@@ -138,7 +138,7 @@ func (bc *Blockchain) Init(datadir string, reason string) error {
 		bc.Logger.Trace.Println("BC read error: " + err.Error())
 		return err
 	}
-	bc.tip = lib.CopyBytes(tip)
+	bc.tip = utils.CopyBytes(tip)
 	bc.db = db
 	bc.datadir = datadir
 
@@ -427,7 +427,7 @@ func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*tran
 * Iterator returns a BlockchainIterator . Can be used to do something with blockchain from outside
  */
 func (bc *Blockchain) Iterator() *BlockchainIterator {
-	starttip := lib.CopyBytes(bc.tip)
+	starttip := utils.CopyBytes(bc.tip)
 
 	bci := &BlockchainIterator{starttip, bc.db}
 
@@ -716,7 +716,7 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	if err != nil {
 		return nil, -1, err
 	}
-	lastHashFinal := lib.CopyBytes(lastHash)
+	lastHashFinal := utils.CopyBytes(lastHash)
 	return lastHashFinal, lastHeight, nil
 }
 
@@ -907,7 +907,7 @@ func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 		hash = b.Get([]byte("f"))
 
 		if hash != nil {
-			hash = lib.CopyBytes(hash)
+			hash = utils.CopyBytes(hash)
 		}
 
 		return nil
@@ -925,7 +925,7 @@ func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 		block, _ := bci.Next()
 
 		if len(block.PrevBlockHash) == 0 {
-			hash = lib.CopyBytes(block.Hash)
+			hash = utils.CopyBytes(block.Hash)
 			break
 		}
 	}

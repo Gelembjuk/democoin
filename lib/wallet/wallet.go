@@ -9,6 +9,7 @@ import (
 	"log"
 
 	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 const keysTestString = "this is the test string to use for new keys. to know that sign and verify works fine"
@@ -40,7 +41,7 @@ func (w *Wallet) MakeWallet() {
 		}
 		private, public = w.newKeyPair()
 
-		signature, err := lib.SignData(private, []byte(keysTestString))
+		signature, err := utils.SignData(private, []byte(keysTestString))
 
 		i++
 
@@ -48,7 +49,7 @@ func (w *Wallet) MakeWallet() {
 			continue
 		}
 
-		vr, err := lib.VerifySignature(signature, []byte(keysTestString), public)
+		vr, err := utils.VerifySignature(signature, []byte(keysTestString), public)
 
 		if err != nil {
 			continue
@@ -75,13 +76,13 @@ func (w Wallet) GetPrivateKey() ecdsa.PrivateKey {
 
 // GetAddress returns wallet address
 func (w Wallet) GetAddress() []byte {
-	pubKeyHash, _ := lib.HashPubKey(w.PublicKey)
+	pubKeyHash, _ := utils.HashPubKey(w.PublicKey)
 
 	versionedPayload := append([]byte{lib.Version}, pubKeyHash...)
-	checksum := lib.Checksum(versionedPayload)
+	checksum := utils.Checksum(versionedPayload)
 
 	fullPayload := append(versionedPayload, checksum...)
-	address := lib.Base58Encode(fullPayload)
+	address := utils.Base58Encode(fullPayload)
 
 	return address
 }
@@ -92,7 +93,7 @@ func (w Wallet) ValidateAddress(address string) bool {
 		return false
 	}
 
-	pubKeyHash := lib.Base58Decode([]byte(address))
+	pubKeyHash := utils.Base58Decode([]byte(address))
 
 	if len(pubKeyHash) <= lib.AddressChecksumLen {
 		return false
@@ -100,7 +101,7 @@ func (w Wallet) ValidateAddress(address string) bool {
 	actualChecksum := pubKeyHash[len(pubKeyHash)-lib.AddressChecksumLen:]
 	version := pubKeyHash[0]
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-lib.AddressChecksumLen]
-	targetChecksum := lib.Checksum(append([]byte{version}, pubKeyHash...))
+	targetChecksum := utils.Checksum(append([]byte{version}, pubKeyHash...))
 
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }

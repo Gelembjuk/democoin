@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 // Transaction represents a Bitcoin transaction
@@ -57,14 +58,14 @@ func (tx *Transaction) Hash() ([]byte, error) {
 // String returns a human-readable representation of a transaction
 func (tx Transaction) String() string {
 	var lines []string
-	from, _ := lib.PubKeyToAddres(tx.Vin[0].PubKey)
-	fromhash, _ := lib.HashPubKey(tx.Vin[0].PubKey)
+	from, _ := utils.PubKeyToAddres(tx.Vin[0].PubKey)
+	fromhash, _ := utils.HashPubKey(tx.Vin[0].PubKey)
 	to := ""
 	amount := 0.0
 
 	for _, output := range tx.Vout {
 		if bytes.Compare(fromhash, output.PubKeyHash) != 0 {
-			to, _ = lib.PubKeyHashToAddres(output.PubKeyHash)
+			to, _ = utils.PubKeyHashToAddres(output.PubKeyHash)
 			amount = output.Value
 			break
 		}
@@ -75,7 +76,7 @@ func (tx Transaction) String() string {
 	lines = append(lines, fmt.Sprintf("    Time %d (%s)", tx.Time, time.Unix(0, tx.Time)))
 
 	for i, input := range tx.Vin {
-		address, _ := lib.PubKeyToAddres(input.PubKey)
+		address, _ := utils.PubKeyToAddres(input.PubKey)
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
 		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.Txid))
 		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Vout))
@@ -85,7 +86,7 @@ func (tx Transaction) String() string {
 	}
 
 	for i, output := range tx.Vout {
-		address, _ := lib.PubKeyHashToAddres(output.PubKeyHash)
+		address, _ := utils.PubKeyHashToAddres(output.PubKeyHash)
 		lines = append(lines, fmt.Sprintf("     Output %d:", i))
 		lines = append(lines, fmt.Sprintf("       Value:  %f", output.Value))
 		lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
@@ -105,11 +106,11 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	}
 
 	for _, vout := range tx.Vout {
-		pkh := lib.CopyBytes(vout.PubKeyHash)
+		pkh := utils.CopyBytes(vout.PubKeyHash)
 
 		outputs = append(outputs, TXOutput{vout.Value, pkh})
 	}
-	txID := lib.CopyBytes(tx.ID)
+	txID := utils.CopyBytes(tx.ID)
 	txCopy := Transaction{txID, inputs, outputs, tx.Time}
 
 	return txCopy
@@ -124,20 +125,20 @@ func (tx *Transaction) Copy() (Transaction, error) {
 	var outputs []TXOutput
 
 	for _, vin := range tx.Vin {
-		sig := lib.CopyBytes(vin.Signature)
+		sig := utils.CopyBytes(vin.Signature)
 
-		pk := lib.CopyBytes(vin.PubKey)
+		pk := utils.CopyBytes(vin.PubKey)
 
 		inputs = append(inputs, TXInput{vin.Txid, vin.Vout, sig, pk})
 	}
 
 	for _, vout := range tx.Vout {
-		pkh := lib.CopyBytes(vout.PubKeyHash)
+		pkh := utils.CopyBytes(vout.PubKeyHash)
 
 		outputs = append(outputs, TXOutput{vout.Value, pkh})
 	}
 
-	txID := lib.CopyBytes(tx.ID)
+	txID := utils.CopyBytes(tx.ID)
 
 	txCopy := Transaction{txID, inputs, outputs, tx.Time}
 
@@ -202,7 +203,7 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, PubKey []byte, DataToS
 		for {
 			// we can do more 1 attempt to sign. we found some cases where verification of signature fails
 			// we don't know the reason
-			signature, err = lib.SignData(privKey, dataToSign)
+			signature, err = utils.SignData(privKey, dataToSign)
 
 			if err != nil {
 				return err
@@ -210,7 +211,7 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, PubKey []byte, DataToS
 
 			attempt = attempt + 1
 
-			v, err := lib.VerifySignature(signature, dataToSign, PubKey)
+			v, err := utils.VerifySignature(signature, dataToSign, PubKey)
 
 			if err != nil {
 				return err
@@ -269,7 +270,7 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 		prevTx := prevTXs[inID]
 
 		//hash of key who signed this input
-		signPubKeyHash, _ := lib.HashPubKey(vin.PubKey)
+		signPubKeyHash, _ := utils.HashPubKey(vin.PubKey)
 
 		if bytes.Compare(prevTx.Vout[vin.Vout].PubKeyHash, signPubKeyHash) != 0 {
 			return errors.New(fmt.Sprintf("Sign Key Hash for input %x is different from output hash", vin.Txid))
@@ -280,7 +281,7 @@ func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {
 
 		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 
-		v, err := lib.VerifySignature(vin.Signature, []byte(dataToVerify), vin.PubKey)
+		v, err := utils.VerifySignature(vin.Signature, []byte(dataToVerify), vin.PubKey)
 
 		if err != nil {
 			return err

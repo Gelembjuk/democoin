@@ -8,7 +8,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 // TXOutput represents a transaction output
@@ -34,7 +34,7 @@ type TXOutputIndependentList []TXOutputIndependent
 
 // Lock signs the output
 func (out *TXOutput) Lock(address []byte) {
-	pubKeyHash := lib.Base58Decode(address)
+	pubKeyHash := utils.Base58Decode(address)
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 	out.PubKeyHash = pubKeyHash
 }

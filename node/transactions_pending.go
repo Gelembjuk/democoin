@@ -8,13 +8,13 @@ import (
 	"sort"
 
 	"github.com/boltdb/bolt"
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 type UnApprovedTransactions struct {
 	Blockchain *Blockchain
-	Logger     *lib.LoggerMan
+	Logger     *utils.LoggerMan
 }
 type UnApprovedTransactionsIteratorInterface func(txhash, txstr string)
 

@@ -5,8 +5,8 @@ import (
 	"encoding/gob"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 // Block represents a block in the blockchain
@@ -132,7 +132,7 @@ func (b *Block) HashTransactions() ([]byte, error) {
 		}
 		transactions = append(transactions, txser)
 	}
-	mTree := lib.NewMerkleTree(transactions)
+	mTree := utils.NewMerkleTree(transactions)
 
 	return mTree.RootNode.Data, nil
 }

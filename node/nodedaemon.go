@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
@@ -21,7 +22,7 @@ type NodeDaemon struct {
 	Host    string
 	DataDir string
 	Server  *NodeServer
-	Logger  *lib.LoggerMan
+	Logger  *utils.LoggerMan
 	Node    *Node
 }
 
@@ -300,7 +301,7 @@ func (n *NodeDaemon) DaemonizeServer() error {
 		// to force server to try to handle next command if there were no input connects
 		// if we don't do this it will stay in "Accepting" mode and can not real channel
 		n.Logger.Trace.Println("Send void command on port ", server.NodeAddress.Port)
-		serverAddr := lib.NodeAddr{"localhost", server.NodeAddress.Port}
+		serverAddr := net.NodeAddr{"localhost", server.NodeAddress.Port}
 
 		nodeclient := server.GetClient()
 
@@ -383,7 +384,7 @@ func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, startresult 
 
 	// generate some random string. it will be used to auth local network requests
 	if authstr == "" {
-		authstr = lib.RandString(lib.CommandLength) // we use same length as for network commands, but this is not related
+		authstr = utils.RandString(net.CommandLength) // we use same length as for network commands, but this is not related
 	}
 
 	if len(startresult) > 1 {

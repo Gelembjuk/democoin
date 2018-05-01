@@ -1,4 +1,4 @@
-package lib
+package net
 
 import (
 	"encoding/hex"
@@ -6,6 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 // INterface for extra storage for a nodes.
@@ -20,7 +23,7 @@ type NodeNetworkStorage interface {
 
 // This manages list of known nodes by a node
 type NodeNetwork struct {
-	Logger  *LoggerMan
+	Logger  *utils.LoggerMan
 	Nodes   []NodeAddr
 	Storage NodeNetworkStorage
 }
@@ -73,7 +76,7 @@ func (n *NodeNetwork) SetNodes(nodes []NodeAddr, replace bool) {
 // If n any known nodes then it will be loaded from the url on a host
 // Accepts genesis block hash. It will be compared to the hash in JSON doc
 func (n *NodeNetwork) LoadInitialNodes(geenesisHash []byte) error {
-	response, err := http.Get(InitialNodesList)
+	response, err := http.Get(lib.InitialNodesList)
 
 	if err != nil {
 		return err

@@ -9,11 +9,12 @@ import (
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/transaction"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
 type NodeTransactions struct {
-	Logger        *lib.LoggerMan
+	Logger        *utils.LoggerMan
 	BC            *Blockchain
 	UnspentTXs    UnspentTransactions
 	UnapprovedTXs UnApprovedTransactions
@@ -67,7 +68,7 @@ func (n *NodeTransactions) GetAddressBalance(address string) (wallet.WalletBalan
 
 // Calculates pending balance of address.
 func (n *NodeTransactions) GetAddressPendingBalance(address string) (float64, error) {
-	PubKeyHash, _ := lib.AddresToPubKeyHash(address)
+	PubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
 	// inputs this is what a wallet spent
 	// outputs this is what a wallet receives
@@ -314,7 +315,7 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 	if err != nil {
 		return nil, nil, err
 	}
-	PubKeyHash, _ := lib.HashPubKey(PubKey)
+	PubKeyHash, _ := utils.HashPubKey(PubKey)
 	// get from pending transactions. find outputs used by this pubkey
 	pendinginputs, pendingoutputs, _, err := n.UnapprovedTXs.GetPreparedBy(PubKeyHash)
 	n.Logger.Trace.Printf("Pending transactions state: %d- inputs, %d - unspent outputs", len(pendinginputs), len(pendingoutputs))
@@ -360,7 +361,7 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 	var outputs []transaction.TXOutput
 
 	// Build a list of outputs
-	from, _ := lib.PubKeyToAddres(PubKey)
+	from, _ := utils.PubKeyToAddres(PubKey)
 	outputs = append(outputs, *transaction.NewTXOutput(amount, to))
 
 	if totalamount > amount && totalamount-amount > lib.SmallestUnit {

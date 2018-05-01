@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 )
-import "github.com/gelembjuk/democoin/lib"
+import "github.com/gelembjuk/democoin/lib/utils"
 
 // TXInput represents a transaction input
 type TXInput struct {
@@ -18,7 +18,7 @@ type TXInput struct {
 
 // UsesKey checks whether the address initiated the transaction
 func (in *TXInput) UsesKey(pubKeyHash []byte) bool {
-	lockingHash, _ := lib.HashPubKey(in.PubKey)
+	lockingHash, _ := utils.HashPubKey(in.PubKey)
 
 	return bytes.Compare(lockingHash, pubKeyHash) == 0
 }

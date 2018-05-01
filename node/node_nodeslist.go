@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/net"
 )
 
 const nodesFileName = "nodeslist.db"
@@ -15,7 +15,7 @@ type NodesListStorage struct {
 	DataDir string
 }
 
-func (s NodesListStorage) GetNodes() ([]lib.NodeAddr, error) {
+func (s NodesListStorage) GetNodes() ([]net.NodeAddr, error) {
 	db, err := s.openDB()
 
 	if err != nil {
@@ -24,7 +24,7 @@ func (s NodesListStorage) GetNodes() ([]lib.NodeAddr, error) {
 
 	defer db.Close()
 
-	nodes := []lib.NodeAddr{}
+	nodes := []net.NodeAddr{}
 
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(nodesBucket))
@@ -33,7 +33,7 @@ func (s NodesListStorage) GetNodes() ([]lib.NodeAddr, error) {
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			addr := string(v)
-			node := lib.NodeAddr{}
+			node := net.NodeAddr{}
 			node.LoadFromString(addr)
 
 			nodes = append(nodes, node)
@@ -47,7 +47,7 @@ func (s NodesListStorage) GetNodes() ([]lib.NodeAddr, error) {
 
 	return nodes, nil
 }
-func (s NodesListStorage) AddNodeToKnown(addr lib.NodeAddr) {
+func (s NodesListStorage) AddNodeToKnown(addr net.NodeAddr) {
 	db, err := s.openDB()
 
 	if err != nil {
@@ -66,7 +66,7 @@ func (s NodesListStorage) AddNodeToKnown(addr lib.NodeAddr) {
 	})
 
 }
-func (s NodesListStorage) RemoveNodeFromKnown(addr lib.NodeAddr) {
+func (s NodesListStorage) RemoveNodeFromKnown(addr net.NodeAddr) {
 	db, err := s.openDB()
 
 	if err != nil {

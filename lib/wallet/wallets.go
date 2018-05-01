@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 // Wallets stores a collection of wallets
@@ -18,7 +18,7 @@ type Wallets struct {
 
 	Wallets map[string]*Wallet
 
-	Logger *lib.LoggerMan
+	Logger *utils.LoggerMan
 
 	WalletsFile string
 }

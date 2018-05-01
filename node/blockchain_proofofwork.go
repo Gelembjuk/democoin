@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 var (
@@ -52,8 +52,8 @@ func (pow *ProofOfWork) prepareData() ([]byte, error) {
 		[][]byte{
 			pow.block.PrevBlockHash,
 			txshash,
-			lib.IntToHex(pow.block.Timestamp),
-			lib.IntToHex(int64(targetBits)),
+			utils.IntToHex(pow.block.Timestamp),
+			utils.IntToHex(int64(targetBits)),
 		},
 		[]byte{},
 	)
@@ -62,7 +62,7 @@ func (pow *ProofOfWork) prepareData() ([]byte, error) {
 }
 
 func (pow *ProofOfWork) addNonceToPrepared(data []byte, nonce int) []byte {
-	data = append(data, lib.IntToHex(int64(nonce))...)
+	data = append(data, utils.IntToHex(int64(nonce))...)
 
 	return data
 }
