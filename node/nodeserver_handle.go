@@ -165,10 +165,8 @@ func (s *NodeServerRequest) handleGetBalance() error {
 	return nil
 }
 
-/*
-* Accepts new transaction. Adds to the list of unapproved. then try to build a block
-* This is the request from wallet. Not from other node.
- */
+// Accepts new transaction. Adds to the list of unapproved. then try to build a block
+// This is the request from wallet. Not from other node.
 func (s *NodeServerRequest) handleTxFull() error {
 	s.HasResponse = true
 
@@ -202,6 +200,40 @@ func (s *NodeServerRequest) handleTxFull() error {
 	return nil
 }
 
+// Accepts new transaction data. It is prepared transaction without signatures
+// Signatures are received too. Complete TX must be constructed and verified.
+// If all is ok TXt is added to unapproved and ID returned
+func (s *NodeServerRequest) handleTxData() error {
+	s.HasResponse = true
+
+	var payload nodeclient.ComNewTransactionData
+
+	err := s.parseRequestData(&payload)
+
+	if err != nil {
+		return err
+	}
+
+	TX, err := s.Node.NodeTX.ReceivedNewTransactionData(payload.TX, payload.Signatures)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Transaction accepting error: %s", err.Error()))
+	}
+
+	s.Logger.Trace.Printf("Acceppted new transaction from %s\n", payload.Address)
+
+	// send internal command to try to mine new block
+
+	s.S.TryToMakeNewBlock(TX.ID)
+
+	s.Response, err = net.GobEncode(TX.ID)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("TXFull Response Error: %s", err.Error()))
+	}
+	return nil
+}
+
 /*
 * Request for new transaction from light client. Builds a transaction without sign.
 * Returns also list of previous transactions selected for input. it is used for signature on client side
@@ -219,7 +251,7 @@ func (s *NodeServerRequest) handleTxRequest() error {
 
 	result := nodeclient.ComRequestTransactionData{}
 
-	TX, DataToSign, err := s.Node.NodeTX.
+	TXBytes, DataToSign, err := s.Node.NodeTX.
 		PrepareNewTransaction(payload.PubKey, payload.To, payload.Amount)
 
 	if err != nil {
@@ -227,15 +259,13 @@ func (s *NodeServerRequest) handleTxRequest() error {
 	}
 
 	result.DataToSign = DataToSign
-	result.TX, _ = TX.Serialize()
+	result.TX = TXBytes
 
 	s.Response, err = net.GobEncode(result)
 
 	if err != nil {
 		return err
 	}
-	address, _ := utils.PubKeyToAddres(payload.PubKey)
-	s.Logger.Trace.Printf("Return prepared transaction %x for %s\n", TX.ID, address)
 
 	return nil
 }

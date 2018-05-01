@@ -234,6 +234,23 @@ func (tx *Transaction) SignData(privKey ecdsa.PrivateKey, PubKey []byte, DataToS
 	return nil
 }
 
+// Sets signatures for inputs. Signatures were created separately for data set prepared before
+// in the function PrepareSignData
+func (tx *Transaction) SetSignatures(signatures [][]byte) error {
+	if tx.IsCoinbase() {
+		return nil
+	}
+
+	for inID, _ := range tx.Vin {
+
+		tx.Vin[inID].Signature = signatures[inID]
+	}
+	// when transaction is complete, we can add ID to it
+	tx.Hash()
+
+	return nil
+}
+
 // Verify verifies signatures of Transaction inputs
 // And total amount of inputs and outputs
 func (tx *Transaction) Verify(prevTXs map[int]*Transaction) error {

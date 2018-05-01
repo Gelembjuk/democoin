@@ -69,6 +69,13 @@ type ComNewTransaction struct {
 	TX      []byte
 }
 
+// New Transaction Data command. It includes prepared TX and signatures for imputs
+type ComNewTransactionData struct {
+	Address    string
+	TX         []byte
+	Signatures [][]byte
+}
+
 // To Request new transaction by wallet.
 // Wallet sends address where to send and amount to send
 // and own pubkey. Server returns transaction but wihout signatures
@@ -351,6 +358,30 @@ func (c *NodeClient) SendNewTransaction(addr netlib.NodeAddr, from string, tx []
 	}
 	// no data are returned. only success or not
 	return NewTX, nil
+}
+
+// Send new transaction from a wallet to a node
+func (c *NodeClient) SendNewTransactionData(addr netlib.NodeAddr, from string, txBytes []byte, signatures [][]byte) ([]byte, error) {
+	data := ComNewTransactionData{}
+	data.Address = from
+	data.TX = txBytes
+	data.Signatures = signatures
+
+	request, err := c.BuildCommandData("txdata", &data)
+
+	NewTXID := []byte{}
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.SendDataWaitResponse(addr, request, &NewTXID)
+
+	if err != nil {
+		return nil, err
+	}
+	// no data are returned. only success or not
+	return NewTXID, nil
 }
 
 // Request to prepare new transaction by wallet.

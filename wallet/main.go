@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
 )
 
@@ -31,7 +32,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	logger := lib.CreateLogger()
+	logger := utils.CreateLogger()
 
 	if input.LogDest != "stdout" {
 		logger.LogToFiles(input.DataDir, "log_trace.txt", "log_info.txt", "log_warning.txt", "log_error.txt")

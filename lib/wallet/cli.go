@@ -8,7 +8,6 @@ import (
 
 	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
-	"github.com/gelembjuk/democoin/lib/transaction"
 	"github.com/gelembjuk/democoin/lib/utils"
 )
 
@@ -291,24 +290,16 @@ func (wc *WalletCLI) commandSend() error {
 	if err != nil {
 		return err
 	}
+	// Sign transaction data
+	signatures, err := utils.SignDataSet(walletobj.GetPublicKey(), walletobj.GetPrivateKey(), DataToSign)
 
-	TX := transaction.Transaction{}
-	TX.DeserializeTransaction(TXBytes)
-	// Sign transaction.
-	TX.SignData(walletobj.GetPrivateKey(), walletobj.GetPublicKey(), DataToSign)
-
-	// Sends final complete transaction
-	TXBytes, _ = TX.Serialize()
-	TXBytes, err = wc.NodeCLI.SendNewTransaction(wc.Node, wc.Input.Address, TXBytes)
+	NewTXID, err := wc.NodeCLI.SendNewTransactionData(wc.Node, wc.Input.Address, TXBytes, signatures)
 
 	if err != nil {
 		return err
 	}
 
-	TX = transaction.Transaction{}
-	TX.DeserializeTransaction(TXBytes)
-
-	fmt.Printf("Success. New transaction: %x\n", TX.ID)
+	fmt.Printf("Success. New transaction: %x\n", NewTXID)
 
 	return nil
 }

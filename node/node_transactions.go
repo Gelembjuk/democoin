@@ -291,6 +291,29 @@ func (n *NodeTransactions) IterateUnapprovedTransactions(callback UnApprovedTran
 	return n.UnapprovedTXs.IterateTransactions(callback)
 }
 
+func (n *NodeTransactions) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte) (*transaction.Transaction, error) {
+	tx := transaction.Transaction{}
+	err := tx.DeserializeTransaction(txBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.SetSignatures(Signatures)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = n.ReceivedNewTransaction(&tx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &tx, nil
+}
+
 // New transaction reveived from other node. We need to verify and add to cache of unapproved
 func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) error {
 	// verify this transaction
@@ -309,7 +332,7 @@ func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) e
 // Request to make new transaction and prepare data to sign
 // This function should find good input transactions for this amount
 // Including inputs from unapproved transactions if no good approved transactions yet
-func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amount float64) (*transaction.Transaction, [][]byte, error) {
+func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amount float64) ([]byte, [][]byte, error) {
 	amount, err := strconv.ParseFloat(fmt.Sprintf("%.8f", amount), 64)
 
 	if err != nil {
@@ -356,7 +379,7 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 
 //
 func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to string, amount float64,
-	inputs []transaction.TXInput, totalamount float64, prevTXs map[string]transaction.Transaction) (*transaction.Transaction, [][]byte, error) {
+	inputs []transaction.TXInput, totalamount float64, prevTXs map[string]transaction.Transaction) ([]byte, [][]byte, error) {
 
 	var outputs []transaction.TXOutput
 
@@ -384,7 +407,13 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 		return nil, nil, err
 	}
 
-	return &tx, signdata, nil
+	txBytes, err := tx.Serialize()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return txBytes, signdata, nil
 }
 
 // Send amount of money if a node is not running.
@@ -407,21 +436,20 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 		return nil, errors.New("Recipient address is not valid")
 	}
 
-	NewTX, DataToSign, err := n.PrepareNewTransaction(PubKey, to, amount)
+	txBytes, DataToSign, err := n.PrepareNewTransaction(PubKey, to, amount)
 
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Prepare error: %s", err.Error()))
 	}
 
-	err = NewTX.SignData(privKey, PubKey, DataToSign)
+	signatures, err := utils.SignDataSet(PubKey, privKey, DataToSign)
 
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Sign error: %s", err.Error()))
 	}
-	err = n.ReceivedNewTransaction(NewTX)
+	NewTX, err := n.ReceivedNewTransactionData(txBytes, signatures)
 
 	if err != nil {
-		n.Logger.Trace.Printf("Sending Error for %x: %s", NewTX.ID, err.Error())
 		return nil, errors.New(fmt.Sprintf("Final ading TX error: %s", err.Error()))
 	}
 
