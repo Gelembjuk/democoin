@@ -8,9 +8,9 @@ import (
 
 	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
-	"github.com/gelembjuk/democoin/lib/transaction"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/transaction"
 )
 
 /*

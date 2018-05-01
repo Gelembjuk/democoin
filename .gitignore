@@ -9,5 +9,5 @@
 node/node
 wallet/wallet
 
-node/*/
+node/data*/
 wallet/*/

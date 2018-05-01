@@ -5,8 +5,8 @@ import (
 	"encoding/gob"
 	"time"
 
-	"github.com/gelembjuk/democoin/lib/transaction"
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/transaction"
 )
 
 // Block represents a block in the blockchain

@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/gelembjuk/democoin/lib"
-	"github.com/gelembjuk/democoin/lib/transaction"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/transaction"
 )
 
 type NodeTransactions struct {
