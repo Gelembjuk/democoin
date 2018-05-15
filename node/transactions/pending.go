@@ -1,4 +1,4 @@
-package main
+package transactions
 
 import (
 	"bytes"
@@ -7,44 +7,36 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/database"
 	"github.com/gelembjuk/democoin/node/transaction"
 )
 
 type UnApprovedTransactions struct {
-	Blockchain *Blockchain
-	Logger     *utils.LoggerMan
+	DB     database.DBManager
+	Logger *utils.LoggerMan
 }
 type UnApprovedTransactionsIteratorInterface func(txhash, txstr string)
 
-func (u *UnApprovedTransactions) SetBlockchain(bc *Blockchain) {
-	u.Blockchain = bc
-}
+func (u *UnApprovedTransactions) getCursor() (database.CursorInterface, error) {
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
-// Returns a bucket where we keep unapproved transactions
-func (u *UnApprovedTransactions) getBucket(tx *bolt.Tx) *bolt.Bucket {
+	if err != nil {
+		return nil, err
+	}
 
-	tx.CreateBucketIfNotExists([]byte(UnapprovedTransactionsBucket))
+	cursor, err := utdb.GetCursor()
 
-	return tx.Bucket([]byte(UnapprovedTransactionsBucket))
-}
+	if err != nil {
+		return nil, err
+	}
 
-/*
-* Is called after blockchain DB creation. It must to create a bucket to keep unapproved tranactions
- */
-func (u *UnApprovedTransactions) InitDB() {
-	db := u.Blockchain.db
-
-	db.Update(func(tx *bolt.Tx) error {
-		u.getBucket(tx)
-		return nil
-	})
+	return cursor, nil
 }
 
 // Check if transaction inputs are pointed to some prepared transactions.
 // Check conflicts too. Same output can not be repeated twice
-
 func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs map[int]transaction.TXInput, inputTXs map[int]*transaction.Transaction) error {
 	checked := map[string][]int{}
 
@@ -137,47 +129,52 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 	inputs := []transaction.TXInput{}
 	outputs := []*transaction.TXOutputIndependent{}
 
-	db := u.Blockchain.db
+	cursor, err := u.getCursor()
 
-	err := db.View(func(txdb *bolt.Tx) error {
-		b := u.getBucket(txdb)
-		c := b.Cursor()
-
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			tx := transaction.Transaction{}
-			err := tx.DeserializeTransaction(v)
-
-			if err != nil {
-				return err
-			}
-
-			sender := []byte{}
-
-			if !tx.IsCoinbase() {
-				sender = tx.Vin[0].PubKey
-
-				for _, vin := range tx.Vin {
-					if vin.UsesKey(PubKeyHash) {
-						inputs = append(inputs, vin)
-					}
-				}
-			}
-			for indV, vout := range tx.Vout {
-				if vout.IsLockedWithKey(PubKeyHash) {
-					voutind := transaction.TXOutputIndependent{}
-					// we are settings serialised transaction in place of block hash
-					// we don't have a block for such ransaction , but we need full transaction later
-					voutind.LoadFromSimple(vout, tx.ID, indV, sender, tx.IsCoinbase(), v)
-					outputs = append(outputs, &voutind)
-				}
-			}
-		}
-
-		return nil
-	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	for {
+		_, txBytes, err := cursor.Next()
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if txBytes == nil {
+			break
+		}
+
+		tx := transaction.Transaction{}
+		err = tx.DeserializeTransaction(txBytes)
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		sender := []byte{}
+
+		if !tx.IsCoinbase() {
+			sender = tx.Vin[0].PubKey
+
+			for _, vin := range tx.Vin {
+				if vin.UsesKey(PubKeyHash) {
+					inputs = append(inputs, vin)
+				}
+			}
+		}
+		for indV, vout := range tx.Vout {
+			if vout.IsLockedWithKey(PubKeyHash) {
+				voutind := transaction.TXOutputIndependent{}
+				// we are settings serialised transaction in place of block hash
+				// we don't have a block for such ransaction , but we need full transaction later
+				voutind.LoadFromSimple(vout, tx.ID, indV, sender, tx.IsCoinbase(), txBytes)
+				outputs = append(outputs, &voutind)
+			}
+		}
+	}
+
 	// outputs not yet used in other pending transactions
 	realoutputs := []*transaction.TXOutputIndependent{}
 	// inputs based on approved transactions
@@ -231,94 +228,88 @@ func (u *UnApprovedTransactions) GetInputValue(input transaction.TXInput) (float
 
 // Check if transaction exists in a cache of unapproved
 func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*transaction.Transaction, error) {
-	db := u.Blockchain.db
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
-	var txres *transaction.Transaction
-
-	txres = nil
-
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
-
-		v := b.Get(txid)
-
-		if v != nil {
-			tx := transaction.Transaction{}
-			err := tx.DeserializeTransaction(v)
-
-			if err != nil {
-				return err
-			}
-			txres = &tx
-		}
-
-		return nil
-	})
 	if err != nil {
 		return nil, err
 	}
 
-	return txres, nil
+	txBytes, err := utdb.GetTransaction(txid)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(txBytes) == 0 {
+		return nil, nil
+	}
+
+	tx := transaction.Transaction{}
+	err = tx.DeserializeTransaction(txBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &tx, nil
+
 }
 
 /*
 * Get all unapproved transactions
  */
 func (u *UnApprovedTransactions) GetTransactions(number int) ([]*transaction.Transaction, error) {
-	db := u.Blockchain.db
-	txset := []*transaction.Transaction{}
+	cursor, err := u.getCursor()
 
-	err := db.View(func(txdb *bolt.Tx) error {
-		b := u.getBucket(txdb)
-		c := b.Cursor()
-
-		totalnumber := 0
-
-		for k, v := c.First(); k != nil && number > totalnumber; k, v = c.Next() {
-			tx := transaction.Transaction{}
-			err := tx.DeserializeTransaction(v)
-
-			if err != nil {
-				return err
-			}
-
-			txset = append(txset, &tx)
-			totalnumber++
-		}
-
-		return nil
-	})
 	if err != nil {
 		return nil, err
 	}
+
+	txset := []*transaction.Transaction{}
+
+	totalnumber := 0
+
+	for {
+		_, txBytes, err := cursor.Next()
+
+		if err != nil {
+			return nil, err
+		}
+
+		if txBytes == nil {
+			break
+		}
+
+		tx := transaction.Transaction{}
+		err = tx.DeserializeTransaction(txBytes)
+
+		if err != nil {
+			return nil, err
+		}
+
+		txset = append(txset, &tx)
+		totalnumber++
+
+		if totalnumber >= number {
+			break
+		}
+	}
+
 	// we need to sort transactions. oldest should be first
 	sort.Sort(transaction.Transactions(txset))
 	return txset, nil
 }
 
-/*
-* Get number of unapproved transactions in a cache
- */
+// Get number of unapproved transactions in a cache
+
 func (u *UnApprovedTransactions) GetCount() (int, error) {
-	db := u.Blockchain.db
-	counter := 0
+	cursor, err := u.getCursor()
 
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
-
-		c := b.Cursor()
-
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			counter++
-		}
-
-		return nil
-	})
 	if err != nil {
 		return 0, err
 	}
 
-	return counter, nil
+	return cursor.Count()
 }
 
 // Add new transaction for the list of unapproved
@@ -335,29 +326,26 @@ func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
 		return errors.New(fmt.Sprintf("The transaction conflicts with other prepared transaction: %x", conflicts.ID))
 	}
 
-	db := u.Blockchain.db
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
-	err = db.Update(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
-		u.Logger.Trace.Printf("adding TX to unappr %x", txadd.ID)
-
-		txser, err := txadd.Serialize()
-
-		if err != nil {
-			return err
-		}
-
-		err = b.Put(txadd.ID, txser)
-
-		if err != nil {
-			return errors.New("Adding new transaction to unapproved cache: " + err.Error())
-		}
-		u.Logger.Trace.Printf("Added %x", txadd.ID)
-		return nil
-	})
 	if err != nil {
 		return err
 	}
+
+	u.Logger.Trace.Printf("adding TX to unappr %x", txadd.ID)
+
+	txser, err := txadd.Serialize()
+
+	if err != nil {
+		return err
+	}
+
+	err = utdb.PutTransaction(txadd.ID, txser)
+
+	if err != nil {
+		return errors.New("Adding new transaction to unapproved cache: " + err.Error())
+	}
+
 	return nil
 }
 
@@ -365,37 +353,35 @@ func (u *UnApprovedTransactions) Add(txadd *transaction.Transaction) error {
 * Delete transaction from a cache. When transaction becomes part ofa block
  */
 func (u *UnApprovedTransactions) Delete(txid []byte) (bool, error) {
-	db := u.Blockchain.db
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
-	found := false
-
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
-
-		v := b.Get(txid)
-
-		if v != nil {
-			found = true
-
-			err := b.Delete(txid)
-
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
 	if err != nil {
 		return false, err
 	}
-	return found, nil
+
+	txBytes, err := utdb.GetTransaction(txid)
+
+	if err != nil {
+
+		return false, err
+	}
+
+	if len(txBytes) > 0 {
+		err = utdb.DeleteTransaction(txid)
+
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 /*
 * Remove given blocks transavtions from unapproved . For case when list of blocks are added to primary blockchain branch
  */
-func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*Block) error {
+func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*blockchain.Block) error {
 	for _, block := range blocks {
 
 		err := u.DeleteFromBlock(block)
@@ -412,7 +398,7 @@ func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*Block) error {
 * Remove all transactions from this cache listed in a block.
 * Is used when new block added and transactions are approved now
  */
-func (u *UnApprovedTransactions) DeleteFromBlock(block *Block) error {
+func (u *UnApprovedTransactions) DeleteFromBlock(block *blockchain.Block) error {
 	// try to delete each transaction from this block
 
 	for _, tx := range block.Transactions {
@@ -424,38 +410,38 @@ func (u *UnApprovedTransactions) DeleteFromBlock(block *Block) error {
 	return nil
 }
 
-/*
-* Is used for cases when it is needed to do something with all cached transactions.
-* For example, to print them.
- */
+// Is used for cases when it is needed to do something with all cached transactions.
+// For example, to print them.
+
 func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransactionsIteratorInterface) (int, error) {
-	db := u.Blockchain.db
+	cursor, err := u.getCursor()
 
-	total := 0
-
-	err := db.View(func(txdb *bolt.Tx) error {
-		b := u.getBucket(txdb)
-
-		c := b.Cursor()
-
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			tx := transaction.Transaction{}
-			err := tx.DeserializeTransaction(v)
-
-			if err != nil {
-				return err
-			}
-			//u.Logger.Trace.Printf("Iterate over. Next %x", tx.ID)
-			callback(hex.EncodeToString(k), tx.String())
-			total++
-		}
-		u.Logger.Trace.Printf("Total %d", total)
-		return nil
-	})
 	if err != nil {
 		return 0, err
 	}
 
+	total := 0
+
+	for {
+		txID, txBytes, err := cursor.Next()
+
+		if err != nil {
+			return 0, err
+		}
+
+		if txBytes == nil {
+			break
+		}
+
+		tx := transaction.Transaction{}
+		err = tx.DeserializeTransaction(txBytes)
+
+		if err != nil {
+			return 0, err
+		}
+		callback(hex.EncodeToString(txID), tx.String())
+		total++
+	}
 	return total, nil
 }
 
@@ -464,34 +450,41 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 // we return first found transaction taht conflicts
 func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Transaction) (*transaction.Transaction, error) {
 	// it i needed to go over all tranactions in cache and check each of them if input is same as in this tx
-	db := u.Blockchain.db
+
+	cursor, err := u.getCursor()
+
+	if err != nil {
+		return nil, err
+	}
 
 	var txconflicts *transaction.Transaction
 
-	err := db.View(func(tx *bolt.Tx) error {
-		b := u.getBucket(tx)
-		c := b.Cursor()
+	for {
+		_, txBytes, err := cursor.Next()
 
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			txexi := transaction.Transaction{}
-			err := txexi.DeserializeTransaction(v)
+		if err != nil {
+			return nil, err
+		}
 
-			if err != nil {
-				return err
-			}
+		if txBytes == nil {
+			break
+		}
 
-			conflicts := false
+		txexi := transaction.Transaction{}
+		err = txexi.DeserializeTransaction(txBytes)
 
-			for _, vin := range txcheck.Vin {
-				for _, vine := range txexi.Vin {
-					if bytes.Compare(vin.Txid, vine.Txid) == 0 && vin.Vout == vine.Vout {
-						// this is same input transaction. it is conflict
-						txconflicts = &txexi
-						conflicts = true
-						break
-					}
-				}
-				if conflicts {
+		if err != nil {
+			return nil, err
+		}
+
+		conflicts := false
+
+		for _, vin := range txcheck.Vin {
+			for _, vine := range txexi.Vin {
+				if bytes.Compare(vin.Txid, vine.Txid) == 0 && vin.Vout == vine.Vout {
+					// this is same input transaction. it is conflict
+					txconflicts = &txexi
+					conflicts = true
 					break
 				}
 			}
@@ -499,11 +492,9 @@ func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Tran
 				break
 			}
 		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		if conflicts {
+			break
+		}
 	}
 
 	return txconflicts, nil
@@ -565,7 +556,7 @@ func (u *UnApprovedTransactions) DetectConflicts(txs []*transaction.Transaction)
 * Many blocks canceled. Make their transactions to be unapproved.
 * Blocks can be canceled when other branch of blockchain becomes primary
  */
-func (u *UnApprovedTransactions) AddFromBlocksCancel(blocks []*Block) error {
+func (u *UnApprovedTransactions) AddFromBlocksCancel(blocks []*blockchain.Block) error {
 	for _, block := range blocks {
 
 		err := u.AddFromCanceled(block.Transactions)
@@ -597,27 +588,14 @@ func (u *UnApprovedTransactions) AddFromCanceled(txs []*transaction.Transaction)
 
 }
 func (u *UnApprovedTransactions) CleanUnapprovedCache() error {
+
 	u.Logger.Trace.Println("Clean Unapproved Transactions cache: Prepare")
-	db := u.Blockchain.db
-	bucketName := []byte(UnapprovedTransactionsBucket)
 
-	err := db.Update(func(tx *bolt.Tx) error {
-		err := tx.DeleteBucket(bucketName)
-		if err != nil && err != bolt.ErrBucketNotFound {
-			return err
-		}
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
-		_, err = tx.CreateBucket(bucketName)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
 	if err != nil {
 		return err
 	}
-	u.Logger.Trace.Println("Clean Unapproved Transactions cache: Clean done")
-	return nil
+	return utdb.TruncateDB()
 
 }

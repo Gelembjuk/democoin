@@ -1,4 +1,4 @@
-package main
+package nodemanager
 
 import (
 	"errors"
@@ -6,15 +6,16 @@ import (
 
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/consensus"
 	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/transactions"
 )
 
 type NodeBlockchain struct {
 	Logger        *utils.LoggerMan
-	DataDir       string
 	MinterAddress string
-	BC            *Blockchain
-	NodeTX        *NodeTransactions
+	DBConn        *Database
 }
 
 // this are structures with methods to organize blockchain iterator
@@ -37,12 +38,16 @@ type TransactionsHistory struct {
 
 // iterator for blockchain. can be used to iterate over BC from outside
 type BlocksIterator struct {
-	BCI *BlockchainIterator
+	BCI *blockchain.BlockchainIterator
 }
 
 // Returns next block in iterator. First will be the top block
-func (bci *BlocksIterator) Next() BlockInfo {
-	block, _ := bci.BCI.Next()
+func (bci *BlocksIterator) Next() *BlockInfo {
+	block, err := bci.BCI.Next()
+
+	if err != nil || block == nil {
+		return nil
+	}
 
 	Block := BlockInfo{}
 	Block.Hash = block.Hash
@@ -54,100 +59,35 @@ func (bci *BlocksIterator) Next() BlockInfo {
 	for _, tx := range block.Transactions {
 		Block.Transactions = append(Block.Transactions, tx.String())
 	}
-	return Block
+	return &Block
 }
 
-// Close iterator
-func (bci *BlocksIterator) Close() {
-	bci.BCI.db.Close()
+func (n *NodeBlockchain) GetBCManager() *blockchain.Blockchain {
+	bcm, _ := blockchain.NewBlockchainManager(n.DBConn.DB, n.Logger)
+	return bcm
 }
 
-/*
-* Set pointer to already opened blockchain DB
- */
-func (n *NodeBlockchain) SetBlockchain(bc *Blockchain) {
-	n.BC = bc
-}
-
-/*
-* Opens Blockchain DB
- */
-func (n *NodeBlockchain) OpenBlockchain(reason string) error {
-
-	if n.BC != nil {
-		return nil
-	}
-	bc := Blockchain{}
-
-	bc.Logger = n.Logger
-
-	err := bc.Init(n.DataDir, reason)
-
-	if err != nil {
-		return err
-	}
-
-	n.BC = &bc
-
-	return nil
-}
-
-/*
-* Closes Blockchain DB
- */
-func (n *NodeBlockchain) CloseBlockchain() {
-	if n.BC != nil {
-		n.BC.Close()
-		n.BC = nil
-	}
-}
-
-// Returns reference to BC object. If some other structure wants to acces the DB directly
-func (n *NodeBlockchain) GetBlockChainObject() *Blockchain {
-	return n.BC
-}
-
-//Get minimum and maximum number of transaction allowed in block for current chain
-func (n *NodeBlockchain) GetTransactionNumbersLimits(block *Block) (int, int, error) {
-	var min int
-
-	if block == nil {
-		bestHeight, err := n.BC.GetBestHeight()
-
-		if err != nil {
-			return 0, 0, err
-		}
-		min = bestHeight + 1
-	} else {
-		min = block.Height
-	}
-
-	if min > maxMinNumberTransactionInBlock {
-		min = maxMinNumberTransactionInBlock
-	} else if min < 1 {
-		min = 1
-	}
-	n.Logger.Trace.Printf("TX count limits %d - %d", min, maxNumberTransactionInBlock)
-	return min, maxNumberTransactionInBlock, nil
+func (n *NodeBlockchain) getTransactionsManager() *transactions.Manager {
+	return transactions.NewManager(n.DBConn.DB, n.Logger)
 }
 
 // Checks if a block exists in the chain. It will go over blocks list
 func (n *NodeBlockchain) CheckBlockExists(blockHash []byte) (bool, error) {
-	return n.BC.CheckBlockExists(blockHash)
+	return n.GetBCManager().CheckBlockExists(blockHash)
+}
+
+// Get block objet by hash
+func (n *NodeBlockchain) GetBlock(hash []byte) (*blockchain.Block, error) {
+	block, err := n.GetBCManager().GetBlock(hash)
+
+	return &block, err
 }
 
 // Returns height of the chain. Index of top block
 func (n *NodeBlockchain) GetBestHeight() (int, error) {
-	if n.BC == nil {
-		err := n.OpenBlockchain("GetBestHeight")
+	bcm := n.GetBCManager()
 
-		if err != nil {
-			return 0, err
-		}
-		defer n.CloseBlockchain()
-	}
-
-	bestHeight, err := n.BC.GetBestHeight()
+	bestHeight, err := bcm.GetBestHeight()
 
 	if err != nil {
 		return 0, err
@@ -156,8 +96,21 @@ func (n *NodeBlockchain) GetBestHeight() (int, error) {
 	return bestHeight, nil
 }
 
+// Return top hash
+func (n *NodeBlockchain) GetTopBlockHash() ([]byte, error) {
+	bcm := n.GetBCManager()
+
+	topHash, _, err := bcm.GetState()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return topHash, nil
+}
+
 // BUilds a genesis block. It is used only to start new blockchain
-func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string) (*Block, error) {
+func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string) (*blockchain.Block, error) {
 	if address == "" {
 		return nil, errors.New("Geneisis block wallet address missed")
 	}
@@ -180,23 +133,59 @@ func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string
 		return nil, errc
 	}
 
-	genesis := &Block{}
+	genesis := &blockchain.Block{}
 	genesis.PrepareNewBlock([]*transaction.Transaction{cbtx}, []byte{}, 0)
 
 	return genesis, nil
 }
 
 // Create new blockchain from given genesis block
-func (n *NodeBlockchain) CreateBlockchain(genesis *Block) error {
+func (n *NodeBlockchain) CreateBlockchain(genesis *blockchain.Block) error {
+	n.Logger.Trace.Println("Init DB")
 
-	bc := Blockchain{}
+	// this creates DB connection object but doesn't try to connect to DB
+	n.DBConn.PrepareConnection()
 
-	return bc.CreateBlockchain(n.DataDir, genesis)
+	err := n.DBConn.DB.InitDatabase()
+
+	// clean DB connection object. it will be opened later again
+	n.DBConn.CleanConnection()
+
+	if err != nil {
+		n.Logger.Error.Printf("Can not init DB: %s", err.Error())
+		return err
+	}
+	n.DBConn.OpenConnection("AddGeneis")
+
+	defer n.DBConn.CloseConnection()
+
+	n.Logger.Trace.Println("Go to create DB connection")
+	bcdb, err := n.DBConn.DB.GetBlockchainObject()
+
+	if err != nil {
+		n.Logger.Error.Printf("Can not create conn object: %s", err.Error())
+		return err
+	}
+
+	blockdata, err := genesis.Serialize()
+
+	if err != nil {
+		return err
+	}
+
+	err = bcdb.PutBlockOnTop(genesis.Hash, blockdata)
+
+	return err
 }
 
 // Creates iterator to go over blockchain
 func (n *NodeBlockchain) GetBlockChainIterator() (*BlocksIterator, error) {
-	bci := BlocksIterator{n.BC.Iterator()}
+	bcicore, err := blockchain.NewBlockchainIterator(n.DBConn.DB)
+
+	if err != nil {
+		return nil, err
+	}
+	bci := BlocksIterator{bcicore}
 	return &bci, nil
 }
 
@@ -212,17 +201,11 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 	if !w.ValidateAddress(address) {
 		return result, errors.New("Address is not valid")
 	}
-	if n.BC == nil {
-		err := n.OpenBlockchain("GetAddressHistory")
+	bci, err := blockchain.NewBlockchainIterator(n.DBConn.DB)
 
-		if err != nil {
-			return result, err
-		}
-		defer n.CloseBlockchain()
+	if err != nil {
+		return nil, err
 	}
-	bc := n.BC
-
-	bci := bc.Iterator()
 
 	pubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
@@ -299,13 +282,13 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 }
 
 // Drop block from a top of blockchain
-func (n *NodeBlockchain) DropBlock() (*Block, error) {
-	return n.BC.DeleteBlock()
+func (n *NodeBlockchain) DropBlock() (*blockchain.Block, error) {
+	return n.GetBCManager().DeleteBlock()
 }
 
 // Add block to blockchain
 // Block is not yet verified
-func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
+func (n *NodeBlockchain) AddBlock(block *blockchain.Block) (uint, error) {
 	// do some checks of the block
 	// check if block exists
 	blockstate, err := n.CheckBlockState(block.Hash, block.PrevBlockHash)
@@ -316,12 +299,12 @@ func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 
 	if blockstate == 1 {
 		// block exists. no sese to continue
-		return BCBAddState_notAddedExists, nil
+		return blockchain.BCBAddState_notAddedExists, nil
 	}
 
 	if blockstate == 2 {
 		// previous bock is not found. can not add
-		return BCBAddState_notAddedNoPrev, nil
+		return blockchain.BCBAddState_notAddedNoPrev, nil
 	}
 
 	// verify this block against rules.
@@ -331,16 +314,18 @@ func (n *NodeBlockchain) AddBlock(block *Block) (uint, error) {
 		return 0, err
 	}
 
-	return n.BC.AddBlock(block)
+	return n.GetBCManager().AddBlock(block)
 }
 
 // returns two branches of a block starting from their common block.
 // One of branches is primary at this time
-func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*Block, []*Block, error) {
+func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*blockchain.Block, []*blockchain.Block, error) {
+	bcm := n.GetBCManager()
+
 	if len(tip) == 0 {
-		tip, _, _ = n.BC.GetState()
+		tip, _, _ = bcm.GetState()
 	}
-	return n.BC.GetBranchesReplacement(sideBranchHash, tip)
+	return bcm.GetBranchesReplacement(sideBranchHash, tip)
 }
 
 /*
@@ -375,7 +360,7 @@ func (n *NodeBlockchain) CheckBlockState(hash, prevhash []byte) (int, error) {
 }
 
 // Get next blocks uppper then given
-func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
+func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*blockchain.BlockShort, error) {
 	exists, err := n.CheckBlockExists(hash)
 
 	if err != nil {
@@ -388,7 +373,8 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 
 	// there are 2 cases: block is in main branch , and it is not in main branch
 	// this will be nil if a hash is not in a chain
-	blocks := n.BC.GetNextBlocks(hash)
+
+	blocks := n.GetBCManager().GetNextBlocks(hash)
 
 	return blocks, nil
 }
@@ -403,10 +389,10 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*BlockShort, error) {
 // 4. all inputs must be in blockchain (correct unspent inputs)
 // 5. Additionally verify each transaction agains signatures, total amount, balance etc
 // 6. Verify hash is correc agains rules
-func (n *NodeBlockchain) VerifyBlock(block *Block) error {
+func (n *NodeBlockchain) VerifyBlock(block *blockchain.Block) error {
 	//6. Verify hash
 
-	pow := NewProofOfWork(block)
+	pow := consensus.NewProofOfWork(block)
 
 	valid, err := pow.Validate()
 
@@ -421,7 +407,9 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 	// 2. check number of TX
 	txnum := len(block.Transactions) - 1 /*minus coinbase TX*/
 
-	min, max, err := n.GetTransactionNumbersLimits(block)
+	bcm := n.GetBCManager()
+
+	min, max, err := bcm.GetTransactionNumbersLimits(block)
 
 	if err != nil {
 		return err
@@ -447,7 +435,7 @@ func (n *NodeBlockchain) VerifyBlock(block *Block) error {
 			}
 			coinbaseused = true
 		}
-		vtx, err := n.NodeTX.VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
+		vtx, err := n.getTransactionsManager().VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
 
 		if err != nil {
 			return err

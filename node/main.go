@@ -5,11 +5,12 @@ import (
 	"os"
 
 	"github.com/gelembjuk/democoin/lib"
+	"github.com/gelembjuk/democoin/node/config"
 )
 
 func main() {
 	// Parse input
-	input, ierr := GetAppInput()
+	input, ierr := config.GetAppInput()
 
 	if ierr != nil {
 		// something went wrong when parsing input data
@@ -17,17 +18,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	if input.checkNeedsHelp() {
+	if input.CheckNeedsHelp() {
 		fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 		// if user requested a help, display it
-		input.printUsage()
+		input.PrintUsage()
 		os.Exit(0)
 	}
 
-	if input.checkConfigUpdateNeeded() {
+	if input.CheckConfigUpdateNeeded() {
 		fmt.Printf("%s - %s\n\n", lib.ApplicationTitle, lib.ApplicationVersion)
 		// save config using input arguments
-		input.updateConfig()
+		input.UpdateConfig()
 		os.Exit(0)
 	}
 	// create node client object
@@ -57,5 +58,5 @@ func main() {
 	}
 
 	fmt.Println("Unknown command!")
-	input.printUsage()
+	input.PrintUsage()
 }

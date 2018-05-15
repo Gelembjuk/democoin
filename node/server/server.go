@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -13,11 +13,12 @@ import (
 	netlib "github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/nodemanager"
 )
 
 type NodeServer struct {
 	DataDir string
-	Node    *Node
+	Node    *nodemanager.Node
 
 	NodeAddress netlib.NodeAddr
 
@@ -426,7 +427,7 @@ func (s *NodeServer) BlockBuilder() {
 			// blockchain should be closed in this place
 			NodeClone.OpenBlockchain("SendTxToAll")
 
-			tx, err := NodeClone.NodeTX.UnapprovedTXs.GetIfExists(txID)
+			tx, err := NodeClone.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
 
 			if err == nil && tx != nil {
 				s.Logger.Trace.Printf("Sending...")
@@ -448,10 +449,10 @@ func (s *NodeServer) BlockBuilder() {
 * Creates clone of a node object. We use this in case if we need separate object
 * for a routine. This prevents conflicts of pointers in different routines
  */
-func (s *NodeServer) CloneNode() *Node {
+func (s *NodeServer) CloneNode() *nodemanager.Node {
 	orignode := s.Node
 
-	node := Node{}
+	node := nodemanager.Node{}
 
 	node.DataDir = s.DataDir
 	node.Logger = s.Logger

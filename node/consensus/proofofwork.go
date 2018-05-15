@@ -1,4 +1,4 @@
-package main
+package consensus
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"math/big"
 
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/config"
 )
 
 var (
@@ -15,21 +17,21 @@ var (
 
 // ProofOfWork represents a proof-of-work
 type ProofOfWork struct {
-	block  *Block
+	block  *blockchain.Block
 	target *big.Int
 }
 
 // NewProofOfWork builds and returns a ProofOfWork object
 // The object can be used to find a hash for the block
-func NewProofOfWork(b *Block) *ProofOfWork {
+func NewProofOfWork(b *blockchain.Block) *ProofOfWork {
 	target := big.NewInt(1)
 
 	var tb int
 
 	if b.Height >= 1000 {
-		tb = targetBits_2
+		tb = config.TargetBits_2
 	} else {
-		tb = targetBits
+		tb = config.TargetBits
 	}
 
 	target.Lsh(target, uint(256-tb))
@@ -53,7 +55,7 @@ func (pow *ProofOfWork) prepareData() ([]byte, error) {
 			pow.block.PrevBlockHash,
 			txshash,
 			utils.IntToHex(pow.block.Timestamp),
-			utils.IntToHex(int64(targetBits)),
+			utils.IntToHex(int64(config.TargetBits)),
 		},
 		[]byte{},
 	)

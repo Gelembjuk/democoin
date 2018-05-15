@@ -1,4 +1,4 @@
-package main
+package transactions
 
 import (
 	"crypto/ecdsa"
@@ -10,22 +10,36 @@ import (
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/database"
 	"github.com/gelembjuk/democoin/node/transaction"
 )
 
-type NodeTransactions struct {
-	Logger        *utils.LoggerMan
-	BC            *Blockchain
-	UnspentTXs    UnspentTransactions
-	UnapprovedTXs UnApprovedTransactions
-	TXCache       TransactionsIndex
-	DataDir       string
+type Manager struct {
+	DB     database.DBManager
+	Logger *utils.LoggerMan
+}
+
+func NewManager(DB database.DBManager, Logger *utils.LoggerMan) *Manager {
+	return &Manager{DB, Logger}
+}
+
+func (n Manager) GetIndexManager() *TransactionsIndex {
+	return NewTransactionIndex(n.DB, n.Logger)
+}
+
+func (n Manager) GetUnapprovedTransactionsManager() *UnApprovedTransactions {
+	return &UnApprovedTransactions{n.DB, n.Logger}
+}
+
+func (n Manager) GetUnspentOutputsManager() *UnspentTransactions {
+	return &UnspentTransactions{n.DB, n.Logger}
 }
 
 // Calculates balance of address. Uses DB of unspent trasaction outputs
 // TODO must check lso cache of unapproved to skip return of transactions added as input
 // to unapproved
-func (n *NodeTransactions) GetAddressesBalance(addresses []string) (map[string]wallet.WalletBalance, error) {
+func (n *Manager) GetAddressesBalance(addresses []string) (map[string]wallet.WalletBalance, error) {
 	result := map[string]wallet.WalletBalance{}
 
 	for _, address := range addresses {
@@ -42,10 +56,10 @@ func (n *NodeTransactions) GetAddressesBalance(addresses []string) (map[string]w
 
 // Calculates balance of address. Uses DB of unspent trasaction outputs
 // and cache of pending transactions
-func (n *NodeTransactions) GetAddressBalance(address string) (wallet.WalletBalance, error) {
+func (n *Manager) GetAddressBalance(address string) (wallet.WalletBalance, error) {
 	balance := wallet.WalletBalance{}
 
-	result, err := n.UnspentTXs.GetAddressBalance(address)
+	result, err := n.GetUnspentOutputsManager().GetAddressBalance(address)
 
 	if err != nil {
 		return balance, err
@@ -67,12 +81,12 @@ func (n *NodeTransactions) GetAddressBalance(address string) (wallet.WalletBalan
 }
 
 // Calculates pending balance of address.
-func (n *NodeTransactions) GetAddressPendingBalance(address string) (float64, error) {
+func (n *Manager) GetAddressPendingBalance(address string) (float64, error) {
 	PubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
 	// inputs this is what a wallet spent
 	// outputs this is what a wallet receives
-	_, outputs, inputs, err := n.UnapprovedTXs.GetPreparedBy(PubKeyHash)
+	_, outputs, inputs, err := n.GetUnapprovedTransactionsManager().GetPreparedBy(PubKeyHash)
 
 	if err != nil {
 		return 0, err
@@ -88,7 +102,7 @@ func (n *NodeTransactions) GetAddressPendingBalance(address string) (float64, er
 
 	// we need to know values for inputs. this are inputs based on TXs that are in unapproved
 	for _, i := range inputs {
-		v, err := n.UnspentTXs.GetInputValue(i)
+		v, err := n.GetUnspentOutputsManager().GetInputValue(i)
 
 		if err != nil {
 			return 0, err
@@ -104,7 +118,7 @@ func (n *NodeTransactions) GetAddressPendingBalance(address string) (float64, er
 * NOTE this can work only for local node. it a transaction was already sent to other nodes, it will not be canceled
 * and can be added to next block
  */
-func (n *NodeTransactions) CancelTransaction(txidstr string) error {
+func (n *Manager) CancelTransaction(txidstr string) error {
 	if txidstr == "" {
 		return errors.New("Transaction ID not provided")
 	}
@@ -115,7 +129,7 @@ func (n *NodeTransactions) CancelTransaction(txidstr string) error {
 		return err
 	}
 
-	found, err := n.UnapprovedTXs.Delete(txid)
+	found, err := n.GetUnapprovedTransactionsManager().Delete(txid)
 
 	if err == nil && !found {
 		return errors.New("Transaction ID not found in the list of unapproved transactions")
@@ -129,8 +143,8 @@ func (n *NodeTransactions) CancelTransaction(txidstr string) error {
 // This function doesn't do full alidation with blockchain
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
-func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (bool, error) {
-	notFoundInputs, inputTXs, err := n.UnspentTXs.VerifyTransactionsOutputsAreNotSpent(tx.Vin)
+func (n *Manager) VerifyTransactionQuick(tx *transaction.Transaction) (bool, error) {
+	notFoundInputs, inputTXs, err := n.GetUnspentOutputsManager().VerifyTransactionsOutputsAreNotSpent(tx.Vin)
 
 	if err != nil {
 		return false, err
@@ -140,7 +154,7 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 		// some inputs are not existent
 		// we need to try to find them in list of unapproved transactions
 		// if not found then it is bad transaction
-		err := n.UnapprovedTXs.CheckInputsArePrepared(notFoundInputs, inputTXs)
+		err := n.GetUnapprovedTransactionsManager().CheckInputsArePrepared(notFoundInputs, inputTXs)
 
 		if err != nil {
 			return false, err
@@ -160,7 +174,7 @@ func (n *NodeTransactions) VerifyTransactionQuick(tx *transaction.Transaction) (
 // If it is build on correct outputs.This does checks agains blockchain. Needs more time
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
-func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction, tip []byte) (bool, error) {
+func (n *Manager) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction, tip []byte) (bool, error) {
 	inputTXs, notFoundInputs, err := n.GetInputTransactionsState(tx, tip)
 	if err != nil {
 		return false, err
@@ -168,7 +182,7 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 
 	if len(notFoundInputs) > 0 {
 		// some of inputs can be from other transactions in this pool
-		inputTXs, err = n.UnapprovedTXs.CheckInputsWereBefore(notFoundInputs, prevtxs, inputTXs)
+		inputTXs, err = n.GetUnapprovedTransactionsManager().CheckInputsWereBefore(notFoundInputs, prevtxs, inputTXs)
 
 		if err != nil {
 			return false, err
@@ -190,7 +204,7 @@ func (n *NodeTransactions) VerifyTransactionDeep(tx *transaction.Transaction, pr
 // Missed inputs can be some unconfirmed transactions
 // Returns: map of previous transactions (full info about input TX). map by input index
 // next map is wrong input, where a TX is not found.
-func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction,
+func (n *Manager) GetInputTransactionsState(tx *transaction.Transaction,
 	tip []byte) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
 
 	//n.Logger.Trace.Printf("get state %x , tip %x", tx.ID, tip)
@@ -203,9 +217,15 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 		return prevTXs, badinputs, nil
 	}
 
+	bcMan, err := blockchain.NewBlockchainManager(n.DB, n.Logger)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for vind, vin := range tx.Vin {
 		//n.Logger.Trace.Printf("Load in tx %x", vin.Txid)
-		txBockHash, err := n.TXCache.GetTranactionBlock(vin.Txid)
+		txBockHash, err := n.GetIndexManager().GetTranactionBlock(vin.Txid)
 
 		if err != nil {
 			n.Logger.Trace.Printf("Error %s", err.Error())
@@ -221,7 +241,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 
 			//n.Logger.Trace.Printf("tx block hash %x %x", vin.Txid, txBockHash)
 			// check this block is part of chain
-			heigh, err := n.BC.GetBlockInTheChain(txBockHash, tip)
+			heigh, err := bcMan.GetBlockInTheChain(txBockHash, tip)
 
 			if err != nil {
 				return nil, nil, err
@@ -230,7 +250,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 			if heigh >= 0 {
 				// if block is in this chain
 				//n.Logger.Trace.Printf("block height %d", heigh)
-				prevTX, err = n.BC.FindTransactionByBlock(vin.Txid, txBockHash)
+				prevTX, err = bcMan.FindTransactionByBlock(vin.Txid, txBockHash)
 
 				if err != nil {
 					return nil, nil, err
@@ -251,7 +271,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 		} else {
 			//n.Logger.Trace.Printf("tx found")
 			// check if this input was not yet spent somewhere
-			spentouts, err := n.TXCache.GetTranactionOutputsSpent(vin.Txid)
+			spentouts, err := n.GetIndexManager().GetTranactionOutputsSpent(vin.Txid)
 
 			if err != nil {
 				return nil, nil, err
@@ -261,7 +281,7 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 
 				for _, o := range spentouts {
 					if o.OutInd == vin.Vout {
-						heigh, err := n.BC.GetBlockInTheChain(o.BlockHash, tip)
+						heigh, err := bcMan.GetBlockInTheChain(o.BlockHash, tip)
 
 						if err != nil {
 							return nil, nil, err
@@ -287,11 +307,11 @@ func (n *NodeTransactions) GetInputTransactionsState(tx *transaction.Transaction
 /*
 * Allows to iterate over unapproved transactions, for eample to display them . Accepts callback as argument
  */
-func (n *NodeTransactions) IterateUnapprovedTransactions(callback UnApprovedTransactionsIteratorInterface) (int, error) {
-	return n.UnapprovedTXs.IterateTransactions(callback)
+func (n *Manager) IterateUnapprovedTransactions(callback UnApprovedTransactionsIteratorInterface) (int, error) {
+	return n.GetUnapprovedTransactionsManager().IterateTransactions(callback)
 }
 
-func (n *NodeTransactions) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte) (*transaction.Transaction, error) {
+func (n *Manager) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte) (*transaction.Transaction, error) {
 	tx := transaction.Transaction{}
 	err := tx.DeserializeTransaction(txBytes)
 
@@ -315,7 +335,7 @@ func (n *NodeTransactions) ReceivedNewTransactionData(txBytes []byte, Signatures
 }
 
 // New transaction reveived from other node. We need to verify and add to cache of unapproved
-func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) error {
+func (n *Manager) ReceivedNewTransaction(tx *transaction.Transaction) error {
 	// verify this transaction
 	good, err := n.VerifyTransactionQuick(tx)
 
@@ -326,13 +346,13 @@ func (n *NodeTransactions) ReceivedNewTransaction(tx *transaction.Transaction) e
 		return errors.New("Transaction verification failed")
 	}
 	// if all is ok, add it to the list of unapproved
-	return n.UnapprovedTXs.Add(tx)
+	return n.GetUnapprovedTransactionsManager().Add(tx)
 }
 
 // Request to make new transaction and prepare data to sign
 // This function should find good input transactions for this amount
 // Including inputs from unapproved transactions if no good approved transactions yet
-func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amount float64) ([]byte, [][]byte, error) {
+func (n *Manager) PrepareNewTransaction(PubKey []byte, to string, amount float64) ([]byte, [][]byte, error) {
 	amount, err := strconv.ParseFloat(fmt.Sprintf("%.8f", amount), 64)
 
 	if err != nil {
@@ -340,10 +360,10 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 	}
 	PubKeyHash, _ := utils.HashPubKey(PubKey)
 	// get from pending transactions. find outputs used by this pubkey
-	pendinginputs, pendingoutputs, _, err := n.UnapprovedTXs.GetPreparedBy(PubKeyHash)
+	pendinginputs, pendingoutputs, _, err := n.GetUnapprovedTransactionsManager().GetPreparedBy(PubKeyHash)
 	n.Logger.Trace.Printf("Pending transactions state: %d- inputs, %d - unspent outputs", len(pendinginputs), len(pendingoutputs))
 
-	inputs, prevTXs, totalamount, err := n.UnspentTXs.GetNewTransactionInputs(PubKey, to, amount, pendinginputs)
+	inputs, prevTXs, totalamount, err := n.GetUnspentOutputsManager().GetNewTransactionInputs(PubKey, to, amount, pendinginputs)
 
 	if err != nil {
 		return nil, nil, err
@@ -360,7 +380,7 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 			return nil, nil, errors.New("No enough funds for requested transaction")
 		}
 		inputs, prevTXs, totalamount, err =
-			n.UnspentTXs.ExtendNewTransactionInputs(PubKey, amount, totalamount,
+			n.GetUnspentOutputsManager().ExtendNewTransactionInputs(PubKey, amount, totalamount,
 				inputs, prevTXs, pendingoutputs)
 
 		if err != nil {
@@ -378,7 +398,7 @@ func (n *NodeTransactions) PrepareNewTransaction(PubKey []byte, to string, amoun
 }
 
 //
-func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to string, amount float64,
+func (n *Manager) PrepareNewTransactionComplete(PubKey []byte, to string, amount float64,
 	inputs []transaction.TXInput, totalamount float64, prevTXs map[string]transaction.Transaction) ([]byte, [][]byte, error) {
 
 	var outputs []transaction.TXOutput
@@ -422,7 +442,7 @@ func (n *NodeTransactions) PrepareNewTransactionComplete(PubKey []byte, to strin
 //
 // Returns new transaction hash. This return can be used to try to send transaction
 // to other nodes or to try mining
-func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) (*transaction.Transaction, error) {
+func (n *Manager) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) (*transaction.Transaction, error) {
 
 	if amount <= 0 {
 		return nil, errors.New("Amount must be positive value")
@@ -456,6 +476,15 @@ func (n *NodeTransactions) Send(PubKey []byte, privKey ecdsa.PrivateKey, to stri
 	return NewTX, nil
 }
 
-func (n *NodeTransactions) CleanUnapprovedCache() error {
-	return n.UnapprovedTXs.CleanUnapprovedCache()
+func (n *Manager) CleanUnapprovedCache() error {
+	return n.GetUnapprovedTransactionsManager().CleanUnapprovedCache()
+}
+
+// to execute when new block added to the top of blockchain
+func (n *Manager) BlockAdddedToTop(block *blockchain.Block) error {
+	// update caches
+	n.GetIndexManager().BlockAdded(block)
+	n.GetUnapprovedTransactionsManager().DeleteFromBlock(block)
+	n.GetUnspentOutputsManager().UpdateOnBlockAdd(block)
+	return nil
 }

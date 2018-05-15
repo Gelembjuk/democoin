@@ -1,4 +1,4 @@
-package main
+package config
 
 // This code reads command line arguments and config file
 import (
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gelembjuk/democoin/lib/net"
+	"github.com/gelembjuk/democoin/node/database"
 )
 
 // Thi is the struct with all possible command line arguments
@@ -39,14 +40,16 @@ type AppInput struct {
 	DataDir       string
 	Nodes         []net.NodeAddr
 	Args          AllPossibleArgs
+	Database      database.DatabaseConfig
 }
 
 type AppConfig struct {
-	Minter string
-	Port   int
-	Host   string
-	Nodes  []net.NodeAddr
-	Logs   []string
+	Minter   string
+	Port     int
+	Host     string
+	Nodes    []net.NodeAddr
+	Logs     []string
+	Database database.DatabaseConfig
 }
 
 // Parses inout and config file. Command line arguments ovverride config file options
@@ -108,7 +111,7 @@ func GetAppInput() (AppInput, error) {
 	input.Host = input.Args.Host
 
 	// read config file . command line arguments are more important than a config
-	config, err := input.getConfig()
+	config, err := input.GetConfig()
 
 	if err != nil {
 		return input, err
@@ -134,7 +137,12 @@ func GetAppInput() (AppInput, error) {
 		if input.Logs == "" && len(config.Logs) > 0 {
 			input.Logs = strings.Join(config.Logs, ",")
 		}
+
+		input.Database = config.Database
+	} else {
+		input.Database.SetDefault()
 	}
+	input.Database.DataDir = input.DataDir
 
 	if input.Host == "" {
 		input.Host = "localhost"
@@ -142,7 +150,7 @@ func GetAppInput() (AppInput, error) {
 
 	return input, nil
 }
-func (c AppInput) getConfig() (*AppConfig, error) {
+func (c AppInput) GetConfig() (*AppConfig, error) {
 	file, errf := os.Open(c.DataDir + "config.json")
 
 	if errf != nil && !os.IsNotExist(errf) {
@@ -150,6 +158,8 @@ func (c AppInput) getConfig() (*AppConfig, error) {
 		return nil, errf
 	}
 	if errf != nil {
+		// config file not found
+
 		return nil, nil
 	}
 
@@ -161,25 +171,31 @@ func (c AppInput) getConfig() (*AppConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if config.Database.IsEmpty() {
+
+		config.Database.SetDefault()
+	}
+
 	return &config, nil
 }
-func (c AppInput) checkNeedsHelp() bool {
+func (c AppInput) CheckNeedsHelp() bool {
 	if c.Command == "help" || c.Command == "" {
 		return true
 	}
 	return false
 }
 
-func (c AppInput) checkConfigUpdateNeeded() bool {
+func (c AppInput) CheckConfigUpdateNeeded() bool {
 	if c.Command == "updateconfig" {
 		return true
 	}
 	return false
 }
 
-func (c AppInput) updateConfig() error {
+func (c AppInput) UpdateConfig() error {
 
-	config, err := c.getConfig()
+	config, err := c.GetConfig()
 
 	if err != nil {
 		return err
@@ -254,7 +270,7 @@ func (c AppInput) updateConfig() error {
 	return nil
 }
 
-func (c AppInput) printUsage() {
+func (c AppInput) PrintUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  help - Prints this help")
 	fmt.Println("  == Any of next commands can have optional argument [-datadir /path/to/dir] [-logdest stdout]==")

@@ -1,4 +1,4 @@
-package main
+package consensus
 
 import (
 	"bytes"
@@ -6,15 +6,34 @@ import (
 	"time"
 
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/config"
+	"github.com/gelembjuk/democoin/node/database"
 	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/transactions"
 )
 
 type NodeBlockMaker struct {
+	DB            database.DBManager
 	Logger        *utils.LoggerMan
-	BC            *Blockchain
-	NodeTX        *NodeTransactions
-	NodeBC        *NodeBlockchain
 	MinterAddress string // this is the wallet that will receive for mining
+}
+
+func (n *NodeBlockMaker) SetDBManager(DB database.DBManager) {
+	n.DB = DB
+}
+func (n *NodeBlockMaker) getTransactionsManager() *transactions.Manager {
+	return transactions.NewManager(n.DB, n.Logger)
+}
+
+func (n *NodeBlockMaker) getBlockchainManager() *blockchain.Blockchain {
+	bcm, _ := blockchain.NewBlockchainManager(n.DB, n.Logger)
+
+	return bcm
+}
+
+func (n *NodeBlockMaker) GetUnapprovedTransactionsManager() *transactions.UnApprovedTransactions {
+	return n.getTransactionsManager().GetUnapprovedTransactionsManager()
 }
 
 /*
@@ -29,7 +48,7 @@ func (n *NodeBlockMaker) CheckGoodTimeToMakeBlock() bool {
 * Check if there are abough unapproved transactions to make a block
  */
 func (n *NodeBlockMaker) CheckUnapprovedCache() bool {
-	count, err := n.NodeTX.UnapprovedTXs.GetCount()
+	count, err := n.GetUnapprovedTransactionsManager().GetCount()
 
 	if err != nil {
 		n.Logger.Trace.Printf("Error when check unapproved cache: %s", err.Error())
@@ -38,7 +57,7 @@ func (n *NodeBlockMaker) CheckUnapprovedCache() bool {
 
 	n.Logger.Trace.Printf("Transaction in cache - %d", count)
 
-	min, max, err := n.NodeBC.GetTransactionNumbersLimits(nil)
+	min, max, err := n.getBlockchainManager().GetTransactionNumbersLimits(nil)
 
 	if count >= min {
 		if count > max {
@@ -52,14 +71,14 @@ func (n *NodeBlockMaker) CheckUnapprovedCache() bool {
 /*
 * Makes new block, without a hash. Only finds transactions to add to a block
  */
-func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
+func (n *NodeBlockMaker) PrepareNewBlock() (*blockchain.Block, error) {
 	// firstly, check count of transactions to know if there are enough
-	count, err := n.NodeTX.UnapprovedTXs.GetCount()
+	count, err := n.GetUnapprovedTransactionsManager().GetCount()
 
 	if err != nil {
 		return nil, err
 	}
-	min, max, err := n.NodeBC.GetTransactionNumbersLimits(nil)
+	min, max, err := n.getBlockchainManager().GetTransactionNumbersLimits(nil)
 
 	if err != nil {
 		return nil, err
@@ -73,7 +92,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			count = max
 		}
 		// get unapproved transactions
-		txlist, err := n.NodeTX.UnapprovedTXs.GetTransactions(count)
+		txlist, err := n.GetUnapprovedTransactionsManager().GetTransactions(count)
 
 		if err != nil {
 			return nil, err
@@ -89,7 +108,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			// we need to verify each transaction
 			// we will do full deep check of transaction
 			// also, a transaction can have input from other transaction from thi block
-			vtx, err := n.NodeTX.VerifyTransactionDeep(tx, txs, []byte{})
+			vtx, err := n.getTransactionsManager().VerifyTransactionDeep(tx, txs, []byte{})
 
 			if err != nil {
 				// this can be case when a transaction is based on other unapproved transaction
@@ -107,7 +126,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 				// or somethign wrong with signatures.
 				// remove this transaction from the DB of unconfirmed transactions
 				n.Logger.Trace.Printf("Minting: Delete transaction used in other block before: %x\n", tx.ID)
-				n.NodeTX.UnapprovedTXs.Delete(tx.ID)
+				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
 			}
 		}
 		txlist = nil
@@ -125,7 +144,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 		// there is anough of "good" transactions. where inputs were not yet used in other confirmed transactions
 		// now it is needed to check if transactions don't conflict one to other
 		var badtransactions []*transaction.Transaction
-		txs, badtransactions, err = n.NodeTX.UnapprovedTXs.DetectConflicts(txs)
+		txs, badtransactions, err = n.GetUnapprovedTransactionsManager().DetectConflicts(txs)
 
 		n.Logger.Trace.Printf("Minting: After conflict detection %d - fine, %d - conflicts\n", len(txs), len(badtransactions))
 
@@ -137,7 +156,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 			// there are conflicts! remove conflicting transactions
 			for _, tx := range badtransactions {
 				n.Logger.Trace.Printf("Delete conflicting transaction: %x\n", tx.ID)
-				n.NodeTX.UnapprovedTXs.Delete(tx.ID)
+				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
 			}
 		}
 
@@ -162,7 +181,7 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*Block, error) {
 }
 
 // finalise a block. in this place we do MIMING
-func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
+func (n *NodeBlockMaker) CompleteBlock(b *blockchain.Block) error {
 	// NOTE
 	// We don't check if transactions are valid in this place .
 	// we did checks before in the calling function
@@ -185,8 +204,8 @@ func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
 	b.Hash = hash[:]
 	b.Nonce = nonce
 
-	if MinimumBlockBuildingTime > 0 {
-		for t := time.Since(starttime).Seconds(); t < float64(MinimumBlockBuildingTime); t = time.Since(starttime).Seconds() {
+	if config.MinimumBlockBuildingTime > 0 {
+		for t := time.Since(starttime).Seconds(); t < float64(config.MinimumBlockBuildingTime); t = time.Since(starttime).Seconds() {
 			time.Sleep(1 * time.Second)
 			n.Logger.Trace.Printf("Sleep")
 		}
@@ -199,9 +218,9 @@ func (n *NodeBlockMaker) CompleteBlock(b *Block) error {
 
 // this builds a block object from given transactions list
 // adds coinbase transacion (prize for miner)
-func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transaction.Transaction) (*Block, error) {
+func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transaction.Transaction) (*blockchain.Block, error) {
 	// get last block info
-	lastHash, lastHeight, err := n.BC.GetState()
+	lastHash, lastHeight, err := n.getBlockchainManager().GetState()
 
 	if err != nil {
 		return nil, err
@@ -225,7 +244,7 @@ func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transactio
 			txlist = append(txlist, &tx)
 		}
 	*/
-	newblock := Block{}
+	newblock := blockchain.Block{}
 	err = newblock.PrepareNewBlock(transactions, lastHash[:], lastHeight+1)
 
 	if err != nil {
@@ -240,9 +259,9 @@ func (n *NodeBlockMaker) makeNewBlockFromTransactions(transactions []*transactio
 // or current block transactions were used in other block added paralelly
 // wecan continue, we can correct and we can return error here
 // TODO . Not sure we have do this work. We can build parallel chain if somethign happens on background
-func (n *NodeBlockMaker) FinalBlockCheck(b *Block) error {
+func (n *NodeBlockMaker) FinalBlockCheck(b *blockchain.Block) error {
 	// Blockchain DB should be opened here
-	lastHash, _, err := n.BC.GetState()
+	lastHash, _, err := n.getBlockchainManager().GetState()
 
 	if err != nil {
 		return err

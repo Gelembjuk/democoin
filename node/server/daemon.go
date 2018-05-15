@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/base64"
@@ -15,6 +15,8 @@ import (
 	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/config"
+	"github.com/gelembjuk/democoin/node/nodemanager"
 )
 
 type NodeDaemon struct {
@@ -23,7 +25,7 @@ type NodeDaemon struct {
 	DataDir string
 	Server  *NodeServer
 	Logger  *utils.LoggerMan
-	Node    *Node
+	Node    *nodemanager.Node
 }
 
 func (n *NodeDaemon) Init() error {
@@ -36,7 +38,7 @@ func (n *NodeDaemon) Init() error {
 * BUild a pid file path
  */
 func (n *NodeDaemon) getServerPidFile() string {
-	return n.DataDir + pidFileName
+	return n.DataDir + config.PidFileName
 }
 
 /*
@@ -152,7 +154,7 @@ func (n *NodeDaemon) StartServer() error {
 		return err
 	}
 
-	command := os.Args[0] + " " + daemonprocesscommandline + " " +
+	command := os.Args[0] + " " + config.Daemonprocesscommandline + " " +
 		"-datadir=" + n.DataDir + " " +
 		"-minter=" + n.Server.Node.MinterAddress + " " +
 		"-port=" + strconv.Itoa(n.Port) + " " +
@@ -160,7 +162,7 @@ func (n *NodeDaemon) StartServer() error {
 
 	n.Logger.Trace.Println("Execute command : ", command)
 
-	cmd := exec.Command(os.Args[0], daemonprocesscommandline,
+	cmd := exec.Command(os.Args[0], config.Daemonprocesscommandline,
 		"-datadir="+n.DataDir,
 		"-minter="+n.Server.Node.MinterAddress,
 		"-port="+strconv.Itoa(n.Port),
@@ -484,4 +486,14 @@ func (n *NodeDaemon) checkProcessExists(pid int) bool {
 	}
 	return false
 
+}
+
+// Returns port and auth string of currently running process
+func (n *NodeDaemon) GetRunningProcessInfo() (int, string) {
+	_, port, authstr, _, err := n.loadPIDFile()
+
+	if err == nil && port > 0 {
+		return port, authstr
+	}
+	return 0, ""
 }

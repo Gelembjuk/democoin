@@ -1,4 +1,4 @@
-package main
+package transactions
 
 // Custom errors
 
@@ -16,6 +16,10 @@ type TXVerifyError struct {
 
 func (e *TXVerifyError) Error() string {
 	return fmt.Sprintf("Transaction verify failed: %s, for TX %x", e.err, e.TX)
+}
+
+func (e *TXVerifyError) GetKind() string {
+	return e.kind
 }
 
 func NewTXVerifyError(err string, kind string, TX []byte) error {

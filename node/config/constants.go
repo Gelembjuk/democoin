@@ -1,38 +1,29 @@
-package main
+package config
 
 // ==========================================================
 // this can be altered to experiment with blockchain
 
 // this defines how strong miming is needed. 16 is simple mining less 5 sec in simple desktop
 // 24 will need 30 seconds in average
-const targetBits = 16
-const targetBits_2 = 24
+const TargetBits = 16
+const TargetBits_2 = 24
 
 // Max and Min number of transactions per block
 // If number of block in a chain is less this umber then it is a minimum. if more then
 // this number is  a minimum unmber of TX
-const maxMinNumberTransactionInBlock = 1000
+const MaxMinNumberTransactionInBlock = 1000
 
 // Max number of TX per block
-const maxNumberTransactionInBlock = 10000
+const MaxNumberTransactionInBlock = 10000
 
 // ==========================================================
 //No need to change this
 
 // File names
-const dbFile = "blockchain.db"
-const dbFileLock = "blockchain.lock"
-const pidFileName = "server.pid"
-
-// DB settings.
-const BlocksBucket = "blocks"
-const TransactionsBucket = "transactions"
-const TransactionsOutputsBucket = "transactionsoutputs"
-const UnapprovedTransactionsBucket = "unapprovedtransactions"
-const UnspentTransactionsBucket = "unspentoutputstransactions"
+const PidFileName = "server.pid"
 
 // other internal constant
-const daemonprocesscommandline = "daemonnode"
+const Daemonprocesscommandline = "daemonnode"
 
 // ==========================================================
 // Testing mode constants

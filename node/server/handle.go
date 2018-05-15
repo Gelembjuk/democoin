@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -9,11 +9,14 @@ import (
 	"github.com/gelembjuk/democoin/lib/net"
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/utils"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/nodemanager"
 	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/transactions"
 )
 
 type NodeServerRequest struct {
-	Node              *Node
+	Node              *nodemanager.Node
 	S                 *NodeServer
 	Request           []byte
 	RequestIP         string
@@ -57,9 +60,13 @@ func (s *NodeServerRequest) handleGetUnspent() error {
 
 	result := nodeclient.ComUnspentTransactions{}
 
-	result.LastBlock = s.Node.NodeBC.BC.tip
+	result.LastBlock, err = s.Node.NodeBC.GetTopBlockHash()
 
-	UST, err := s.Node.NodeTX.UnspentTXs.GetUnspentTransactionsOutputs(payload.Address)
+	if err != nil {
+		return err
+	}
+
+	UST, err := s.Node.GetTransactionsManager().GetUnspentOutputsManager().GetUnspentTransactionsOutputs(payload.Address)
 
 	if err != nil {
 		return err
@@ -146,7 +153,7 @@ func (s *NodeServerRequest) handleGetBalance() error {
 
 	balance := nodeclient.ComWalletBalance{}
 
-	balancen, err := s.Node.NodeTX.GetAddressBalance(payload.Address)
+	balancen, err := s.Node.GetTransactionsManager().GetAddressBalance(payload.Address)
 
 	if err != nil {
 		return err
@@ -180,7 +187,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 	TX := transaction.Transaction{}
 	TX.DeserializeTransaction(payload.TX)
 
-	err = s.Node.NodeTX.ReceivedNewTransaction(&TX)
+	err = s.Node.GetTransactionsManager().ReceivedNewTransaction(&TX)
 
 	if err != nil {
 		return errors.New(fmt.Sprintf("Transaction accepting error: %s", err.Error()))
@@ -214,7 +221,7 @@ func (s *NodeServerRequest) handleTxData() error {
 		return err
 	}
 
-	TX, err := s.Node.NodeTX.ReceivedNewTransactionData(payload.TX, payload.Signatures)
+	TX, err := s.Node.GetTransactionsManager().ReceivedNewTransactionData(payload.TX, payload.Signatures)
 
 	if err != nil {
 		return errors.New(fmt.Sprintf("Transaction accepting error: %s", err.Error()))
@@ -251,7 +258,7 @@ func (s *NodeServerRequest) handleTxRequest() error {
 
 	result := nodeclient.ComRequestTransactionData{}
 
-	TXBytes, DataToSign, err := s.Node.NodeTX.
+	TXBytes, DataToSign, err := s.Node.GetTransactionsManager().
 		PrepareNewTransaction(payload.PubKey, payload.To, payload.Amount)
 
 	if err != nil {
@@ -279,7 +286,7 @@ func (s *NodeServerRequest) handleGetFirstBlocks() error {
 
 	result := nodeclient.ComGetFirstBlocksData{}
 
-	blocks, height, err := s.Node.NodeBC.BC.GetFirstBlocks(10)
+	blocks, height, err := s.Node.NodeBC.GetBCManager().GetFirstBlocks(10)
 
 	if err != nil {
 		return err
@@ -388,7 +395,7 @@ func (s *NodeServerRequest) handleBlock() error {
 				s.S.Transit.CleanBlocks(payload.AddrFrom)
 
 				// request from a node blocks down to this first block
-				bs := &BlockShort{}
+				bs := &blockchain.BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
 
 				if err != nil {
@@ -403,8 +410,8 @@ func (s *NodeServerRequest) handleBlock() error {
 			}
 		}
 	}
-	s.Logger.Trace.Printf("check if try to make new %d , %d ", addstate, BCBAddState_addedToParallelTop)
-	if addstate == BCBAddState_addedToParallelTop {
+	s.Logger.Trace.Printf("check if try to make new %d , %d ", addstate, blockchain.BCBAddState_addedToParallelTop)
+	if addstate == blockchain.BCBAddState_addedToParallelTop {
 		// maybe some transactiosn become unapproved now. try to make new block from them on top of new chain
 		s.S.TryToMakeNewBlock([]byte{1})
 	}
@@ -457,7 +464,7 @@ func (s *NodeServerRequest) handleInv() error {
 				s.S.Transit.CleanBlocks(payload.AddrFrom)
 
 				// request from a node blocks down to this first block
-				bs := &BlockShort{}
+				bs := &blockchain.BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
 
 				if err != nil {
@@ -479,7 +486,7 @@ func (s *NodeServerRequest) handleInv() error {
 
 		s.Logger.Trace.Printf("Check if TX exists %x\n", txID)
 
-		tx, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(txID)
+		tx, err := s.Node.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
 
 		if tx == nil && err == nil {
 			// not exists
@@ -506,7 +513,7 @@ func (s *NodeServerRequest) handleGetBlocks() error {
 		return err
 	}
 
-	blocks := s.Node.NodeBC.BC.GetBlocksShortInfo(payload.StartFrom, 1000)
+	blocks := s.Node.NodeBC.GetBCManager().GetBlocksShortInfo(payload.StartFrom, 1000)
 
 	s.Logger.Trace.Printf("Loaded %d block hashes", len(blocks))
 
@@ -546,7 +553,7 @@ func (s *NodeServerRequest) handleGetBlocksUpper() error {
 	if blocks == nil {
 		s.Logger.Trace.Printf("Nothing found after %x. Return top of the blockchain", payload.StartFrom)
 
-		blocks = s.Node.NodeBC.BC.GetBlocksShortInfo([]byte{}, 1000)
+		blocks = s.Node.NodeBC.GetBCManager().GetBlocksShortInfo([]byte{}, 1000)
 	}
 
 	s.Logger.Trace.Printf("Loaded %d block hashes", len(blocks))
@@ -579,10 +586,8 @@ func (s *NodeServerRequest) handleGetData() error {
 	s.Logger.Trace.Printf("Data Requested of type %s, id %x\n", payload.Type, payload.ID)
 
 	if payload.Type == "block" {
-		bc := s.Node.NodeBC.GetBlockChainObject()
 
-		block, err := bc.GetBlock([]byte(payload.ID))
-
+		block, err := s.Node.NodeBC.GetBlock([]byte(payload.ID))
 		if err != nil {
 			return err
 		}
@@ -597,7 +602,9 @@ func (s *NodeServerRequest) handleGetData() error {
 
 	if payload.Type == "tx" {
 
-		if txe, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(payload.ID); err == nil && txe != nil {
+		if txe, err := s.Node.GetTransactionsManager().
+			GetUnapprovedTransactionsManager().GetIfExists(payload.ID); err == nil && txe != nil {
+
 			s.Logger.Trace.Printf("Return transaction with ID %x to %s\n", payload.ID, payload.AddrFrom.NodeAddrToString())
 			// exists
 			txser, err := txe.Serialize()
@@ -639,21 +646,21 @@ func (s *NodeServerRequest) handleTx() error {
 		return err
 	}
 
-	if txe, err := s.Node.NodeTX.UnapprovedTXs.GetIfExists(tx.ID); err == nil && txe != nil {
+	if txe, err := s.Node.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(tx.ID); err == nil && txe != nil {
 		// exists , nothing to do, it was already processed before
 		return nil
 	}
 	// this will also verify a transaction
-	err = s.Node.NodeTX.ReceivedNewTransaction(&tx)
+	err = s.Node.GetTransactionsManager().ReceivedNewTransaction(&tx)
 
 	if err != nil {
 		// if error is because some input transaction is not found, then request it and after it this TX again
 		s.Logger.Trace.Println("Error ", err.Error())
 
-		if err, ok := err.(*TXVerifyError); ok {
-			s.Logger.Trace.Println("Custom errro of kind ", err.kind)
+		if err, ok := err.(*transactions.TXVerifyError); ok {
+			s.Logger.Trace.Println("Custom errro of kind ", err.GetKind())
 
-			if err.kind == TXVerifyErrorNoInput {
+			if err.GetKind() == transactions.TXVerifyErrorNoInput {
 				/*
 					* we will not do somethign in this case. If no base TX that is not yet approved we wil ignore it
 					* previous TX must exist on a node that sent this TX, so, let it complete this work abd build a block
@@ -697,7 +704,7 @@ func (s *NodeServerRequest) handleVersion() error {
 		return err
 	}
 
-	topHash, myBestHeight, err := s.Node.NodeBC.BC.GetState()
+	topHash, myBestHeight, err := s.Node.NodeBC.GetBCManager().GetState()
 
 	if err != nil {
 		return err

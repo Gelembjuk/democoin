@@ -1,4 +1,4 @@
-package main
+package nodemanager
 
 import (
 	"crypto/ecdsa"
@@ -10,7 +10,10 @@ import (
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/blockchain"
+	"github.com/gelembjuk/democoin/node/consensus"
 	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/transactions"
 )
 
 /*
@@ -18,14 +21,15 @@ import (
  */
 
 type Node struct {
-	NodeBC        NodeBlockchain
-	NodeTX        NodeTransactions
-	NodeNet       net.NodeNetwork
-	Logger        *utils.LoggerMan
-	DataDir       string
+	NodeBC  NodeBlockchain
+	NodeNet net.NodeNetwork
+	Logger  *utils.LoggerMan
+	DataDir string
+
 	MinterAddress string
 	NodeClient    *nodeclient.NodeClient
 	OtherNodes    []net.NodeAddr
+	DBConn        *Database
 }
 
 /*
@@ -33,28 +37,29 @@ type Node struct {
 * Init interfaces of all DBs, blockchain, unspent transactions, unapproved transactions
  */
 func (n *Node) Init() {
+
 	n.NodeNet.Logger = n.Logger
 	n.NodeBC.Logger = n.Logger
 
-	n.NodeTX.DataDir = n.DataDir
-	n.NodeTX.Logger = n.Logger
-	n.NodeTX.UnapprovedTXs.Logger = n.Logger
-	n.NodeTX.UnspentTXs.Logger = n.Logger
-	n.NodeTX.TXCache.Logger = n.Logger
-
-	n.NodeBC.DataDir = n.DataDir
 	n.NodeBC.MinterAddress = n.MinterAddress
 
+	n.NodeBC.DBConn = n.DBConn
+
 	// Nodes list storage
-	n.NodeNet.SetExtraManager(NodesListStorage{n.DataDir})
+	n.NodeNet.SetExtraManager(NodesListStorage{n.DBConn})
 	// load list of nodes from config
 	n.NodeNet.SetNodes([]net.NodeAddr{}, true)
-
-	n.NodeBC.NodeTX = &n.NodeTX
 
 	n.InitClient()
 
 	rand.Seed(time.Now().UTC().UnixNano())
+}
+
+func (n *Node) GetTransactionsManager() *transactions.Manager {
+	return transactions.NewManager(n.DBConn.DB, n.Logger)
+}
+func (n *Node) GetBCManager() (*blockchain.Blockchain, error) {
+	return blockchain.NewBlockchainManager(n.DBConn.DB, n.Logger)
 }
 
 /*
@@ -85,7 +90,10 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 		if n.NodeNet.GetCountOfKnownNodes() == 0 && n.BlockchainExist() {
 			// there are no any known nodes.
 			n.OpenBlockchain("Check genesis block")
-			geenesisHash, err := n.NodeBC.BC.GetGenesisBlockHash()
+
+			bcm := n.NodeBC.GetBCManager()
+
+			geenesisHash, err := bcm.GetGenesisBlockHash()
 			n.CloseBlockchain()
 
 			if err == nil {
@@ -102,43 +110,24 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 /*
 * Init block maker object. It is used to make new blocks
  */
-func (n *Node) initBlockMaker() (*NodeBlockMaker, error) {
-	Minter := &NodeBlockMaker{}
-	Minter.MinterAddress = n.MinterAddress
-	Minter.BC = n.NodeBC.BC
-	Minter.Logger = n.Logger
-	Minter.NodeTX = &n.NodeTX
-	Minter.NodeBC = &n.NodeBC
-
-	return Minter, nil
+func (n *Node) initBlockMaker() (*consensus.NodeBlockMaker, error) {
+	return consensus.NewConsensusManager(n.DBConn.DB, n.Logger).NewBlockMaker(n.MinterAddress), nil
 }
 
 // Open Blockchain  DB. This must be called before any operation with blockchain or cached data
-
 func (n *Node) OpenBlockchain(reason string) error {
-	err := n.NodeBC.OpenBlockchain(reason)
+	err := n.DBConn.OpenConnection(reason)
 
 	if err != nil {
 		return err
 	}
-	n.NodeTX.BC = n.NodeBC.BC
-	n.NodeTX.UnspentTXs.SetBlockchain(n.NodeBC.BC)
-	n.NodeTX.UnapprovedTXs.SetBlockchain(n.NodeBC.BC)
-	n.NodeTX.TXCache.SetBlockchain(n.NodeBC.BC)
 
 	return nil
 }
 
-/*
-* Closes Blockchain DB
- */
+// Closes Blockchain DB connection
 func (n *Node) CloseBlockchain() {
-	n.NodeBC.CloseBlockchain()
-
-	n.NodeTX.UnspentTXs.SetBlockchain(nil)
-	n.NodeTX.UnapprovedTXs.SetBlockchain(nil)
-	n.NodeTX.TXCache.SetBlockchain(nil)
-	n.NodeTX.BC = nil
+	n.DBConn.CloseConnection()
 }
 
 /*
@@ -146,24 +135,10 @@ func (n *Node) CloseBlockchain() {
 * It is needed to create it first
  */
 func (n *Node) BlockchainExist() bool {
-	if n.NodeBC.BC == nil {
-		err := n.OpenBlockchain("CheckBCExists")
-
-		if err != nil {
-			return false
-		}
-
-		defer n.CloseBlockchain()
-	}
-	// block chain DB is opened. check if there is any block
-	_, _, err := n.NodeBC.BC.GetState()
-
-	if err != nil {
-		// DB exists but it is empty or broken
-		return false
-	}
-
-	return true
+	n.DBConn.OpenConnection("checkBCexists")
+	exists, _ := n.DBConn.DB.CheckDBExists()
+	n.DBConn.CloseConnection()
+	return exists
 }
 
 /*
@@ -195,10 +170,10 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	}
 	n.Logger.Trace.Printf("Prepare TX caches\n")
 
-	n.OpenBlockchain("InitAfterCreate")
-	n.NodeTX.UnspentTXs.Reindex()
-	n.NodeTX.UnapprovedTXs.InitDB()
-	n.NodeTX.TXCache.Reindex()
+	n.DBConn.OpenConnection("InitAfterCreate")
+
+	n.GetTransactionsManager().BlockAdddedToTop(genesisBlock)
+
 	n.CloseBlockchain()
 
 	n.Logger.Trace.Printf("Blockchain ready!\n")
@@ -238,7 +213,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 
 	firstblockbytes := result.Blocks[0]
 
-	block := &Block{}
+	block := &blockchain.Block{}
 	err = block.DeserializeBlock(firstblockbytes)
 
 	if err != nil {
@@ -253,7 +228,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	// open block chain now
 	n.OpenBlockchain("InitAfterImport")
 
-	n.NodeTX.TXCache.Reindex()
+	n.GetTransactionsManager().BlockAdddedToTop(block)
 
 	MH := block.Height
 
@@ -267,7 +242,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 				continue
 			}
 			// add this block
-			block := &Block{}
+			block := &blockchain.Block{}
 			err := block.DeserializeBlock(blockdata)
 
 			if err != nil {
@@ -280,15 +255,11 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 				return false, err
 			}
 
-			n.NodeTX.TXCache.BlockAdded(block)
+			n.GetTransactionsManager().BlockAdddedToTop(block)
 
 			MH = block.Height
 		}
 	}
-
-	// init DB for unspent and unapproved transactions
-	n.NodeTX.UnspentTXs.Reindex()
-	n.NodeTX.UnapprovedTXs.InitDB()
 
 	n.CloseBlockchain()
 
@@ -318,7 +289,7 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 // created by this node. We will notify our network about new block
 // But not send full block, only hash and previous hash. So, other can copy it
 // Address from where we get it will be skipped
-func (n *Node) SendBlockToAll(newBlock *Block, skipaddr net.NodeAddr) {
+func (n *Node) SendBlockToAll(newBlock *blockchain.Block, skipaddr net.NodeAddr) {
 	for _, node := range n.NodeNet.Nodes {
 		if node.CompareToAddress(n.NodeClient.NodeAddress) {
 			continue
@@ -373,7 +344,7 @@ func (n *Node) CheckAddressKnown(addr net.NodeAddr) {
 func (n *Node) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) ([]byte, error) {
 	// get pubkey of the wallet with "from" address
 
-	tx, err := n.NodeTX.Send(PubKey, privKey, to, amount)
+	tx, err := n.GetTransactionsManager().Send(PubKey, privKey, to, amount)
 
 	if err != nil {
 		return nil, err
@@ -427,7 +398,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	var block *Block
+	var block *blockchain.Block
 	block = nil
 
 	if blockorig != nil {
@@ -456,7 +427,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 		// open BC DB again
 		n.OpenBlockchain("AddNewMadeBlock")
-		Minter.BC = n.NodeBC.BC
+		Minter.SetDBManager(n.DBConn.DB)
 
 		// final correction. while we did minting, there can be something changes
 		// some other block could be added to the blockchain in parallel process
@@ -489,8 +460,14 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 // Add new block to blockchain.
 // It can be executed when new block was created locally or received from other node
 
-func (n *Node) AddBlock(block *Block) (uint, error) {
-	curLastHash, _, err := n.NodeBC.BC.GetState()
+func (n *Node) AddBlock(block *blockchain.Block) (uint, error) {
+	bcm, err := n.GetBCManager()
+
+	if err != nil {
+		return 0, err
+	}
+
+	curLastHash, _, err := bcm.GetState()
 
 	// we need to know how the block was added to managed transactions caches correctly
 	addstate, err := n.NodeBC.AddBlock(block)
@@ -499,22 +476,22 @@ func (n *Node) AddBlock(block *Block) (uint, error) {
 		return 0, err
 	}
 
-	if addstate == BCBAddState_addedToTop ||
-		addstate == BCBAddState_addedToParallelTop ||
-		addstate == BCBAddState_addedToParallel {
+	if addstate == blockchain.BCBAddState_addedToTop ||
+		addstate == blockchain.BCBAddState_addedToParallelTop ||
+		addstate == blockchain.BCBAddState_addedToParallel {
 		// block was added. add transactions to caches
-		n.NodeTX.TXCache.BlockAdded(block)
+		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
 	}
 
-	if addstate == BCBAddState_addedToTop {
+	if addstate == blockchain.BCBAddState_addedToTop {
 		// only if a block was really added
 		// delete block transaction from list of unapproved
-		n.NodeTX.UnapprovedTXs.DeleteFromBlock(block)
+		n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlock(block)
 
 		// reindes unspent transactions cache based on block added
-		n.NodeTX.UnspentTXs.UpdateOnBlockAdd(block)
+		n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlockAdd(block)
 
-	} else if addstate == BCBAddState_addedToParallelTop {
+	} else if addstate == blockchain.BCBAddState_addedToParallelTop {
 		// get 2 blocks branches that replaced each other
 		newChain, oldChain, err := n.NodeBC.GetBranchesReplacement(curLastHash, []byte{})
 
@@ -524,14 +501,14 @@ func (n *Node) AddBlock(block *Block) (uint, error) {
 
 		if newChain != nil && oldChain != nil {
 			// add old blocks back to unspent tranactions
-			n.NodeTX.UnspentTXs.UpdateOnBlocksCancel(oldChain)
+			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksCancel(oldChain)
 			// remove new blocks from unspent transactions
-			n.NodeTX.UnspentTXs.UpdateOnBlocksAdd(newChain)
+			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksAdd(newChain)
 
 			// transactions from old blocks become unapproved
-			n.NodeTX.UnapprovedTXs.AddFromBlocksCancel(oldChain)
+			n.GetTransactionsManager().GetUnapprovedTransactionsManager().AddFromBlocksCancel(oldChain)
 			// transactions from new chain becomes approved
-			n.NodeTX.UnapprovedTXs.DeleteFromBlocks(newChain)
+			n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlocks(newChain)
 		}
 	}
 
@@ -549,9 +526,9 @@ func (n *Node) DropBlock() error {
 		return err
 	}
 
-	n.NodeTX.UnapprovedTXs.AddFromCanceled(block.Transactions)
+	n.GetTransactionsManager().GetUnapprovedTransactionsManager().AddFromCanceled(block.Transactions)
 
-	n.NodeTX.UnspentTXs.UpdateOnBlockCancel(block)
+	n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlockCancel(block)
 
 	return nil
 }
@@ -561,7 +538,7 @@ func (n *Node) DropBlock() error {
 // returns state of processing. if a block data was requested or exists or prev doesn't exist
 func (n *Node) ReceivedBlockFromOtherNode(addrfrom net.NodeAddr, bsdata []byte) (int, error) {
 
-	bs := &BlockShort{}
+	bs := &blockchain.BlockShort{}
 	err := bs.DeserializeBlock(bsdata)
 
 	if err != nil {
@@ -587,10 +564,10 @@ func (n *Node) ReceivedBlockFromOtherNode(addrfrom net.NodeAddr, bsdata []byte) 
 * Check if this is new block and if previous block is fine
 * returns state of processing. if a block data was requested or exists or prev doesn't exist
  */
-func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *Block, error) {
-	addstate := uint(BCBAddState_error)
+func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *blockchain.Block, error) {
+	addstate := uint(blockchain.BCBAddState_error)
 
-	block := &Block{}
+	block := &blockchain.Block{}
 	err := block.DeserializeBlock(blockdata)
 
 	if err != nil {
@@ -642,7 +619,7 @@ func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
 	}
 	result.BlocksNumber = bh + 1
 
-	unappr, err := n.NodeTX.UnapprovedTXs.GetCount()
+	unappr, err := n.GetTransactionsManager().GetUnapprovedTransactionsManager().GetCount()
 
 	if err != nil {
 		return result, err
@@ -650,7 +627,7 @@ func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
 
 	result.TransactionsCached = unappr
 
-	unspent, err := n.NodeTX.UnspentTXs.CountUnspentOutputs()
+	unspent, err := n.GetTransactionsManager().GetUnspentOutputsManager().CountUnspentOutputs()
 
 	if err != nil {
 		return result, err

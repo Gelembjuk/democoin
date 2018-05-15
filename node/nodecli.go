@@ -9,22 +9,25 @@ import (
 	"github.com/gelembjuk/democoin/lib/nodeclient"
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
+	"github.com/gelembjuk/democoin/node/config"
+	"github.com/gelembjuk/democoin/node/nodemanager"
+	"github.com/gelembjuk/democoin/node/server"
 )
 
 type NodeCLI struct {
-	Input              AppInput
+	Input              config.AppInput
 	Logger             *utils.LoggerMan
 	DataDir            string
 	Command            string
 	AlreadyRunningPort int
 	NodeAuthStr        string
-	Node               *Node
+	Node               *nodemanager.Node
 }
 
 /*
 * Creates a client object
  */
-func getNodeCLI(input AppInput) NodeCLI {
+func getNodeCLI(input config.AppInput) NodeCLI {
 	cli := NodeCLI{}
 	cli.Input = input
 	cli.DataDir = input.DataDir
@@ -42,19 +45,14 @@ func getNodeCLI(input AppInput) NodeCLI {
 
 	cli.Node = nil
 	// check if Daemon is already running
-	nd := NodeDaemon{}
+	nd := server.NodeDaemon{}
 	nd.DataDir = cli.DataDir
 	nd.Logger = cli.Logger
 
-	_, port, authstr, _, err := nd.loadPIDFile()
+	port, authstr := nd.GetRunningProcessInfo()
 
-	if err == nil && port > 0 {
-		cli.AlreadyRunningPort = port
-		cli.NodeAuthStr = authstr
-	} else {
-		cli.AlreadyRunningPort = 0
-		cli.NodeAuthStr = ""
-	}
+	cli.AlreadyRunningPort = port
+	cli.NodeAuthStr = authstr
 
 	cli.Logger.Trace.Println("Node CLI inited")
 
@@ -69,9 +67,16 @@ func (c *NodeCLI) CreateNode() {
 		//already created
 		return
 	}
-	node := Node{}
+	node := nodemanager.Node{}
 
 	node.DataDir = c.DataDir
+
+	node.DBConn = &nodemanager.Database{}
+
+	node.DBConn.SetLogger(c.Logger)
+
+	node.DBConn.SetConfig(c.Input.Database)
+
 	node.Logger = c.Logger
 	node.MinterAddress = c.Input.MinterAddress
 
@@ -124,7 +129,7 @@ func (c NodeCLI) isNodeManageMode() bool {
 	if "startnode" == c.Command ||
 		"startintnode" == c.Command ||
 		"stopnode" == c.Command ||
-		daemonprocesscommandline == c.Command ||
+		config.Daemonprocesscommandline == c.Command ||
 		"nodestate" == c.Command {
 		return true
 	}
@@ -209,8 +214,8 @@ func (c NodeCLI) ExecuteCommand() error {
 /*
 * Creates node server daemon manager
  */
-func (c NodeCLI) createDaemonManager() (*NodeDaemon, error) {
-	nd := NodeDaemon{}
+func (c NodeCLI) createDaemonManager() (*server.NodeDaemon, error) {
+	nd := server.NodeDaemon{}
 
 	c.CreateNode()
 
@@ -247,7 +252,7 @@ func (c NodeCLI) ExecuteManageCommand() error {
 	} else if c.Command == "stopnode" {
 		return noddaemon.StopServer()
 
-	} else if c.Command == daemonprocesscommandline {
+	} else if c.Command == config.Daemonprocesscommandline {
 		return noddaemon.DaemonizeServer()
 
 	} else if c.Command == "nodestate" {
@@ -373,9 +378,7 @@ func (c *NodeCLI) commandPrintChain() error {
 		return err
 	}
 
-	defer bci.Close()
-
-	blocks := []*BlockInfo{}
+	blocks := []*nodemanager.BlockInfo{}
 
 	for {
 		block := bci.Next()
@@ -388,7 +391,7 @@ func (c *NodeCLI) commandPrintChain() error {
 
 			fmt.Printf("\n")
 		} else if c.Input.Args.View == "shortr" {
-			blocks = append(blocks, &block)
+			blocks = append(blocks, block)
 		} else {
 			fmt.Printf("============ Block %x ============\n", block.Hash)
 			fmt.Printf("Height: %d\n", block.Height)
@@ -433,10 +436,10 @@ func (c *NodeCLI) commandUnapprovedTransactions() error {
 	if c.Input.Args.Clean {
 		// clean cache
 
-		return c.Node.NodeTX.CleanUnapprovedCache()
+		return c.Node.GetTransactionsManager().CleanUnapprovedCache()
 	}
 
-	total, _ := c.Node.NodeTX.IterateUnapprovedTransactions(
+	total, _ := c.Node.GetTransactionsManager().IterateUnapprovedTransactions(
 		func(txhash, txstr string) {
 			fmt.Printf("============ Transaction %x ============\n", txhash)
 
@@ -469,7 +472,7 @@ func (c *NodeCLI) commandAddressesBalance() error {
 	}
 	// get addresses in local wallets
 
-	result, err := c.Node.NodeTX.GetAddressesBalance(walletscli.WalletsObj.GetAddresses())
+	result, err := c.Node.GetTransactionsManager().GetAddressesBalance(walletscli.WalletsObj.GetAddresses())
 
 	if err != nil {
 		return err
@@ -534,7 +537,7 @@ func (c *NodeCLI) commandShowUnspent() error {
 	}
 	defer c.Node.CloseBlockchain()
 
-	result, err := c.Node.NodeTX.UnspentTXs.GetUnspentTransactionsOutputs(c.Input.Args.Address)
+	result, err := c.Node.GetTransactionsManager().GetUnspentOutputsManager().GetUnspentTransactionsOutputs(c.Input.Args.Address)
 
 	if err != nil {
 		return err
@@ -575,7 +578,7 @@ func (c *NodeCLI) commandGetBalance() error {
 	}
 	defer c.Node.CloseBlockchain()
 
-	balance, err := c.Node.NodeTX.GetAddressBalance(c.Input.Args.Address)
+	balance, err := c.Node.GetTransactionsManager().GetAddressBalance(c.Input.Args.Address)
 
 	if err != nil {
 		return err
@@ -640,13 +643,13 @@ func (c *NodeCLI) commandReindexCache() error {
 	}
 	defer c.Node.CloseBlockchain()
 
-	err = c.Node.NodeTX.TXCache.Reindex()
+	err = c.Node.GetTransactionsManager().GetIndexManager().Reindex()
 
 	if err != nil {
 		return err
 	}
 
-	count, err := c.Node.NodeTX.UnspentTXs.Reindex()
+	count, err := c.Node.GetTransactionsManager().GetUnspentOutputsManager().Reindex()
 
 	if err != nil {
 		return err
@@ -686,7 +689,7 @@ func (c *NodeCLI) commandCancelTransaction() error {
 	}
 	defer c.Node.CloseBlockchain()
 
-	err = c.Node.NodeTX.CancelTransaction(c.Input.Args.Transaction)
+	err = c.Node.GetTransactionsManager().CancelTransaction(c.Input.Args.Transaction)
 
 	if err != nil {
 		return err
@@ -721,8 +724,6 @@ func (c *NodeCLI) commandDropBlock() error {
 		return err
 	}
 
-	defer bci.Close()
-
 	block := bci.Next()
 
 	fmt.Printf("Done!\n")
@@ -741,7 +742,7 @@ func (c *NodeCLI) commandDropBlock() error {
 /*
 * Shows server state
  */
-func (c *NodeCLI) commandShowState(daemon *NodeDaemon) error {
+func (c *NodeCLI) commandShowState(daemon *server.NodeDaemon) error {
 	Runnning, ProcessID, Port, err := daemon.GetServerState()
 
 	fmt.Println("Node Server State:")
