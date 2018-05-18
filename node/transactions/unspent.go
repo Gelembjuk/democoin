@@ -90,11 +90,12 @@ func (u UnspentTransactions) GetInputValue(input transaction.TXInput) (float64, 
 	outsBytes, err := uodb.GetDataForTransaction(input.Txid)
 
 	if err != nil {
+		u.Logger.Trace.Printf("Data reading error: %s", err.Error())
 		return 0, err
 	}
 
 	if outsBytes == nil {
-		return 0, errors.New("Input TX is not found in unspent outputs")
+		return 0, NewTXNotFoundUOTError("Input TX is not found in unspent outputs")
 	}
 
 	outs, err := u.DeserializeOutputs(outsBytes)
@@ -122,30 +123,14 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 		return 0, nil, err
 	}
 
-	cursor, err := uodb.GetCursor()
-
-	if err != nil {
-		return 0, nil, err
-	}
-
 	unspentOutputs := []transaction.TXOutputIndependent{}
 	accumulated := float64(0)
 
-	for {
-		_, txData, err := cursor.Next()
-
-		if err != nil {
-			return 0, nil, err
-		}
-
-		if txData == nil {
-			break
-		}
-
+	err = uodb.ForEach(func(txID, txData []byte) error {
 		outs, err := u.DeserializeOutputs(txData)
 
 		if err != nil {
-			return 0, nil, err
+			return err
 		}
 
 		for _, out := range outs {
@@ -166,6 +151,10 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 				unspentOutputs = append(unspentOutputs, out)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return 0, nil, err
 	}
 
 	if accumulated >= amount {
@@ -214,36 +203,25 @@ func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]tr
 		return nil, err
 	}
 
-	cursor, err := uodb.GetCursor()
-
-	if err != nil {
-		return nil, err
-	}
-
 	UTXOs := []transaction.TXOutputIndependent{}
-
-	for {
-		_, txData, err := cursor.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		if txData == nil {
-			break
-		}
-
+	u.Logger.Trace.Printf("findoutputs for  %s", address)
+	err = uodb.ForEach(func(txID, txData []byte) error {
 		outs, err := u.DeserializeOutputs(txData)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, out := range outs {
+			u.Logger.Trace.Printf("output %x %d", out.TXID, out.OIndex)
 			if out.IsLockedWithKey(pubKeyHash) {
 				UTXOs = append(UTXOs, out)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return UTXOs, nil
@@ -257,13 +235,7 @@ func (u UnspentTransactions) CountTransactions() (int, error) {
 		return 0, err
 	}
 
-	cursor, err := uodb.GetCursor()
-
-	if err != nil {
-		return 0, err
-	}
-
-	return cursor.Count()
+	return uodb.GetCount()
 }
 
 // Returns toal number of transactions outputs in a cache
@@ -275,32 +247,20 @@ func (u UnspentTransactions) CountUnspentOutputs() (int, error) {
 		return 0, err
 	}
 
-	cursor, err := uodb.GetCursor()
-
-	if err != nil {
-		return 0, err
-	}
-
 	counter := 0
 
-	for {
-		_, txData, err := cursor.Next()
-
-		if err != nil {
-			return 0, err
-		}
-
-		if txData == nil {
-			break
-		}
-
+	err = uodb.ForEach(func(txID, txData []byte) error {
 		outs, err := u.DeserializeOutputs(txData)
 
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		counter += len(outs)
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
 
 	return counter, nil
@@ -543,7 +503,7 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *blockchain.Block) error {
 		if err != nil {
 			return err
 		}
-
+		u.Logger.Trace.Printf("BA tx save as unspent %x %d outputs", tx.ID, len(newOutputs))
 		err = uodb.PutDataForTransaction(tx.ID, d)
 
 		if err != nil {
@@ -584,7 +544,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 		return err
 	}
 	for _, tx := range block.Transactions {
-		u.Logger.Trace.Printf("tx %x", tx.ID) //REM
+		u.Logger.Trace.Printf("BC check tx %x", tx.ID) //REM
 
 		// delete this transaction from list of unspent
 		uodb.DeleteDataForTransaction(tx.ID)
@@ -598,7 +558,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 		for _, vin := range tx.Vin {
 			txi, spending, blockHash, err := u.NewTransactionIndex().GetTransactionAllInfo(vin.Txid)
 
-			u.Logger.Trace.Printf("tx find input %x", vin.Txid) //REM
+			u.Logger.Trace.Printf("input tx find input %x", vin.Txid) //REM
 
 			if err != nil {
 				u.Logger.Trace.Printf("error finding tx %x %s", tx.ID, err.Error()) //REM
@@ -612,6 +572,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 			}
 
 			u.Logger.Trace.Printf("found tx in block %x", blockHash) //REM
+			//u.Logger.Trace.Printf("spendings %s", spending)          //REM
 
 			sender, _ := utils.HashPubKey(txi.Vin[0].PubKey)
 
@@ -633,19 +594,24 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 					UnspentOuts = append(UnspentOuts, no)
 				}
 			}
-			u.Logger.Trace.Printf("tx save as unspent %x %d outputs", vin.Txid, len(UnspentOuts))
+			u.Logger.Trace.Printf("BC tx save as unspent %x %d outputs", vin.Txid, len(UnspentOuts))
 
-			txData, err := u.SerializeOutputs(UnspentOuts)
+			if len(UnspentOuts) > 0 {
+				txData, err := u.SerializeOutputs(UnspentOuts)
 
-			if err != nil {
-				return err
+				if err != nil {
+					return err
+				}
+
+				err = uodb.PutDataForTransaction(vin.Txid, txData)
+
+				if err != nil {
+					return err
+				}
+			} else {
+				uodb.DeleteDataForTransaction(vin.Txid)
 			}
 
-			err = uodb.PutDataForTransaction(vin.Txid, txData)
-
-			if err != nil {
-				return err
-			}
 		}
 	}
 

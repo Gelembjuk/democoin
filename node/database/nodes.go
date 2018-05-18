@@ -31,6 +31,11 @@ func (ns *Nodes) ForEach(callback ForEachKeyIteratorInterface) error {
 	return ns.DB.forEachInBucket(nodesBucket, callback)
 }
 
+// get count of records in the table
+func (ns *Nodes) GetCount() (int, error) {
+	return ns.DB.getCountInBucket(nodesBucket)
+}
+
 // Save node info
 func (ns *Nodes) PutNode(nodeID []byte, nodeData []byte) error {
 	return ns.DB.db.Update(func(txDB *bolt.Tx) error {

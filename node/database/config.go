@@ -8,9 +8,9 @@ type DatabaseConfig struct {
 
 func (dbc *DatabaseConfig) IsEmpty() bool {
 	if dbc.BlockchainFile == "" || dbc.NodesFile == "" {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 func (dbc *DatabaseConfig) SetDefault() error {

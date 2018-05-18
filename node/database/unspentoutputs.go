@@ -17,11 +17,14 @@ func (uos *UnspentOutputs) InitDB() error {
 	})
 }
 
-// retrns BC iterator
-func (uos *UnspentOutputs) GetCursor() (CursorInterface, error) {
-	i := &Cursor{unspentTransactionsBucket, uos.DB, nil, nil}
+// execute functon for each key/value in the bucket
+func (uos *UnspentOutputs) ForEach(callback ForEachKeyIteratorInterface) error {
+	return uos.DB.forEachInBucket(unspentTransactionsBucket, callback)
+}
 
-	return i, nil
+// get count of records in the table
+func (uos *UnspentOutputs) GetCount() (int, error) {
+	return uos.DB.getCountInBucket(unspentTransactionsBucket)
 }
 
 func (uos *UnspentOutputs) TruncateDB() error {

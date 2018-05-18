@@ -114,6 +114,9 @@ def CopyTestData(todir,testset):
     
     if os.path.isfile(srcdir+"config.t"):
         copyfile(srcdir+"config.t", todir + "/config.json")
+        
+    if os.path.isfile(srcdir+"nodeslist.t"):
+        copyfile(srcdir+"nodeslist.t", todir + "/nodeslist.db")
 #=============================================================================================================
 # Assert functions
 def Fatal(comment):

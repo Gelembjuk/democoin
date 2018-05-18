@@ -201,22 +201,22 @@ def CopyBlockchainWithBlocks():
 
 def Copy6Nodes():
     datadirs = [""] * 6
-    datadirs[0] = _lib.CreateTestFolder()
+    datadirs[0] = _lib.CreateTestFolder("_1_")
     _lib.CopyTestData(datadirs[0],"bc6nodes_1")
     
-    datadirs[1] = _lib.CreateTestFolder()
+    datadirs[1] = _lib.CreateTestFolder("_2_")
     _lib.CopyTestData(datadirs[1],"bc6nodes_2")
     
-    datadirs[2] = _lib.CreateTestFolder()
+    datadirs[2] = _lib.CreateTestFolder("_3_")
     _lib.CopyTestData(datadirs[2],"bc6nodes_3")
     
-    datadirs[3] = _lib.CreateTestFolder()
+    datadirs[3] = _lib.CreateTestFolder("_4_")
     _lib.CopyTestData(datadirs[3],"bc6nodes_4")
     
-    datadirs[4] = _lib.CreateTestFolder()
+    datadirs[4] = _lib.CreateTestFolder("_5_")
     _lib.CopyTestData(datadirs[4],"bc6nodes_5")
     
-    datadirs[5] = _lib.CreateTestFolder()
+    datadirs[5] = _lib.CreateTestFolder("_6_")
     _lib.CopyTestData(datadirs[5],"bc6nodes_6")
     
     return datadirs

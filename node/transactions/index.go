@@ -3,6 +3,7 @@ package transactions
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/node/blockchain"
@@ -24,6 +25,22 @@ type TransactionsIndexSpentOutputs struct {
 
 func NewTransactionIndex(DB database.DBManager, Logger *utils.LoggerMan) *TransactionsIndex {
 	return &TransactionsIndex{DB, Logger}
+}
+
+func (tiso TransactionsIndexSpentOutputs) String() string {
+	return fmt.Sprintf("OI %d used in %x II %d block %x", tiso.OutInd, tiso.TXWhereUsed, tiso.InInd, tiso.BlockHash)
+}
+func (ti *TransactionsIndex) BlocksAdded(blocks []*blockchain.Block) error {
+	for _, block := range blocks {
+
+		err := ti.BlockAdded(block)
+
+		if err != nil {
+
+			return err
+		}
+	}
+	return nil
 }
 
 // Block added. We need to update index of transactions
@@ -82,7 +99,18 @@ func (ti *TransactionsIndex) BlockAdded(block *blockchain.Block) error {
 	}
 	return nil
 }
+func (ti *TransactionsIndex) BlocksRemoved(blocks []*blockchain.Block) error {
+	for _, block := range blocks {
 
+		err := ti.BlockRemoved(block)
+
+		if err != nil {
+
+			return err
+		}
+	}
+	return nil
+}
 func (ti *TransactionsIndex) BlockRemoved(block *blockchain.Block) error {
 	txdb, err := ti.DB.GetTransactionsObject()
 

@@ -19,22 +19,6 @@ type UnApprovedTransactions struct {
 }
 type UnApprovedTransactionsIteratorInterface func(txhash, txstr string)
 
-func (u *UnApprovedTransactions) getCursor() (database.CursorInterface, error) {
-	utdb, err := u.DB.GetUnapprovedTransactionsObject()
-
-	if err != nil {
-		return nil, err
-	}
-
-	cursor, err := utdb.GetCursor()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return cursor, nil
-}
-
 // Check if transaction inputs are pointed to some prepared transactions.
 // Check conflicts too. Same output can not be repeated twice
 func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs map[int]transaction.TXInput, inputTXs map[int]*transaction.Transaction) error {
@@ -129,28 +113,18 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 	inputs := []transaction.TXInput{}
 	outputs := []*transaction.TXOutputIndependent{}
 
-	cursor, err := u.getCursor()
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	for {
-		_, txBytes, err := cursor.Next()
-
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		if txBytes == nil {
-			break
-		}
-
+	err = utdb.ForEach(func(k, txBytes []byte) error {
 		tx := transaction.Transaction{}
 		err = tx.DeserializeTransaction(txBytes)
 
 		if err != nil {
-			return nil, nil, nil, err
+			return err
 		}
 
 		sender := []byte{}
@@ -173,6 +147,11 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 				outputs = append(outputs, &voutind)
 			}
 		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	// outputs not yet used in other pending transactions
@@ -213,6 +192,7 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]transaction
 
 // Get input value for TX in the cache
 func (u *UnApprovedTransactions) GetInputValue(input transaction.TXInput) (float64, error) {
+	u.Logger.Trace.Printf("Find TX %x in unapproved", input.Txid)
 	tx, err := u.GetIfExists(input.Txid)
 
 	if err != nil {
@@ -259,40 +239,35 @@ func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*transaction.Transact
 * Get all unapproved transactions
  */
 func (u *UnApprovedTransactions) GetTransactions(number int) ([]*transaction.Transaction, error) {
-	cursor, err := u.getCursor()
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
 		return nil, err
 	}
-
 	txset := []*transaction.Transaction{}
 
 	totalnumber := 0
 
-	for {
-		_, txBytes, err := cursor.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		if txBytes == nil {
-			break
-		}
-
+	err = utdb.ForEach(func(k, txBytes []byte) error {
 		tx := transaction.Transaction{}
 		err = tx.DeserializeTransaction(txBytes)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		txset = append(txset, &tx)
 		totalnumber++
 
 		if totalnumber >= number {
-			break
+			// time to exit the loop. we don't need more
+			return database.NewDBCursorStopError()
 		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// we need to sort transactions. oldest should be first
@@ -303,13 +278,13 @@ func (u *UnApprovedTransactions) GetTransactions(number int) ([]*transaction.Tra
 // Get number of unapproved transactions in a cache
 
 func (u *UnApprovedTransactions) GetCount() (int, error) {
-	cursor, err := u.getCursor()
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
 		return 0, err
 	}
 
-	return cursor.Count()
+	return utdb.GetCount()
 }
 
 // Add new transaction for the list of unapproved
@@ -414,7 +389,7 @@ func (u *UnApprovedTransactions) DeleteFromBlock(block *blockchain.Block) error 
 // For example, to print them.
 
 func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransactionsIteratorInterface) (int, error) {
-	cursor, err := u.getCursor()
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
 		return 0, err
@@ -422,26 +397,22 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 
 	total := 0
 
-	for {
-		txID, txBytes, err := cursor.Next()
-
-		if err != nil {
-			return 0, err
-		}
-
-		if txBytes == nil {
-			break
-		}
-
+	err = utdb.ForEach(func(txID, txBytes []byte) error {
 		tx := transaction.Transaction{}
 		err = tx.DeserializeTransaction(txBytes)
 
 		if err != nil {
-			return 0, err
+			return err
 		}
 		callback(hex.EncodeToString(txID), tx.String())
 		total++
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
+
 	return total, nil
 }
 
@@ -450,8 +421,7 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 // we return first found transaction taht conflicts
 func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Transaction) (*transaction.Transaction, error) {
 	// it i needed to go over all tranactions in cache and check each of them if input is same as in this tx
-
-	cursor, err := u.getCursor()
+	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
 		return nil, err
@@ -459,22 +429,12 @@ func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Tran
 
 	var txconflicts *transaction.Transaction
 
-	for {
-		_, txBytes, err := cursor.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		if txBytes == nil {
-			break
-		}
-
+	err = utdb.ForEach(func(txID, txBytes []byte) error {
 		txexi := transaction.Transaction{}
 		err = txexi.DeserializeTransaction(txBytes)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		conflicts := false
@@ -493,8 +453,14 @@ func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *transaction.Tran
 			}
 		}
 		if conflicts {
-			break
+			// return out of loop
+			return database.NewDBCursorStopError()
 		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return txconflicts, nil

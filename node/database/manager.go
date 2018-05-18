@@ -41,7 +41,7 @@ func (bdm *BoltDBManager) SetLogger(logger *utils.LoggerMan) error {
 }
 
 func (bdm *BoltDBManager) OpenConnection(reason string) error {
-	bdm.Logger.Trace.Println("open connection for " + reason)
+	//bdm.Logger.Trace.Println("open connection for " + reason)
 	if bdm.openedConn {
 		return nil
 	}
@@ -54,14 +54,12 @@ func (bdm *BoltDBManager) OpenConnection(reason string) error {
 	return nil
 }
 func (bdm *BoltDBManager) CloseConnection() error {
-	bdm.Logger.Trace.Println("close connection")
 	if !bdm.openedConn {
 		return nil
 	}
-	bdm.Logger.Trace.Println("check cache")
+
 	if bdm.connBC != nil {
 		bdm.connBC.Close()
-		bdm.Logger.Trace.Println("unlock " + bdm.connBC.lockFile)
 		bdm.unLockDB(bdm.connBC.lockFile)
 		bdm.connBC = nil
 	}
@@ -247,15 +245,12 @@ func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremis
 	if !bdm.openedConn {
 		return nil, errors.New("Connection was not inited")
 	}
-	bdm.Logger.Trace.Println("check state")
+
 	if bdm.isBCDB(name) && bdm.connBC != nil {
-		bdm.Logger.Trace.Println("exists")
+		//bdm.Logger.Trace.Println("bc connection exists. rteurn it")
 		return bdm.connBC, nil
 	}
-	if bdm.connBC != nil {
-		bdm.Logger.Trace.Println("bc conn exists")
-	}
-	bdm.Logger.Trace.Println("check state 2")
+
 	if bdm.isNodesDB(name) && bdm.connNodes != nil {
 		return bdm.connNodes, nil
 	}
@@ -301,7 +296,7 @@ func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremis
 // Creates a lock file for DB access. We need this to controll parallel access to the DB
 func (bdm *BoltDBManager) lockDB(name string) (string, error) {
 	lockfile, err := bdm.getDBLockFileForObject(name)
-	bdm.Logger.Trace.Printf("lock file is %s", lockfile)
+	bdm.Logger.Trace.Printf("lock %s", name)
 
 	if err != nil {
 		return "", err
@@ -321,7 +316,7 @@ func (bdm *BoltDBManager) lockDB(name string) (string, error) {
 	}
 
 	for bdm.dbExists(lockfile) != false {
-		bdm.Logger.Trace.Printf("lock sleep")
+
 		time.Sleep(1 * time.Second)
 		i++
 
@@ -329,7 +324,7 @@ func (bdm *BoltDBManager) lockDB(name string) (string, error) {
 			return "", errors.New("Can not open DB. Lock failed after many attempts")
 		}
 	}
-	bdm.Logger.Trace.Printf("lock create")
+	bdm.Logger.Trace.Printf("locked")
 	file, err := os.Create(lockfile)
 
 	if err != nil {

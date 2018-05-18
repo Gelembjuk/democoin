@@ -6,6 +6,7 @@ import _wallet
 import _blocks
 import re
 import time
+import math
 import blocksnodes
 import startnode
 import transactions
@@ -208,17 +209,17 @@ def test(testfilter):
     #transactions.CancelTransaction(datadir,tx4)
     
     am3 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_1,"localhost", nodeport)
-    
+   
     addb1_2 = _transfers.GetBalance(datadir, address1_2)
-    
+   
     amounttosend2 = "%.8f" % round(am3[0]/2,8)
     
     _wallet.Send(walletdatadir2,waddress2_1, address1_2 ,amounttosend2,"localhost", nodeport)
     
     am3_2 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_1,"localhost", nodeport)
-    
+   
     addb1_2_2 = _transfers.GetBalance(datadir, address1_2)
-    
+   
     _lib.FatalAssert(am3[1] == am3_2[1], "Approved balance should be unchanged")
     _lib.FatalAssert(round(am3[0] - float(amounttosend2),8) == am3_2[0] , "Total balance should be changed")
     _lib.FatalAssert(round(am3[2] - float(amounttosend2),8) == am3_2[2], "Pending balance should be changed")
@@ -226,20 +227,21 @@ def test(testfilter):
     _lib.FatalAssert(round(addb1_2_2[2] - addb1_2[2],8) == round(am3[2] - am3_2[2],8), "Pending difference should be same")
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
-    
+   
     amounttosend2 = "%.8f" % round(am3[1]/2 -0.00000001 ,8)
     
     _wallet.Send(walletdatadir2,waddress2_1, address1_2 ,amounttosend2,"localhost", nodeport)
     
     am3_3 = _wallet.GetBalanceWallet(walletdatadir2, waddress2_1,"localhost", nodeport)
-    
+   
     addb1_2_3 = _transfers.GetBalance(datadir, address1_2)
     
     _lib.FatalAssert(am3[1] == am3_3[1], "Approved balance should be unchanged")
-    _lib.FatalAssert(round(am3_2[0] - float(amounttosend2),8) == am3_3[0] , "Total balance should be changed")
-    _lib.FatalAssert(round(am3_2[2] - float(amounttosend2),8) == am3_3[2], "Pending balance should be changed")
+    
+    _lib.FatalAssert(math.fabs(round(am3_2[0] - float(amounttosend2),8) - am3_3[0]) <= 0.00000001, "Total balance should be changed")
+    _lib.FatalAssert(math.fabs(round(am3_2[2] - float(amounttosend2),8) - am3_3[2]) <= 0.00000001, "Pending balance should be changed")
 
-    _lib.FatalAssert(round(addb1_2_3[2] - addb1_2[2],8) == round(am3[2] - am3_3[2],8), "Pending difference should be same after 2 sends")
+    _lib.FatalAssert(math.fabs(round(addb1_2_3[2] - addb1_2[2],8) - round(am3[2] - am3_3[2],8))  <= 0.00000001, "Pending difference should be same after 2 sends")
     
     startnode.StopNode(datadir)
     datadir = ""

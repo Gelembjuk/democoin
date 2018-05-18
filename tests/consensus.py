@@ -53,8 +53,9 @@ def test(testfilter):
         
     #check nodes on each node is correct 
     for node in nodes:
-        print os.path.basename(node['datadir'])
+        #print os.path.basename(node['datadir'])
         nodeslist = managenodes.GetNodes(node['datadir'])
+        
         _lib.FatalAssert(len(nodeslist) == 2,"Should be 2 nodes on "+node["title"])
         
         if node['index'] == 0:
@@ -81,13 +82,14 @@ def test(testfilter):
     # wait whle blocks are exachanged
     _blocks.WaitBlocks(nodes[1]["datadir"],9)
     
+    
     # get unapproved transactions (after block cancel)
     txlist = transactions.GetUnapprovedTransactions(nodes[1]["datadir"])
     _lib.FatalAssert(len(txlist) == 7,"SHould be 7 unapproved TXs")
     
     #send another 2 TXs to have 9 required TXs
     balances = _transfers.GetGroupBalance(nodes[1]["datadir"])
-
+    
     mainbalance = _transfers.GetGroupBalance(nodes[0]["datadir"])
 
     addr1 = balances.keys()[0]

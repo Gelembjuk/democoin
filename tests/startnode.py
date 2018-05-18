@@ -46,7 +46,7 @@ def StartNode(datadir, address, port,comment = ""):
     _lib.StartTestGroup("Start node "+comment)
     
     _lib.StartTest("Start normal")
-    res = _lib.ExecuteNode(['startnode','-datadir',datadir,'-port',port,'-minter',address])
+    res = _lib.ExecuteNode(['startnode','-datadir',datadir,'-port',port,'-minter',address,'-logs','trace'])
     _lib.FatalAssertStr(res,"","Should not be any output on succes start")
 
     # get process of the node. find this process exists

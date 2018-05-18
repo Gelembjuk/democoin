@@ -3,6 +3,7 @@ package nodemanager
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -84,17 +85,20 @@ func (n *Node) InitClient() error {
 * Load list of other nodes addresses
  */
 func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
+	n.DBConn.OpenConnection("CheckNodesAndGenesis")
+	defer n.DBConn.CloseConnection()
+
 	if len(list) == 0 && !force {
+
 		n.NodeNet.LoadNodes()
+
 		// load nodes from local storage of nodes
 		if n.NodeNet.GetCountOfKnownNodes() == 0 && n.BlockchainExist() {
 			// there are no any known nodes.
-			n.OpenBlockchain("Check genesis block")
 
 			bcm := n.NodeBC.GetBCManager()
 
 			geenesisHash, err := bcm.GetGenesisBlockHash()
-			n.CloseBlockchain()
 
 			if err == nil {
 				// load them from some external resource
@@ -119,6 +123,7 @@ func (n *Node) OpenBlockchain(reason string) error {
 	err := n.DBConn.OpenConnection(reason)
 
 	if err != nil {
+		n.Logger.Trace.Printf("OpenConn error %s", err.Error())
 		return err
 	}
 
@@ -135,9 +140,13 @@ func (n *Node) CloseBlockchain() {
 * It is needed to create it first
  */
 func (n *Node) BlockchainExist() bool {
-	n.DBConn.OpenConnection("checkBCexists")
+
+	if n.DBConn.OpenConnectionIfNeeded("CheckBCExists") {
+		defer n.DBConn.CloseConnection()
+	}
+
 	exists, _ := n.DBConn.DB.CheckDBExists()
-	n.DBConn.CloseConnection()
+
 	return exists
 }
 
@@ -223,10 +232,12 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	err = n.NodeBC.CreateBlockchain(block)
 
 	if err != nil {
-		return false, err
+		return false, errors.New(fmt.Sprintf("Create DB abd add first block: %", err.Error()))
 	}
 	// open block chain now
 	n.OpenBlockchain("InitAfterImport")
+
+	defer n.CloseBlockchain()
 
 	n.GetTransactionsManager().BlockAdddedToTop(block)
 
@@ -260,8 +271,6 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 			MH = block.Height
 		}
 	}
-
-	n.CloseBlockchain()
 
 	// add that node to list of known nodes.
 	n.NodeNet.AddNodeToKnown(addr)
@@ -305,7 +314,9 @@ func (n *Node) SendBlockToAll(newBlock *blockchain.Block, skipaddr net.NodeAddr)
 * Send own version to all known nodes
  */
 func (n *Node) SendVersionToNodes(nodes []net.NodeAddr) {
+	n.OpenBlockchain("GetHeigh")
 	bestHeight, err := n.NodeBC.GetBestHeight()
+	n.CloseBlockchain()
 
 	if err != nil {
 		return
@@ -476,15 +487,16 @@ func (n *Node) AddBlock(block *blockchain.Block) (uint, error) {
 		return 0, err
 	}
 
-	if addstate == blockchain.BCBAddState_addedToTop ||
-		addstate == blockchain.BCBAddState_addedToParallelTop ||
-		addstate == blockchain.BCBAddState_addedToParallel {
-		// block was added. add transactions to caches
+	if addstate == blockchain.BCBAddState_addedToParallel {
 		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
 	}
 
 	if addstate == blockchain.BCBAddState_addedToTop {
 		// only if a block was really added
+
+		// block was added. add transactions to caches
+		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
+
 		// delete block transaction from list of unapproved
 		n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlock(block)
 
@@ -500,6 +512,11 @@ func (n *Node) AddBlock(block *blockchain.Block) (uint, error) {
 		}
 
 		if newChain != nil && oldChain != nil {
+			// transaction/block index update
+			n.GetTransactionsManager().GetIndexManager().BlocksRemoved(oldChain)
+			// now index for new aded blocks
+			n.GetTransactionsManager().GetIndexManager().BlocksAdded(newChain)
+
 			// add old blocks back to unspent tranactions
 			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksCancel(oldChain)
 			// remove new blocks from unspent transactions

@@ -45,7 +45,7 @@ def GetBalance(datadir, address):
 def GetGroupBalance(datadir):
     _lib.StartTest("Request group balance for addresses on a node")
     res = _lib.ExecuteNode(['getbalances','-datadir',datadir])
-    
+    #print res
     _lib.FatalAssertSubstr(res,"Balance for all addresses:","Balance result not printed")
     
     regex = ur"([a-z0-9A-Z]+): ([0-9.]+) .Approved - ([0-9.]+), Pending - ([0-9.-]+)"

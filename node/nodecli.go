@@ -340,10 +340,7 @@ func (c *NodeCLI) commandCreateBlockchain() error {
  */
 func (c *NodeCLI) commandInitBlockchain() error {
 	// try to open existent BC to check if it exists
-	err := c.Node.OpenBlockchain("CheckIfExistsBeforeInit")
-
-	if err == nil {
-		c.Node.CloseBlockchain()
+	if c.Node.BlockchainExist() {
 		return errors.New("Blockchain already exists")
 	}
 
@@ -402,6 +399,16 @@ func (c *NodeCLI) commandPrintChain() error {
 			}
 			fmt.Printf("\n\n")
 		}
+		/*
+			c.Logger.Trace.Printf("============ Block %x ============\n", block.Hash)
+			c.Logger.Trace.Printf("Height: %d\n", block.Height)
+			c.Logger.Trace.Printf("Prev. block: %x\n", block.PrevBlockHash)
+
+			for _, tx := range block.Transactions {
+				c.Logger.Trace.Println(tx)
+			}
+			c.Logger.Trace.Printf("\n\n")
+		*/
 		if len(block.PrevBlockHash) == 0 {
 			break
 		}

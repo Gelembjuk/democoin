@@ -25,12 +25,7 @@ type DBManager interface {
 type DatabaseConnection interface {
 	Close() error
 }
-type ForEachKeyIteratorInterface func(key, value []byte)
-
-type CursorInterface interface {
-	Next() ([]byte, []byte, error)
-	Count() (int, error)
-}
+type ForEachKeyIteratorInterface func(key, value []byte) error
 
 type BlockchainInterface interface {
 	InitDB() error
@@ -61,7 +56,8 @@ type TranactionsInterface interface {
 type UnapprovedTransactionsInterface interface {
 	InitDB() error
 	TruncateDB() error
-	GetCursor() (CursorInterface, error)
+	ForEach(callback ForEachKeyIteratorInterface) error
+	GetCount() (int, error)
 
 	GetTransaction(txID []byte) ([]byte, error)
 	PutTransaction(txID []byte, txdata []byte) error
@@ -71,7 +67,8 @@ type UnapprovedTransactionsInterface interface {
 type UnspentOutputsInterface interface {
 	InitDB() error
 	TruncateDB() error
-	GetCursor() (CursorInterface, error)
+	ForEach(callback ForEachKeyIteratorInterface) error
+	GetCount() (int, error)
 
 	GetDataForTransaction(txID []byte) ([]byte, error)
 	DeleteDataForTransaction(txID []byte) error
@@ -81,6 +78,7 @@ type UnspentOutputsInterface interface {
 type NodesInterface interface {
 	InitDB() error
 	ForEach(callback ForEachKeyIteratorInterface) error
+	GetCount() (int, error)
 
 	PutNode(nodeID []byte, nodeData []byte) error
 	DeleteNode(nodeID []byte) error

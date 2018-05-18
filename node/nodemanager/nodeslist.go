@@ -9,9 +9,9 @@ type NodesListStorage struct {
 }
 
 func (s NodesListStorage) GetNodes() ([]net.NodeAddr, error) {
-	s.DBConn.OpenConnection("get nodes")
-
-	defer s.DBConn.CloseConnection()
+	if s.DBConn.OpenConnectionIfNeeded("GetNodes") {
+		defer s.DBConn.CloseConnection()
+	}
 
 	nddb, err := s.DBConn.DB.GetNodesObject()
 
@@ -21,21 +21,21 @@ func (s NodesListStorage) GetNodes() ([]net.NodeAddr, error) {
 
 	nodes := []net.NodeAddr{}
 
-	nddb.ForEach(func(k, v []byte) {
+	nddb.ForEach(func(k, v []byte) error {
 		addr := string(v)
 		node := net.NodeAddr{}
 		node.LoadFromString(addr)
 
 		nodes = append(nodes, node)
-
+		return nil
 	})
 
 	return nodes, nil
 }
 func (s NodesListStorage) AddNodeToKnown(addr net.NodeAddr) {
-	s.DBConn.OpenConnection("add node")
-
-	defer s.DBConn.CloseConnection()
+	if s.DBConn.OpenConnectionIfNeeded("AddNode") {
+		defer s.DBConn.CloseConnection()
+	}
 
 	nddb, err := s.DBConn.DB.GetNodesObject()
 
@@ -48,9 +48,9 @@ func (s NodesListStorage) AddNodeToKnown(addr net.NodeAddr) {
 	return
 }
 func (s NodesListStorage) RemoveNodeFromKnown(addr net.NodeAddr) {
-	s.DBConn.OpenConnection("remove node")
-
-	defer s.DBConn.CloseConnection()
+	if s.DBConn.OpenConnectionIfNeeded("RemoveNode") {
+		defer s.DBConn.CloseConnection()
+	}
 
 	nddb, err := s.DBConn.DB.GetNodesObject()
 
@@ -63,9 +63,9 @@ func (s NodesListStorage) RemoveNodeFromKnown(addr net.NodeAddr) {
 	return
 }
 func (s NodesListStorage) GetCountOfKnownNodes() (int, error) {
-	s.DBConn.OpenConnection("get count of nodes")
-
-	defer s.DBConn.CloseConnection()
+	if s.DBConn.OpenConnectionIfNeeded("GetCountOfNodes") {
+		defer s.DBConn.CloseConnection()
+	}
 
 	nddb, err := s.DBConn.DB.GetNodesObject()
 
@@ -73,11 +73,5 @@ func (s NodesListStorage) GetCountOfKnownNodes() (int, error) {
 		return 0, err
 	}
 
-	count := 0
-
-	nddb.ForEach(func(k, v []byte) {
-		count++
-	})
-
-	return count, nil
+	return nddb.GetCount()
 }

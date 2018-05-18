@@ -50,7 +50,7 @@ def ImportBockchain(datadir,host,port):
     address = match.group(1)
     
     _lib.StartTest("Import blockchain from node 1")
-    res = _lib.ExecuteNode(['initblockchain','-datadir',datadir, '-nodehost', host, '-nodeport', port])
+    res = _lib.ExecuteNode(['initblockchain','-datadir',datadir, '-nodehost', host, '-nodeport', port,'-logs','trace,error'])
 
     _lib.FatalAssertSubstr(res,"Done!","Blockchain init failed")
     

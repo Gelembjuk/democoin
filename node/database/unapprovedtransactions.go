@@ -26,6 +26,16 @@ func (uts *UnapprovedTransactions) InitDB() error {
 	return nil
 }
 
+// execute functon for each key/value in the bucket
+func (uts *UnapprovedTransactions) ForEach(callback ForEachKeyIteratorInterface) error {
+	return uts.DB.forEachInBucket(unapprovedTransactionsBucket, callback)
+}
+
+// get count of records in the table
+func (uts *UnapprovedTransactions) GetCount() (int, error) {
+	return uts.DB.getCountInBucket(unapprovedTransactionsBucket)
+}
+
 func (uts *UnapprovedTransactions) TruncateDB() error {
 	err := uts.DB.db.Update(func(tx *bolt.Tx) error {
 		err := tx.DeleteBucket([]byte(unapprovedTransactionsBucket))
@@ -45,13 +55,6 @@ func (uts *UnapprovedTransactions) TruncateDB() error {
 		return err
 	}
 	return nil
-}
-
-// retrns BC iterator
-func (uts *UnapprovedTransactions) GetCursor() (CursorInterface, error) {
-	i := &Cursor{unapprovedTransactionsBucket, uts.DB, nil, nil}
-
-	return i, nil
 }
 
 // returns transaction by ID if it exists

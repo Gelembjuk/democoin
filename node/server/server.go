@@ -457,6 +457,9 @@ func (s *NodeServer) CloneNode() *nodemanager.Node {
 	node.DataDir = s.DataDir
 	node.Logger = s.Logger
 	node.MinterAddress = orignode.MinterAddress
+	// clone DB object
+	ndb := orignode.DBConn.Clone()
+	node.DBConn = &ndb
 
 	node.Init()
 

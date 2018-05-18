@@ -101,11 +101,28 @@ func (n *Manager) GetAddressPendingBalance(address string) (float64, error) {
 	}
 
 	// we need to know values for inputs. this are inputs based on TXs that are in unapproved
+	// input TX can be confirmed (in unspent outputs) or unconfirmed . we need to look for it in
+	// both places
 	for _, i := range inputs {
+		n.Logger.Trace.Printf("find input %s for tx %x", i, i.Txid)
 		v, err := n.GetUnspentOutputsManager().GetInputValue(i)
 
 		if err != nil {
-			return 0, err
+			/*
+				if err, ok := err.(*TXNotFoundError); ok && err.GetKind() == TXNotFoundErrorUnspent {
+
+					// check this TX in prepared
+					v2, err := n.GetUnapprovedTransactionsManager().GetInputValue(i)
+
+					if err != nil {
+						return 0, errors.New(fmt.Sprintf("Pending Balance Error: input check fails on unapproved: %s", err.Error()))
+					}
+					v = v2
+				} else {
+					return 0, errors.New(fmt.Sprintf("Pending Balance Error: input check fails on unspent: %s", err.Error()))
+				}
+			*/
+			return 0, errors.New(fmt.Sprintf("Pending Balance Error: input check fails on unspent: %s", err.Error()))
 		}
 		pendingbalance -= v
 	}
