@@ -31,6 +31,7 @@ type Node struct {
 	NodeClient    *nodeclient.NodeClient
 	OtherNodes    []net.NodeAddr
 	DBConn        *Database
+	SessionID     string
 }
 
 /*
@@ -38,7 +39,7 @@ type Node struct {
 * Init interfaces of all DBs, blockchain, unspent transactions, unapproved transactions
  */
 func (n *Node) Init() {
-
+	n.NodeNet.Init()
 	n.NodeNet.Logger = n.Logger
 	n.NodeBC.Logger = n.Logger
 
@@ -47,7 +48,7 @@ func (n *Node) Init() {
 	n.NodeBC.DBConn = n.DBConn
 
 	// Nodes list storage
-	n.NodeNet.SetExtraManager(NodesListStorage{n.DBConn})
+	n.NodeNet.SetExtraManager(NodesListStorage{n.DBConn, n.SessionID})
 	// load list of nodes from config
 	n.NodeNet.SetNodes([]net.NodeAddr{}, true)
 
@@ -85,8 +86,9 @@ func (n *Node) InitClient() error {
 * Load list of other nodes addresses
  */
 func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
-	n.DBConn.OpenConnection("CheckNodesAndGenesis")
-	defer n.DBConn.CloseConnection()
+	if n.DBConn.OpenConnectionIfNeeded("CheckNodesAndGenesis", n.SessionID) {
+		defer n.DBConn.CloseConnection()
+	}
 
 	if len(list) == 0 && !force {
 
@@ -120,7 +122,7 @@ func (n *Node) initBlockMaker() (*consensus.NodeBlockMaker, error) {
 
 // Open Blockchain  DB. This must be called before any operation with blockchain or cached data
 func (n *Node) OpenBlockchain(reason string) error {
-	err := n.DBConn.OpenConnection(reason)
+	err := n.DBConn.OpenConnection(reason, n.SessionID)
 
 	if err != nil {
 		n.Logger.Trace.Printf("OpenConn error %s", err.Error())
@@ -141,7 +143,7 @@ func (n *Node) CloseBlockchain() {
  */
 func (n *Node) BlockchainExist() bool {
 
-	if n.DBConn.OpenConnectionIfNeeded("CheckBCExists") {
+	if n.DBConn.OpenConnectionIfNeeded("CheckBCExists", "") {
 		defer n.DBConn.CloseConnection()
 	}
 
@@ -179,7 +181,7 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	}
 	n.Logger.Trace.Printf("Prepare TX caches\n")
 
-	n.DBConn.OpenConnection("InitAfterCreate")
+	n.DBConn.OpenConnection("InitAfterCreate", "")
 
 	n.GetTransactionsManager().BlockAdddedToTop(genesisBlock)
 
@@ -314,9 +316,12 @@ func (n *Node) SendBlockToAll(newBlock *blockchain.Block, skipaddr net.NodeAddr)
 * Send own version to all known nodes
  */
 func (n *Node) SendVersionToNodes(nodes []net.NodeAddr) {
-	n.OpenBlockchain("GetHeigh")
+	opened := n.DBConn.OpenConnectionIfNeeded("GetHeigh", n.SessionID)
 	bestHeight, err := n.NodeBC.GetBestHeight()
-	n.CloseBlockchain()
+
+	if opened {
+		n.DBConn.CloseConnection()
+	}
 
 	if err != nil {
 		return
@@ -621,13 +626,6 @@ func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
 	result := nodeclient.ComGetNodeState{}
 
 	result.ExpectingBlocksHeight = 0
-
-	err := n.OpenBlockchain("ShowState")
-
-	if err != nil {
-		return result, err
-	}
-	defer n.CloseBlockchain()
 
 	bh, err := n.NodeBC.GetBestHeight()
 

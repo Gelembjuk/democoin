@@ -7,6 +7,8 @@ import (
 type DBManager interface {
 	SetConfig(config DatabaseConfig) error
 	SetLogger(logger *utils.LoggerMan) error
+	GetLockerObject() DatabaseLocker
+	SetLockerObject(lockerobj DatabaseLocker)
 
 	InitDatabase() error
 	CheckDBExists() (bool, error)
@@ -20,6 +22,10 @@ type DBManager interface {
 	GetUnapprovedTransactionsObject() (UnapprovedTransactionsInterface, error)
 	GetUnspentOutputsObject() (UnspentOutputsInterface, error)
 	GetNodesObject() (NodesInterface, error)
+}
+
+// locker interface. is empty for now. maybe in future we will have some methods
+type DatabaseLocker interface {
 }
 
 type DatabaseConnection interface {

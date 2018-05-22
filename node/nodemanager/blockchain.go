@@ -144,7 +144,7 @@ func (n *NodeBlockchain) CreateBlockchain(genesis *blockchain.Block) error {
 	n.Logger.Trace.Println("Init DB")
 
 	// this creates DB connection object but doesn't try to connect to DB
-	n.DBConn.PrepareConnection()
+	n.DBConn.PrepareConnection("")
 
 	err := n.DBConn.DB.InitDatabase()
 
@@ -155,7 +155,7 @@ func (n *NodeBlockchain) CreateBlockchain(genesis *blockchain.Block) error {
 		n.Logger.Error.Printf("Can not init DB: %s", err.Error())
 		return err
 	}
-	n.DBConn.OpenConnection("AddGeneis")
+	n.DBConn.OpenConnection("AddGeneis", "")
 
 	defer n.DBConn.CloseConnection()
 

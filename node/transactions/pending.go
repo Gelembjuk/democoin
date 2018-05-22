@@ -375,6 +375,7 @@ func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*blockchain.Block) er
  */
 func (u *UnApprovedTransactions) DeleteFromBlock(block *blockchain.Block) error {
 	// try to delete each transaction from this block
+	u.Logger.Trace.Printf("UnApprTXs: remove on block add %x", block.Hash)
 
 	for _, tx := range block.Transactions {
 		if !tx.IsCoinbase() {

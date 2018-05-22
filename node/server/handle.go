@@ -24,6 +24,7 @@ type NodeServerRequest struct {
 	HasResponse       bool
 	Response          []byte
 	NodeAuthStrIsGood bool
+	SessID            string
 }
 
 func (s *NodeServerRequest) Init() {
@@ -325,16 +326,18 @@ func (s *NodeServerRequest) handleAddr() error {
 	}
 	addednodes := []net.NodeAddr{}
 
-	s.Logger.Trace.Printf("Received nodes %s", payload)
+	s.Logger.Trace.Printf("SessID: %s . Received nodes %s", s.SessID, payload)
 
 	for _, node := range payload {
+		s.Logger.Trace.Printf("SessID: %s . node %s", s.SessID, node.NodeAddrToString())
 		if s.S.Node.NodeNet.AddNodeToKnown(node) {
 			addednodes = append(addednodes, node)
+			s.Logger.Trace.Printf("SessID: %s . node appended %s", s.SessID, node.NodeAddrToString())
 		}
 	}
 
-	s.Logger.Trace.Printf("There are %d known nodes now!\n", len(s.Node.NodeNet.Nodes))
-	s.Logger.Trace.Printf("Send version to %d new nodes\n", len(addednodes))
+	s.Logger.Trace.Printf("SessID: %s . There are %d known nodes now!", s.SessID, len(s.Node.NodeNet.Nodes))
+	s.Logger.Trace.Printf("SessID: %s . Send version to %d new nodes", s.SessID, len(addednodes))
 
 	if len(addednodes) > 0 {
 		// send own version to all new found nodes. maybe they have some more blocks
@@ -369,13 +372,14 @@ func (s *NodeServerRequest) handleBlock() error {
 		s.Node.SendBlockToAll(block, payload.AddrFrom)
 	}
 	// this is the list of hashes some node posted before. If there are yes some data then try to get that blocks.
-	// TODO this list must be made as map per node address. we can not have mised list for all other nodes
+	s.Logger.Trace.Printf("check count blocks left %d ", s.S.Transit.GetBlocksCount(payload.AddrFrom))
 	if s.S.Transit.GetBlocksCount(payload.AddrFrom) > 0 {
 		// get next block. continue to get next block if nothing is sent
 		for {
 			blockdata, err := s.S.Transit.ShiftNextBlock(payload.AddrFrom)
 
 			if err != nil {
+				s.Logger.Trace.Printf("Request new block failed %s ", err.Error())
 				return err
 			}
 
@@ -434,7 +438,7 @@ func (s *NodeServerRequest) handleInv() error {
 		return err
 	}
 
-	s.Logger.Trace.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
+	s.Logger.Trace.Printf("SessID: %s . Recevied inventory with %d %s\n", s.SessID, len(payload.Items), payload.Type)
 
 	if payload.Type == "block" {
 
@@ -583,7 +587,7 @@ func (s *NodeServerRequest) handleGetData() error {
 		return err
 	}
 
-	s.Logger.Trace.Printf("Data Requested of type %s, id %x\n", payload.Type, payload.ID)
+	s.Logger.Trace.Printf("SessID: %s . Data Requested of type %s, id %x\n", s.SessID, payload.Type, payload.ID)
 
 	if payload.Type == "block" {
 
@@ -735,6 +739,7 @@ func (s *NodeServerRequest) handleVersion() error {
 	} else {
 		s.Logger.Trace.Printf("Teir blockchain is same as my for %s\n", payload.AddrFrom.NodeAddrToString())
 	}
+
 	s.S.Node.CheckAddressKnown(payload.AddrFrom)
 
 	return nil

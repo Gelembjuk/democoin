@@ -37,7 +37,7 @@ def InitBockchain(datadir):
     address = match.group(1)
 
     _lib.StartTest("Create blockchain")
-    res = _lib.ExecuteNode(['createblockchain','-datadir',datadir, '-address', address, '-genesis', 'This is the initial block in chain'])
+    res = _lib.ExecuteNode(['createblockchain','-datadir',datadir, '-address', address, '-genesis', 'This is the initial block in chain','-logs','trace'])
     _lib.FatalAssertSubstr(res,"Done!","Blockchain init failed")
     
     return address

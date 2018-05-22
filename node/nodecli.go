@@ -77,6 +77,8 @@ func (c *NodeCLI) CreateNode() {
 
 	node.DBConn.SetConfig(c.Input.Database)
 
+	node.DBConn.Init()
+
 	node.Logger = c.Logger
 	node.MinterAddress = c.Input.MinterAddress
 
@@ -766,7 +768,6 @@ func (c *NodeCLI) commandShowState(daemon *server.NodeDaemon) error {
 
 	} else {
 		fmt.Println("Server is not running")
-
 		info, err = c.Node.GetNodeState()
 	}
 

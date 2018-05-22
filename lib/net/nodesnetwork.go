@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/utils"
@@ -26,11 +27,17 @@ type NodeNetwork struct {
 	Logger  *utils.LoggerMan
 	Nodes   []NodeAddr
 	Storage NodeNetworkStorage
+	lock    *sync.Mutex
 }
 
 type NodesListJSON struct {
 	Nodes   []NodeAddr
 	Genesis string
+}
+
+// Init nodes network object
+func (n *NodeNetwork) Init() {
+	n.lock = &sync.Mutex{}
 }
 
 // Set extra storage for a nodes
@@ -43,6 +50,9 @@ func (n *NodeNetwork) LoadNodes() error {
 	if n.Storage == nil {
 		return nil
 	}
+
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	nodes, err := n.Storage.GetNodes()
 
@@ -59,6 +69,9 @@ func (n *NodeNetwork) LoadNodes() error {
 
 // Set nodes list. This can be used to do initial nodes loading from  config or so
 func (n *NodeNetwork) SetNodes(nodes []NodeAddr, replace bool) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	if replace {
 		n.Nodes = nodes
 	} else {
@@ -104,7 +117,8 @@ func (n *NodeNetwork) LoadInitialNodes(geenesisHash []byte) error {
 			return nil
 		}
 	}
-
+	n.lock.Lock()
+	defer n.lock.Unlock()
 	n.Nodes = append(n.Nodes, nodes.Nodes...)
 
 	if n.Storage != nil {
@@ -147,6 +161,9 @@ func (n *NodeNetwork) CheckIsKnown(addr NodeAddr) bool {
 * Returns true if was added
  */
 func (n *NodeNetwork) AddNodeToKnown(addr NodeAddr) bool {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
 	exists := false
 
 	for _, node := range n.Nodes {
@@ -168,6 +185,8 @@ func (n *NodeNetwork) AddNodeToKnown(addr NodeAddr) bool {
 
 // Removes a node from known
 func (n *NodeNetwork) RemoveNodeFromKnown(addr NodeAddr) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	updatedlist := []NodeAddr{}
 

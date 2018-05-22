@@ -531,7 +531,7 @@ func (c *NodeClient) doBuildCommandData(command string, data interface{}, extra 
 	} else {
 		payload = []byte{}
 	}
-
+	c.Logger.Trace.Printf("Build command %s", command)
 	payloadlength := uint32(len(payload))
 	bs := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bs, payloadlength) // convert int to []byte

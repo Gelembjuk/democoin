@@ -153,20 +153,25 @@ func (n *NodeDaemon) StartServer() error {
 	if err != nil {
 		return err
 	}
+	logsstate := n.Logger.GetState()
 
 	command := os.Args[0] + " " + config.Daemonprocesscommandline + " " +
 		"-datadir=" + n.DataDir + " " +
 		"-minter=" + n.Server.Node.MinterAddress + " " +
 		"-port=" + strconv.Itoa(n.Port) + " " +
-		"-host=" + n.Host
+		"-host=" + n.Host + " " +
+		"-logs=" + logsstate
 
 	n.Logger.Trace.Println("Execute command : ", command)
+
+	n.Logger.DisableLogging()
 
 	cmd := exec.Command(os.Args[0], config.Daemonprocesscommandline,
 		"-datadir="+n.DataDir,
 		"-minter="+n.Server.Node.MinterAddress,
 		"-port="+strconv.Itoa(n.Port),
-		"-host="+n.Host)
+		"-host="+n.Host,
+		"-logs="+logsstate)
 	cmd.Start()
 	n.Logger.Trace.Println("Daemon process ID is : ", cmd.Process.Pid)
 	n.savePIDFile(cmd.Process.Pid, n.Port, "", "n")

@@ -149,8 +149,9 @@ func (s *NodeServer) readFromConnection(conn net.Conn, countofbytes int) ([]byte
 
 func (s *NodeServer) handleConnection(conn net.Conn) {
 	starttime := time.Now().UnixNano()
+	sessid := utils.RandString(5)
 
-	s.Logger.Trace.Printf("New command. Start reading\n")
+	s.Logger.Trace.Printf("New command. Start reading %s", sessid)
 
 	command, request, authstring, err := s.readRequest(conn)
 
@@ -160,14 +161,17 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	s.Logger.Trace.Printf("Received %s command", command)
+	s.Logger.Trace.Printf("Received %s command, %s, old sess %s", command, sessid, s.Node.SessionID)
 
 	requestobj := NodeServerRequest{}
 	requestobj.Node = s.CloneNode()
+	requestobj.Node.SessionID = sessid
 	requestobj.Logger = s.Logger
 	requestobj.Request = request[:]
 	requestobj.NodeAuthStrIsGood = (s.NodeAuthStr == authstring && len(authstring) > 0)
 	requestobj.S = s
+	requestobj.S.Node.SessionID = sessid
+	requestobj.SessID = sessid
 
 	if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 		requestobj.RequestIP = addr.IP.String()
@@ -247,7 +251,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	default:
 		rerr = errors.New("Unknown command!")
 	}
-
+	s.Logger.Trace.Println("Close BC after request handled " + sessid)
 	requestobj.Node.CloseBlockchain()
 
 	if rerr != nil {
@@ -276,7 +280,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	}
 	duration := time.Since(time.Unix(0, starttime))
 	ms := duration.Nanoseconds() / int64(time.Millisecond)
-	s.Logger.Trace.Printf("Complete processing %s command. Time: %d ms\n", command, ms)
+	s.Logger.Trace.Printf("Complete processing %s command. Time: %d ms, sess %s", command, ms, sessid)
 	conn.Close()
 }
 func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
@@ -460,6 +464,7 @@ func (s *NodeServer) CloneNode() *nodemanager.Node {
 	// clone DB object
 	ndb := orignode.DBConn.Clone()
 	node.DBConn = &ndb
+	s.Logger.Trace.Println("DB conn clonned")
 
 	node.Init()
 

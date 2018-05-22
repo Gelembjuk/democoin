@@ -36,8 +36,8 @@ def test(testfilter):
     _lib.StartTestGroup("Manage nodes list")
 
     _lib.CleanTestFolders()
-    datadir1 = _lib.CreateTestFolder()
-    datadir2 = _lib.CreateTestFolder()
+    datadir1 = _lib.CreateTestFolder('_1_')
+    datadir2 = _lib.CreateTestFolder('_2_')
     
     _lib.StartTestGroup("Create blockchain and run node 1")
     r = blocksbasic.PrepareBlockchain(datadir1,'30000')
@@ -110,7 +110,7 @@ def test(testfilter):
         _lib.Fatal("Transaction 1 is not in the list of transactions on second node")
     
     # start one more node 
-    datadir3 = _lib.CreateTestFolder()
+    datadir3 = _lib.CreateTestFolder('_3_')
     address3 = initblockchain.ImportBockchain(datadir3,"localhost",'30000')
     
     startnode.StartNode(datadir3, address3,'30002', "Server 3")
@@ -153,7 +153,7 @@ def test(testfilter):
     # send one more TX. Block must be created    
     txid3 = _transfers.Send(datadir1,address,address2,'1')
     
-    time.sleep(4) # wait while a block is minted and posted to other nodes 
+    time.sleep(5) # wait while a block is minted and posted to other nodes 
     transactions.GetUnapprovedTransactionsEmpty(datadir1)
     transactions.GetUnapprovedTransactionsEmpty(datadir2)
     transactions.GetUnapprovedTransactionsEmpty(datadir3)

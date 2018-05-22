@@ -22,6 +22,7 @@ const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 // Structure to manage logs
 type LoggerMan struct {
 	State   map[string]bool
+	loggers map[string]*os.File
 	Trace   *log.Logger
 	Info    *log.Logger
 	Warning *log.Logger
@@ -31,6 +32,7 @@ type LoggerMan struct {
 // Creates logger object. sets all logging to STDOUT
 func CreateLogger() *LoggerMan {
 	logger := LoggerMan{}
+	logger.loggers = map[string]*os.File{"trace": nil, "error": nil, "info": nil, "warning": nil}
 
 	logger.State = map[string]bool{"trace": false, "error": false, "info": false, "warning": false}
 
@@ -52,11 +54,41 @@ func CreateLogger() *LoggerMan {
 
 	return &logger
 }
+
+// change enabled logs state
 func (logger *LoggerMan) EnableLogs(logs string) {
 	l := strings.Split(logs, ",")
 
 	for _, lv := range l {
 		logger.State[lv] = true
+	}
+}
+
+// return logs state as command separated list
+func (logger *LoggerMan) GetState() string {
+	list := []string{}
+
+	for l, state := range logger.State {
+		if state {
+			list = append(list, l)
+		}
+	}
+
+	return strings.Join(list, ",")
+}
+
+// disable all logging
+func (logger *LoggerMan) DisableLogging() {
+	logger.Trace.SetOutput(ioutil.Discard)
+	logger.Info.SetOutput(ioutil.Discard)
+	logger.Warning.SetOutput(ioutil.Discard)
+	logger.Error.SetOutput(ioutil.Discard)
+
+	for t, p := range logger.loggers {
+		if p != nil {
+			p.Close()
+		}
+		logger.loggers[t] = nil
 	}
 }
 
@@ -66,6 +98,7 @@ func (logger *LoggerMan) LogToFiles(datadir, trace, info, warning, errorname str
 		f1, err1 := os.OpenFile(datadir+trace, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 		if err1 == nil {
+			logger.loggers["trace"] = f1
 			logger.Trace.SetOutput(f1)
 		}
 	}
@@ -73,6 +106,7 @@ func (logger *LoggerMan) LogToFiles(datadir, trace, info, warning, errorname str
 		f2, err2 := os.OpenFile(datadir+info, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 		if err2 == nil {
+			logger.loggers["info"] = f2
 			logger.Info.SetOutput(f2)
 		}
 	}
@@ -80,6 +114,7 @@ func (logger *LoggerMan) LogToFiles(datadir, trace, info, warning, errorname str
 		f3, err3 := os.OpenFile(datadir+warning, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 		if err3 == nil {
+			logger.loggers["warning"] = f3
 			logger.Warning.SetOutput(f3)
 		}
 	}
@@ -87,6 +122,7 @@ func (logger *LoggerMan) LogToFiles(datadir, trace, info, warning, errorname str
 		f4, err4 := os.OpenFile(datadir+errorname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 		if err4 == nil {
+			logger.loggers["error"] = f4
 			logger.Error.SetOutput(f4)
 		}
 	}

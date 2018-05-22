@@ -6,7 +6,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -27,8 +30,26 @@ type BoltDBManager struct {
 	connBC     *BoltDB
 	connNodes  *BoltDB
 	openedConn bool
+	locker     *BoltDBLocker
+	SessID     string
 }
 
+type BoltDBLocker struct {
+	lockBC    *sync.Mutex
+	lockNodes *sync.Mutex
+}
+
+func (bdm *BoltDBManager) GetLockerObject() DatabaseLocker {
+	locker := &BoltDBLocker{}
+	locker.lockBC = &sync.Mutex{}
+	locker.lockNodes = &sync.Mutex{}
+
+	return locker
+}
+
+func (bdm *BoltDBManager) SetLockerObject(lockerobj DatabaseLocker) {
+	bdm.locker = lockerobj.(*BoltDBLocker)
+}
 func (bdm *BoltDBManager) SetConfig(config DatabaseConfig) error {
 	bdm.Config = config
 
@@ -266,7 +287,7 @@ func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremis
 		return nil, errors.New(fmt.Sprintf("Database file %s not found", boltdbfile))
 	}
 
-	lockFile, err := bdm.lockDB(name)
+	err = bdm.lockDB(name, bdm.SessID)
 
 	if err != nil {
 		return nil, err
@@ -280,7 +301,7 @@ func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremis
 	}
 
 	// if success create object and assign connection
-	boltDB := BoltDB{db, lockFile}
+	boltDB := BoltDB{db, name}
 
 	if bdm.isBCDB(name) {
 		bdm.connBC = &boltDB
@@ -294,12 +315,31 @@ func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremis
 }
 
 // Creates a lock file for DB access. We need this to controll parallel access to the DB
-func (bdm *BoltDBManager) lockDB(name string) (string, error) {
+func (bdm *BoltDBManager) lockDB(name string, locksess string) error {
+	if locksess == "" {
+		locksess = utils.RandString(5)
+		//bdm.Logger.Trace.Println(string(debug.Stack()))
+	}
+	bdm.Logger.Trace.Printf("lock %s %s", name, locksess)
+
+	var locker *sync.Mutex
+
+	if bdm.isNodesDB(name) {
+		locker = bdm.locker.lockNodes
+	} else {
+		locker = bdm.locker.lockBC
+	}
+
+	locker.Lock()
+
+	bdm.Logger.Trace.Printf("lock after mutex %s", locksess)
+
 	lockfile, err := bdm.getDBLockFileForObject(name)
-	bdm.Logger.Trace.Printf("lock %s", name)
 
 	if err != nil {
-		return "", err
+		bdm.Logger.Trace.Printf("mutex error unlock 1 %s", locksess)
+		locker.Unlock()
+		return err
 	}
 
 	i := 0
@@ -317,18 +357,23 @@ func (bdm *BoltDBManager) lockDB(name string) (string, error) {
 
 	for bdm.dbExists(lockfile) != false {
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 		i++
 
-		if i > 100 {
-			return "", errors.New("Can not open DB. Lock failed after many attempts")
+		if i > 2000 {
+			bdm.Logger.Trace.Printf("mutex error unlock 2 %s", locksess)
+			locker.Unlock()
+			return errors.New("Can not open DB. Lock failed after many attempts")
 		}
 	}
+
 	bdm.Logger.Trace.Printf("locked")
 	file, err := os.Create(lockfile)
 
 	if err != nil {
-		return "", err
+		bdm.Logger.Trace.Printf("mutex error unlock 3 %s", locksess)
+		locker.Unlock()
+		return err
 	}
 
 	defer file.Close()
@@ -338,33 +383,56 @@ func (bdm *BoltDBManager) lockDB(name string) (string, error) {
 	_, err = file.WriteString(strconv.Itoa(int(starttime)))
 
 	if err != nil {
-		return "", err
+		bdm.Logger.Trace.Printf("mutex error unlock 4 %s", locksess)
+		locker.Unlock()
+		return err
 	}
+
+	file.WriteString(" " + locksess)
 
 	file.Sync() // flush to disk
 
-	return lockfile, nil
+	return nil
 }
 
 // Removes DB lock file
-func (bdm *BoltDBManager) unLockDB(lockfile string) {
+func (bdm *BoltDBManager) unLockDB(name string) {
+	bdm.Logger.Trace.Printf("unlock %s", name)
 
+	var locker *sync.Mutex
+
+	if bdm.isNodesDB(name) {
+		locker = bdm.locker.lockNodes
+	} else {
+		locker = bdm.locker.lockBC
+	}
+
+	lockfile, err := bdm.getDBLockFileForObject(name)
+
+	if err != nil {
+		locker.Unlock()
+		return
+	}
 	if bdm.dbExists(lockfile) != false {
 		lockinfobytes, err := ioutil.ReadFile(lockfile)
 
 		if err == nil {
 			lockinfo := string(lockinfobytes)
 
-			starttime, err := strconv.Atoi(lockinfo)
+			parts := strings.Split(lockinfo, " ")
+
+			starttime, err := strconv.Atoi(parts[0])
 
 			if err == nil {
 				duration := time.Since(time.Unix(0, int64(starttime)))
 				ms := duration.Nanoseconds() / int64(time.Millisecond)
-				bdm.Logger.Trace.Printf("UnLocked after %d ms", ms)
+				bdm.Logger.Trace.Printf("UnLocked %s after %d ms , %s", name, ms, parts[1])
 			}
 		}
 		os.Remove(lockfile)
 	}
+	locker.Unlock()
+	bdm.Logger.Trace.Printf("unlock mutex %s", name)
 }
 func (bdm *BoltDBManager) getDBFileForObject(name string) (string, error) {
 	switch name {
