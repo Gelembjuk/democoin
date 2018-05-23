@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"github.com/gelembjuk/democoin/node/database"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 // BlockchainIterator is used to iterate over blockchain blocks
@@ -11,8 +12,8 @@ type BlockchainIterator struct {
 }
 
 // Next returns next block starting from the tip
-func (i *BlockchainIterator) Next() (*Block, error) {
-	var block *Block
+func (i *BlockchainIterator) Next() (*structures.Block, error) {
+	var block *structures.Block
 
 	bcdb, err := i.DB.GetBlockchainObject()
 
@@ -26,7 +27,7 @@ func (i *BlockchainIterator) Next() (*Block, error) {
 		return nil, err
 	}
 
-	block = &Block{}
+	block = &structures.Block{}
 	err = block.DeserializeBlock(encodedBlock)
 
 	if err != nil {

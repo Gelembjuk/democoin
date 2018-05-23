@@ -8,7 +8,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/database"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 type TransactionsIndex struct {
@@ -30,7 +30,7 @@ func NewTransactionIndex(DB database.DBManager, Logger *utils.LoggerMan) *Transa
 func (tiso TransactionsIndexSpentOutputs) String() string {
 	return fmt.Sprintf("OI %d used in %x II %d block %x", tiso.OutInd, tiso.TXWhereUsed, tiso.InInd, tiso.BlockHash)
 }
-func (ti *TransactionsIndex) BlocksAdded(blocks []*blockchain.Block) error {
+func (ti *TransactionsIndex) BlocksAdded(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := ti.BlockAdded(block)
@@ -44,7 +44,7 @@ func (ti *TransactionsIndex) BlocksAdded(blocks []*blockchain.Block) error {
 }
 
 // Block added. We need to update index of transactions
-func (ti *TransactionsIndex) BlockAdded(block *blockchain.Block) error {
+func (ti *TransactionsIndex) BlockAdded(block *structures.Block) error {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -99,7 +99,7 @@ func (ti *TransactionsIndex) BlockAdded(block *blockchain.Block) error {
 	}
 	return nil
 }
-func (ti *TransactionsIndex) BlocksRemoved(blocks []*blockchain.Block) error {
+func (ti *TransactionsIndex) BlocksRemoved(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := ti.BlockRemoved(block)
@@ -111,7 +111,7 @@ func (ti *TransactionsIndex) BlocksRemoved(blocks []*blockchain.Block) error {
 	}
 	return nil
 }
-func (ti *TransactionsIndex) BlockRemoved(block *blockchain.Block) error {
+func (ti *TransactionsIndex) BlockRemoved(block *structures.Block) error {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -286,8 +286,8 @@ func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte) ([]Transacti
 }
 
 // Get full TX, spending status and block hash for TX by ID
-func (ti *TransactionsIndex) GetTransactionAllInfo(txID []byte) (*transaction.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
-	localError := func(err error) (*transaction.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
+func (ti *TransactionsIndex) GetTransactionAllInfo(txID []byte) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
+	localError := func(err error) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
 		return nil, nil, nil, err
 	}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/wallet"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/database"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 type Manager struct {
@@ -160,7 +160,7 @@ func (n *Manager) CancelTransaction(txidstr string) error {
 // This function doesn't do full alidation with blockchain
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
-func (n *Manager) VerifyTransactionQuick(tx *transaction.Transaction) (bool, error) {
+func (n *Manager) VerifyTransactionQuick(tx *structures.Transaction) (bool, error) {
 	notFoundInputs, inputTXs, err := n.GetUnspentOutputsManager().VerifyTransactionsOutputsAreNotSpent(tx.Vin)
 
 	if err != nil {
@@ -191,7 +191,7 @@ func (n *Manager) VerifyTransactionQuick(tx *transaction.Transaction) (bool, err
 // If it is build on correct outputs.This does checks agains blockchain. Needs more time
 // NOTE Transaction can have outputs of other transactions that are not yet approved.
 // This must be considered as correct case
-func (n *Manager) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*transaction.Transaction, tip []byte) (bool, error) {
+func (n *Manager) VerifyTransactionDeep(tx *structures.Transaction, prevtxs []*structures.Transaction, tip []byte) (bool, error) {
 	inputTXs, notFoundInputs, err := n.GetInputTransactionsState(tx, tip)
 	if err != nil {
 		return false, err
@@ -221,13 +221,13 @@ func (n *Manager) VerifyTransactionDeep(tx *transaction.Transaction, prevtxs []*
 // Missed inputs can be some unconfirmed transactions
 // Returns: map of previous transactions (full info about input TX). map by input index
 // next map is wrong input, where a TX is not found.
-func (n *Manager) GetInputTransactionsState(tx *transaction.Transaction,
-	tip []byte) (map[int]*transaction.Transaction, map[int]transaction.TXInput, error) {
+func (n *Manager) GetInputTransactionsState(tx *structures.Transaction,
+	tip []byte) (map[int]*structures.Transaction, map[int]structures.TXInput, error) {
 
 	//n.Logger.Trace.Printf("get state %x , tip %x", tx.ID, tip)
 
-	prevTXs := make(map[int]*transaction.Transaction)
-	badinputs := make(map[int]transaction.TXInput)
+	prevTXs := make(map[int]*structures.Transaction)
+	badinputs := make(map[int]structures.TXInput)
 
 	if tx.IsCoinbase() {
 
@@ -249,7 +249,7 @@ func (n *Manager) GetInputTransactionsState(tx *transaction.Transaction,
 			return nil, nil, err
 		}
 
-		var prevTX *transaction.Transaction
+		var prevTX *structures.Transaction
 
 		if txBockHash == nil {
 			//n.Logger.Trace.Printf("Not found TX")
@@ -328,8 +328,8 @@ func (n *Manager) IterateUnapprovedTransactions(callback UnApprovedTransactionsI
 	return n.GetUnapprovedTransactionsManager().IterateTransactions(callback)
 }
 
-func (n *Manager) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte) (*transaction.Transaction, error) {
-	tx := transaction.Transaction{}
+func (n *Manager) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte) (*structures.Transaction, error) {
+	tx := structures.Transaction{}
 	err := tx.DeserializeTransaction(txBytes)
 
 	if err != nil {
@@ -352,7 +352,7 @@ func (n *Manager) ReceivedNewTransactionData(txBytes []byte, Signatures [][]byte
 }
 
 // New transaction reveived from other node. We need to verify and add to cache of unapproved
-func (n *Manager) ReceivedNewTransaction(tx *transaction.Transaction) error {
+func (n *Manager) ReceivedNewTransaction(tx *structures.Transaction) error {
 	// verify this transaction
 	good, err := n.VerifyTransactionQuick(tx)
 
@@ -416,26 +416,26 @@ func (n *Manager) PrepareNewTransaction(PubKey []byte, to string, amount float64
 
 //
 func (n *Manager) PrepareNewTransactionComplete(PubKey []byte, to string, amount float64,
-	inputs []transaction.TXInput, totalamount float64, prevTXs map[string]transaction.Transaction) ([]byte, [][]byte, error) {
+	inputs []structures.TXInput, totalamount float64, prevTXs map[string]structures.Transaction) ([]byte, [][]byte, error) {
 
-	var outputs []transaction.TXOutput
+	var outputs []structures.TXOutput
 
 	// Build a list of outputs
 	from, _ := utils.PubKeyToAddres(PubKey)
-	outputs = append(outputs, *transaction.NewTXOutput(amount, to))
+	outputs = append(outputs, *structures.NewTXOutput(amount, to))
 
 	if totalamount > amount && totalamount-amount > lib.SmallestUnit {
-		outputs = append(outputs, *transaction.NewTXOutput(totalamount-amount, from)) // a change
+		outputs = append(outputs, *structures.NewTXOutput(totalamount-amount, from)) // a change
 	}
 
-	inputTXs := make(map[int]*transaction.Transaction)
+	inputTXs := make(map[int]*structures.Transaction)
 
 	for vinInd, vin := range inputs {
 		tx := prevTXs[hex.EncodeToString(vin.Txid)]
 		inputTXs[vinInd] = &tx
 	}
 
-	tx := transaction.Transaction{nil, inputs, outputs, 0}
+	tx := structures.Transaction{nil, inputs, outputs, 0}
 	tx.TimeNow()
 
 	signdata, err := tx.PrepareSignData(inputTXs)
@@ -459,7 +459,7 @@ func (n *Manager) PrepareNewTransactionComplete(PubKey []byte, to string, amount
 //
 // Returns new transaction hash. This return can be used to try to send transaction
 // to other nodes or to try mining
-func (n *Manager) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) (*transaction.Transaction, error) {
+func (n *Manager) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) (*structures.Transaction, error) {
 
 	if amount <= 0 {
 		return nil, errors.New("Amount must be positive value")
@@ -498,7 +498,7 @@ func (n *Manager) CleanUnapprovedCache() error {
 }
 
 // to execute when new block added to the top of blockchain
-func (n *Manager) BlockAdddedToTop(block *blockchain.Block) error {
+func (n *Manager) BlockAdddedToTop(block *structures.Block) error {
 	// update caches
 	n.GetIndexManager().BlockAdded(block)
 	n.GetUnapprovedTransactionsManager().DeleteFromBlock(block)

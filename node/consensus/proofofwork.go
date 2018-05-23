@@ -7,8 +7,8 @@ import (
 	"math/big"
 
 	"github.com/gelembjuk/democoin/lib/utils"
-	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/config"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 var (
@@ -17,13 +17,13 @@ var (
 
 // ProofOfWork represents a proof-of-work
 type ProofOfWork struct {
-	block  *blockchain.Block
+	block  *structures.Block
 	target *big.Int
 }
 
 // NewProofOfWork builds and returns a ProofOfWork object
 // The object can be used to find a hash for the block
-func NewProofOfWork(b *blockchain.Block) *ProofOfWork {
+func NewProofOfWork(b *structures.Block) *ProofOfWork {
 	target := big.NewInt(1)
 
 	var tb int

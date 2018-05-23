@@ -8,7 +8,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/node/config"
 	"github.com/gelembjuk/democoin/node/database"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 const (
@@ -53,7 +53,7 @@ func NewBlockchainManager(DB database.DBManager, Logger *utils.LoggerMan) (*Bloc
 	BCBAddState_notAddedExists     = 5 already in blockchain
 *
 */
-func (bc *Blockchain) AddBlock(block *Block) (uint, error) {
+func (bc *Blockchain) AddBlock(block *structures.Block) (uint, error) {
 	bc.Logger.Trace.Printf("Adding new block to block chain %x", block.Hash)
 
 	bcdb, err := bc.DB.GetBlockchainObject()
@@ -108,7 +108,7 @@ func (bc *Blockchain) AddBlock(block *Block) (uint, error) {
 		return BCBAddState_error, err
 	}
 
-	lastBlock := Block{}
+	lastBlock := structures.Block{}
 	err = lastBlock.DeserializeBlock(lastBlockData)
 
 	if err != nil {
@@ -149,7 +149,7 @@ func (bc *Blockchain) AddBlock(block *Block) (uint, error) {
 * is longer now. It is needed to care blockchain branches
 * Returns deleted block object
  */
-func (bc *Blockchain) DeleteBlock() (*Block, error) {
+func (bc *Blockchain) DeleteBlock() (*structures.Block, error) {
 	bcdb, err := bc.DB.GetBlockchainObject()
 
 	if err != nil {
@@ -166,9 +166,7 @@ func (bc *Blockchain) DeleteBlock() (*Block, error) {
 		return nil, errors.New("Top block is not found!")
 	}
 
-	block := &Block{}
-
-	block = &Block{}
+	block := &structures.Block{}
 
 	err = block.DeserializeBlock(blockInDb)
 
@@ -193,7 +191,7 @@ func (bc *Blockchain) DeleteBlock() (*Block, error) {
 
 // FindTransactionByBlock finds a transaction by its ID in given block
 // If block is known . It worsk much faster then FindTransaction
-func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*transaction.Transaction, error) {
+func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*structures.Transaction, error) {
 	block, err := bc.GetBlock(blockHash)
 
 	if err != nil {
@@ -213,7 +211,7 @@ func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*tran
 /*
 * Returns a block with specified height in current blockchain
  */
-func (bc *Blockchain) GetBlockAtHeight(height int) (*Block, error) {
+func (bc *Blockchain) GetBlockAtHeight(height int) (*structures.Block, error) {
 	// finds a block with this height
 
 	bci, err := NewBlockchainIterator(bc.DB)
@@ -255,7 +253,7 @@ func (bc *Blockchain) GetBestHeight() (int, error) {
 		return 0, err
 	}
 
-	lastBlock := Block{}
+	lastBlock := structures.Block{}
 	err = lastBlock.DeserializeBlock(blockData)
 
 	if err != nil {
@@ -280,7 +278,7 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 		return nil, 0, err
 	}
 
-	lastBlock := Block{}
+	lastBlock := structures.Block{}
 	err = lastBlock.DeserializeBlock(blockData)
 
 	if err != nil {
@@ -305,8 +303,8 @@ func (bc *Blockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 
 // GetBlock finds a block by its hash and returns it
 
-func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
-	var block Block
+func (bc *Blockchain) GetBlock(blockHash []byte) (structures.Block, error) {
+	var block structures.Block
 
 	bcdb, err := bc.DB.GetBlockchainObject()
 
@@ -323,7 +321,7 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	if blockData == nil {
 		return block, errors.New("Block is not found.")
 	}
-	blocktmp := Block{}
+	blocktmp := structures.Block{}
 	err = blocktmp.DeserializeBlock(blockData)
 
 	if err != nil {
@@ -364,8 +362,8 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 /*
 * Returns a list of blocks short info stating from given block or from a top
  */
-func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*BlockShort {
-	var blocks []*BlockShort
+func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*structures.BlockShort {
+	var blocks []*structures.BlockShort
 	var bci *BlockchainIterator
 
 	var err error
@@ -401,10 +399,10 @@ func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*Bloc
 
 // returns a list of hashes of all the blocks in the chain
 
-func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*BlockShort {
+func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*structures.BlockShort {
 	maxcount := 1000
 
-	blocks := []*BlockShort{}
+	blocks := []*structures.BlockShort{}
 
 	bci, err := NewBlockchainIterator(bc.DB)
 
@@ -450,7 +448,7 @@ func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*BlockShort {
 
 // Returns first blocks in block chain
 
-func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*Block, int, error) {
+func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, error) {
 	_, height, err := bc.GetState()
 
 	if err != nil {
@@ -475,12 +473,12 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*Block, int, error) {
 		return nil, 0, err
 	}
 
-	blocks := []*Block{}
+	blocks := []*structures.Block{}
 
 	for {
 		block, _ := bci.Next()
 
-		blocks = append([]*Block{block}, blocks...)
+		blocks = append([]*structures.Block{block}, blocks...)
 
 		if len(block.PrevBlockHash) == 0 {
 			break
@@ -497,7 +495,7 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*Block, int, error) {
 //
 // The function load all hashes to the memory from "main" chain
 
-func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, []*Block, *Block, error) {
+func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structures.Block, []*structures.Block, *structures.Block, error) {
 	// get 2 blocks with hashes from arguments
 	sideblock_o, err := bc.GetBlock(hash)
 
@@ -520,8 +518,8 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 		return nil, nil, nil, errors.New("Can not do this for genesis block")
 	}
 
-	sideBlocks := []*Block{}
-	mainBlocks := []*Block{}
+	sideBlocks := []*structures.Block{}
+	mainBlocks := []*structures.Block{}
 
 	if sideblock.Height > topblock.Height {
 		// go down from side block till heigh is same as top
@@ -579,7 +577,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 
 		if bytes.Compare(sideblock.Hash, topblock.Hash) == 0 {
 
-			ReverseBlocksSlice(mainBlocks)
+			structures.ReverseBlocksSlice(mainBlocks)
 
 			return sideBlocks, mainBlocks, sideblock, nil
 		}
@@ -604,7 +602,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*Block, [
 *
 * The function load all hashes to the memory from "main" chain
  */
-func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*Block, []*Block, error) {
+func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*structures.Block, []*structures.Block, error) {
 	bc.Logger.Trace.Printf("Go to get branch %x %x", sideBranchHash, tip)
 
 	sideBlocks, mainBlocks, BCBlock, err := bc.GetSideBranch(sideBranchHash, tip)
@@ -701,7 +699,7 @@ func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 }
 
 //Get minimum and maximum number of transaction allowed in block for current chain
-func (bc *Blockchain) GetTransactionNumbersLimits(block *Block) (int, int, error) {
+func (bc *Blockchain) GetTransactionNumbersLimits(block *structures.Block) (int, int, error) {
 	var min int
 
 	if block == nil {

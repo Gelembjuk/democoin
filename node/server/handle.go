@@ -11,7 +11,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/nodemanager"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 	"github.com/gelembjuk/democoin/node/transactions"
 )
 
@@ -185,7 +185,7 @@ func (s *NodeServerRequest) handleTxFull() error {
 	if err != nil {
 		return err
 	}
-	TX := transaction.Transaction{}
+	TX := structures.Transaction{}
 	TX.DeserializeTransaction(payload.TX)
 
 	err = s.Node.GetTransactionsManager().ReceivedNewTransaction(&TX)
@@ -399,7 +399,7 @@ func (s *NodeServerRequest) handleBlock() error {
 				s.S.Transit.CleanBlocks(payload.AddrFrom)
 
 				// request from a node blocks down to this first block
-				bs := &blockchain.BlockShort{}
+				bs := &structures.BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
 
 				if err != nil {
@@ -468,7 +468,7 @@ func (s *NodeServerRequest) handleInv() error {
 				s.S.Transit.CleanBlocks(payload.AddrFrom)
 
 				// request from a node blocks down to this first block
-				bs := &blockchain.BlockShort{}
+				bs := &structures.BlockShort{}
 				err := bs.DeserializeBlock(blockdata)
 
 				if err != nil {
@@ -643,7 +643,7 @@ func (s *NodeServerRequest) handleTx() error {
 	}
 
 	txData := payload.Transaction
-	tx := transaction.Transaction{}
+	tx := structures.Transaction{}
 	err = tx.DeserializeTransaction(txData)
 
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/wallet"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/database"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 )
 
 // UnspentTransactions represents UTXO set
@@ -24,7 +24,7 @@ type UnspentTransactions struct {
 /*
 *Serialize. We need this to store data in DB in bytes
  */
-func (u UnspentTransactions) SerializeOutputs(outs []transaction.TXOutputIndependent) ([]byte, error) {
+func (u UnspentTransactions) SerializeOutputs(outs []structures.TXOutputIndependent) ([]byte, error) {
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 	err := enc.Encode(outs)
@@ -38,8 +38,8 @@ func (u UnspentTransactions) SerializeOutputs(outs []transaction.TXOutputIndepen
 /*
 * Deserialize data from bytes loaded fom DB
  */
-func (u UnspentTransactions) DeserializeOutputs(data []byte) ([]transaction.TXOutputIndependent, error) {
-	var outputs []transaction.TXOutputIndependent
+func (u UnspentTransactions) DeserializeOutputs(data []byte) ([]structures.TXOutputIndependent, error) {
+	var outputs []structures.TXOutputIndependent
 
 	dec := gob.NewDecoder(bytes.NewReader(data))
 	err := dec.Decode(&outputs)
@@ -79,7 +79,7 @@ func (u UnspentTransactions) GetAddressBalance(address string) (float64, error) 
 }
 
 // CGet input value. Input is unspent TX output
-func (u UnspentTransactions) GetInputValue(input transaction.TXInput) (float64, error) {
+func (u UnspentTransactions) GetInputValue(input structures.TXInput) (float64, error) {
 
 	uodb, err := u.DB.GetUnspentOutputsObject()
 
@@ -115,7 +115,7 @@ func (u UnspentTransactions) GetInputValue(input transaction.TXInput) (float64, 
 
 // Choose inputs for new transaction
 func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount float64,
-	pendinguse []transaction.TXInput) (float64, []transaction.TXOutputIndependent, error) {
+	pendinguse []structures.TXInput) (float64, []structures.TXOutputIndependent, error) {
 
 	uodb, err := u.DB.GetUnspentOutputsObject()
 
@@ -123,7 +123,7 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 		return 0, nil, err
 	}
 
-	unspentOutputs := []transaction.TXOutputIndependent{}
+	unspentOutputs := []structures.TXOutputIndependent{}
 	accumulated := float64(0)
 
 	err = uodb.ForEach(func(txID, txData []byte) error {
@@ -159,10 +159,10 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 
 	if accumulated >= amount {
 		// choose longest number of outputs to spent. it must be outs with smallest amounts
-		sort.Sort(transaction.TXOutputIndependentList(unspentOutputs))
+		sort.Sort(structures.TXOutputIndependentList(unspentOutputs))
 
 		accumulated = 0
-		uo := []transaction.TXOutputIndependent{}
+		uo := []structures.TXOutputIndependent{}
 
 		for _, out := range unspentOutputs {
 
@@ -183,7 +183,7 @@ func (u UnspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 /*
 * Returns list of unspent transactions outputs for address
  */
-func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]transaction.TXOutputIndependent, error) {
+func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]structures.TXOutputIndependent, error) {
 	if address == "" {
 		return nil, errors.New("Address is missed")
 	}
@@ -203,7 +203,7 @@ func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]tr
 		return nil, err
 	}
 
-	UTXOs := []transaction.TXOutputIndependent{}
+	UTXOs := []structures.TXOutputIndependent{}
 	u.Logger.Trace.Printf("findoutputs for  %s", address)
 	err = uodb.ForEach(func(txID, txData []byte) error {
 		outs, err := u.DeserializeOutputs(txData)
@@ -323,8 +323,8 @@ func (u UnspentTransactions) Reindex() (int, error) {
 // Iterates over full blockchain
 // TODO this will not work for big blockchain. It keeps data in memory
 
-func (u UnspentTransactions) FindUnspentTransactions() (map[string][]transaction.TXOutputIndependent, error) {
-	UTXO := make(map[string][]transaction.TXOutputIndependent)
+func (u UnspentTransactions) FindUnspentTransactions() (map[string][]structures.TXOutputIndependent, error) {
+	UTXO := make(map[string][]structures.TXOutputIndependent)
 	spentTXOs := make(map[string][]int)
 
 	bci, err := blockchain.NewBlockchainIterator(u.DB)
@@ -372,11 +372,11 @@ func (u UnspentTransactions) FindUnspentTransactions() (map[string][]transaction
 				// add to unspent
 
 				if _, ok := UTXO[txID]; !ok {
-					UTXO[txID] = []transaction.TXOutputIndependent{}
+					UTXO[txID] = []structures.TXOutputIndependent{}
 				}
 				outs := UTXO[txID]
 
-				oute := transaction.TXOutputIndependent{}
+				oute := structures.TXOutputIndependent{}
 				oute.LoadFromSimple(out, tx.ID, outIdx, sender, tx.IsCoinbase(), block.Hash)
 
 				outs = append(outs, oute)
@@ -408,7 +408,7 @@ func (u UnspentTransactions) FindUnspentTransactions() (map[string][]transaction
 /*
 * set of blocks added to block chain. we need to mark transactions unspent and spent
  */
-func (u UnspentTransactions) UpdateOnBlocksAdd(blocks []*blockchain.Block) error {
+func (u UnspentTransactions) UpdateOnBlocksAdd(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := u.UpdateOnBlockAdd(block)
@@ -429,7 +429,7 @@ func (u UnspentTransactions) UpdateOnBlocksAdd(blocks []*blockchain.Block) error
 * Update the UTXO set with transactions from the Block
 * The Block is considered to be the tip of a blockchain
  */
-func (u UnspentTransactions) UpdateOnBlockAdd(block *blockchain.Block) error {
+func (u UnspentTransactions) UpdateOnBlockAdd(block *structures.Block) error {
 	uodb, err := u.DB.GetUnspentOutputsObject()
 
 	if err != nil {
@@ -463,7 +463,7 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *blockchain.Block) error {
 					return err
 				}
 
-				updatedOuts := []transaction.TXOutputIndependent{}
+				updatedOuts := []structures.TXOutputIndependent{}
 
 				for _, out := range outs {
 					if out.OIndex != vin.Vout {
@@ -490,10 +490,10 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *blockchain.Block) error {
 				}
 			}
 		}
-		newOutputs := []transaction.TXOutputIndependent{}
+		newOutputs := []structures.TXOutputIndependent{}
 
 		for outInd, out := range tx.Vout {
-			no := transaction.TXOutputIndependent{}
+			no := structures.TXOutputIndependent{}
 			no.LoadFromSimple(out, tx.ID, outInd, sender, tx.IsCoinbase(), block.Hash)
 			newOutputs = append(newOutputs, no)
 		}
@@ -518,7 +518,7 @@ func (u UnspentTransactions) UpdateOnBlockAdd(block *blockchain.Block) error {
 * Is called for a case when a list of block is canceled. Usually, when new chanin branch appears
 * and replaces part of blocks on a top
  */
-func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*blockchain.Block) error {
+func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := u.UpdateOnBlockCancel(block)
@@ -537,7 +537,7 @@ func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*blockchain.Block) er
 * All input transactions must be return to "unspent"
 * And all outpt must be deleted from "unspent"
  */
-func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error {
+func (u UnspentTransactions) UpdateOnBlockCancel(block *structures.Block) error {
 	uodb, err := u.DB.GetUnspentOutputsObject()
 
 	if err != nil {
@@ -576,7 +576,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 
 			sender, _ := utils.HashPubKey(txi.Vin[0].PubKey)
 
-			UnspentOuts := []transaction.TXOutputIndependent{}
+			UnspentOuts := []structures.TXOutputIndependent{}
 
 			for outInd, out := range txi.Vout {
 				spent := false
@@ -588,7 +588,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 					}
 				}
 				if !spent {
-					no := transaction.TXOutputIndependent{}
+					no := structures.TXOutputIndependent{}
 					no.LoadFromSimple(out, txi.ID, outInd, sender, tx.IsCoinbase(), blockHash)
 
 					UnspentOuts = append(UnspentOuts, no)
@@ -618,18 +618,18 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *blockchain.Block) error 
 	return nil
 }
 
-// Find inputs for new transaction. Receives list of pending inputs used in other
+// Find inputs for new structures. Receives list of pending inputs used in other
 // not yet confirmed transactions
 // Returns list of inputs prepared. Even if less then requested
 // Returns previous transactions. It later will be used to prepare data to sign
 func (u UnspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, amount float64,
-	pendinguse []transaction.TXInput) ([]transaction.TXInput, map[string]transaction.Transaction, float64, error) {
+	pendinguse []structures.TXInput) ([]structures.TXInput, map[string]structures.Transaction, float64, error) {
 
-	localError := func(err error) ([]transaction.TXInput, map[string]transaction.Transaction, float64, error) {
+	localError := func(err error) ([]structures.TXInput, map[string]structures.Transaction, float64, error) {
 		return nil, nil, 0, err
 	}
 
-	inputs := []transaction.TXInput{}
+	inputs := []structures.TXInput{}
 
 	pubKeyHash, _ := utils.HashPubKey(PubKey)
 	totalamount, validOutputs, err := u.ChooseSpendableOutputs(pubKeyHash, amount, pendinguse)
@@ -647,11 +647,11 @@ func (u UnspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, a
 	// later we will add unconfirmed transactions if no enough funds
 
 	// build list of previous transactions
-	prevTXs := make(map[string]transaction.Transaction)
+	prevTXs := make(map[string]structures.Transaction)
 
 	// Build a list of inputs
 	for _, out := range validOutputs {
-		input := transaction.TXInput{out.TXID, out.OIndex, nil, PubKey}
+		input := structures.TXInput{out.TXID, out.OIndex, nil, PubKey}
 		inputs = append(inputs, input)
 
 		prevTX, err := bcMan.FindTransactionByBlock(out.TXID, out.BlockHash)
@@ -666,15 +666,15 @@ func (u UnspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, a
 
 // Returns previous transactions. It later will be used to prepare data to sign
 func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, totalamount float64,
-	inputs []transaction.TXInput, prevTXs map[string]transaction.Transaction,
-	pendingoutputs []*transaction.TXOutputIndependent) ([]transaction.TXInput, map[string]transaction.Transaction, float64, error) {
+	inputs []structures.TXInput, prevTXs map[string]structures.Transaction,
+	pendingoutputs []*structures.TXOutputIndependent) ([]structures.TXInput, map[string]structures.Transaction, float64, error) {
 
 	// Build a list of inputs
 	for _, out := range pendingoutputs {
-		input := transaction.TXInput{out.TXID, out.OIndex, nil, PubKey}
+		input := structures.TXInput{out.TXID, out.OIndex, nil, PubKey}
 		inputs = append(inputs, input)
 
-		prevTX := transaction.Transaction{}
+		prevTX := structures.Transaction{}
 		err := prevTX.DeserializeTransaction(out.BlockHash) // here we have transaction serialised, not block hash
 
 		if err != nil {
@@ -694,16 +694,16 @@ func (u UnspentTransactions) ExtendNewTransactionInputs(PubKey []byte, amount, t
 
 // Verifies which transactions outputs are not yet spent.
 // Returns list of inputs that are not found in list of unspent outputs
-func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []transaction.TXInput) (map[int]transaction.TXInput, map[int]*transaction.Transaction, error) {
-	localError := func(err error) (map[int]transaction.TXInput, map[int]*transaction.Transaction, error) {
+func (u UnspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []structures.TXInput) (map[int]structures.TXInput, map[int]*structures.Transaction, error) {
+	localError := func(err error) (map[int]structures.TXInput, map[int]*structures.Transaction, error) {
 		return nil, nil, err
 	}
 	// list of full input transactions. it can be used to verify signature later
-	var inputTX map[int]*transaction.Transaction
-	inputTX = make(map[int]*transaction.Transaction)
+	var inputTX map[int]*structures.Transaction
+	inputTX = make(map[int]*structures.Transaction)
 
-	var notFoundInputs map[int]transaction.TXInput
-	notFoundInputs = make(map[int]transaction.TXInput)
+	var notFoundInputs map[int]structures.TXInput
+	notFoundInputs = make(map[int]structures.TXInput)
 
 	uodb, err := u.DB.GetUnspentOutputsObject()
 

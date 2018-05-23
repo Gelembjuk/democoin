@@ -8,7 +8,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/wallet"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/consensus"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 	"github.com/gelembjuk/democoin/node/transactions"
 )
 
@@ -77,7 +77,7 @@ func (n *NodeBlockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 }
 
 // Get block objet by hash
-func (n *NodeBlockchain) GetBlock(hash []byte) (*blockchain.Block, error) {
+func (n *NodeBlockchain) GetBlock(hash []byte) (*structures.Block, error) {
 	block, err := n.GetBCManager().GetBlock(hash)
 
 	return &block, err
@@ -110,7 +110,7 @@ func (n *NodeBlockchain) GetTopBlockHash() ([]byte, error) {
 }
 
 // BUilds a genesis block. It is used only to start new blockchain
-func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string) (*blockchain.Block, error) {
+func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string) (*structures.Block, error) {
 	if address == "" {
 		return nil, errors.New("Geneisis block wallet address missed")
 	}
@@ -125,7 +125,7 @@ func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string
 		return nil, errors.New("Geneisis block text missed")
 	}
 
-	cbtx := &transaction.Transaction{}
+	cbtx := &structures.Transaction{}
 
 	errc := cbtx.MakeCoinbaseTX(address, genesisCoinbaseData)
 
@@ -133,14 +133,14 @@ func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string
 		return nil, errc
 	}
 
-	genesis := &blockchain.Block{}
-	genesis.PrepareNewBlock([]*transaction.Transaction{cbtx}, []byte{}, 0)
+	genesis := &structures.Block{}
+	genesis.PrepareNewBlock([]*structures.Transaction{cbtx}, []byte{}, 0)
 
 	return genesis, nil
 }
 
 // Create new blockchain from given genesis block
-func (n *NodeBlockchain) CreateBlockchain(genesis *blockchain.Block) error {
+func (n *NodeBlockchain) CreateBlockchain(genesis *structures.Block) error {
 	n.Logger.Trace.Println("Init DB")
 
 	// this creates DB connection object but doesn't try to connect to DB
@@ -282,13 +282,13 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 }
 
 // Drop block from a top of blockchain
-func (n *NodeBlockchain) DropBlock() (*blockchain.Block, error) {
+func (n *NodeBlockchain) DropBlock() (*structures.Block, error) {
 	return n.GetBCManager().DeleteBlock()
 }
 
 // Add block to blockchain
 // Block is not yet verified
-func (n *NodeBlockchain) AddBlock(block *blockchain.Block) (uint, error) {
+func (n *NodeBlockchain) AddBlock(block *structures.Block) (uint, error) {
 	// do some checks of the block
 	// check if block exists
 	blockstate, err := n.CheckBlockState(block.Hash, block.PrevBlockHash)
@@ -319,7 +319,7 @@ func (n *NodeBlockchain) AddBlock(block *blockchain.Block) (uint, error) {
 
 // returns two branches of a block starting from their common block.
 // One of branches is primary at this time
-func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*blockchain.Block, []*blockchain.Block, error) {
+func (n *NodeBlockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*structures.Block, []*structures.Block, error) {
 	bcm := n.GetBCManager()
 
 	if len(tip) == 0 {
@@ -360,7 +360,7 @@ func (n *NodeBlockchain) CheckBlockState(hash, prevhash []byte) (int, error) {
 }
 
 // Get next blocks uppper then given
-func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*blockchain.BlockShort, error) {
+func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*structures.BlockShort, error) {
 	exists, err := n.CheckBlockExists(hash)
 
 	if err != nil {
@@ -389,7 +389,7 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*blockchain.BlockShort, 
 // 4. all inputs must be in blockchain (correct unspent inputs)
 // 5. Additionally verify each transaction agains signatures, total amount, balance etc
 // 6. Verify hash is correc agains rules
-func (n *NodeBlockchain) VerifyBlock(block *blockchain.Block) error {
+func (n *NodeBlockchain) VerifyBlock(block *structures.Block) error {
 	//6. Verify hash
 
 	pow := consensus.NewProofOfWork(block)
@@ -426,7 +426,7 @@ func (n *NodeBlockchain) VerifyBlock(block *blockchain.Block) error {
 	// 1
 	coinbaseused := false
 
-	prevTXs := []*transaction.Transaction{}
+	prevTXs := []*structures.Transaction{}
 
 	for _, tx := range block.Transactions {
 		if tx.IsCoinbase() {

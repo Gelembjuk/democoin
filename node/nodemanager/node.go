@@ -13,7 +13,7 @@ import (
 	"github.com/gelembjuk/democoin/lib/wallet"
 	"github.com/gelembjuk/democoin/node/blockchain"
 	"github.com/gelembjuk/democoin/node/consensus"
-	"github.com/gelembjuk/democoin/node/transaction"
+	"github.com/gelembjuk/democoin/node/structures"
 	"github.com/gelembjuk/democoin/node/transactions"
 )
 
@@ -224,7 +224,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 
 	firstblockbytes := result.Blocks[0]
 
-	block := &blockchain.Block{}
+	block := &structures.Block{}
 	err = block.DeserializeBlock(firstblockbytes)
 
 	if err != nil {
@@ -255,7 +255,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 				continue
 			}
 			// add this block
-			block := &blockchain.Block{}
+			block := &structures.Block{}
 			err := block.DeserializeBlock(blockdata)
 
 			if err != nil {
@@ -283,7 +283,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 /*
 * Send transaction to all known nodes. This wil send only hash and node hash to check if hash exists or no
  */
-func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
+func (n *Node) SendTransactionToAll(tx *structures.Transaction) {
 	n.Logger.Trace.Printf("Send transaction to %d nodes", len(n.NodeNet.Nodes))
 
 	for _, node := range n.NodeNet.Nodes {
@@ -300,7 +300,7 @@ func (n *Node) SendTransactionToAll(tx *transaction.Transaction) {
 // created by this node. We will notify our network about new block
 // But not send full block, only hash and previous hash. So, other can copy it
 // Address from where we get it will be skipped
-func (n *Node) SendBlockToAll(newBlock *blockchain.Block, skipaddr net.NodeAddr) {
+func (n *Node) SendBlockToAll(newBlock *structures.Block, skipaddr net.NodeAddr) {
 	for _, node := range n.NodeNet.Nodes {
 		if node.CompareToAddress(n.NodeClient.NodeAddress) {
 			continue
@@ -414,7 +414,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	var block *blockchain.Block
+	var block *structures.Block
 	block = nil
 
 	if blockorig != nil {
@@ -476,7 +476,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 // Add new block to blockchain.
 // It can be executed when new block was created locally or received from other node
 
-func (n *Node) AddBlock(block *blockchain.Block) (uint, error) {
+func (n *Node) AddBlock(block *structures.Block) (uint, error) {
 	bcm, err := n.GetBCManager()
 
 	if err != nil {
@@ -560,7 +560,7 @@ func (n *Node) DropBlock() error {
 // returns state of processing. if a block data was requested or exists or prev doesn't exist
 func (n *Node) ReceivedBlockFromOtherNode(addrfrom net.NodeAddr, bsdata []byte) (int, error) {
 
-	bs := &blockchain.BlockShort{}
+	bs := &structures.BlockShort{}
 	err := bs.DeserializeBlock(bsdata)
 
 	if err != nil {
@@ -586,10 +586,10 @@ func (n *Node) ReceivedBlockFromOtherNode(addrfrom net.NodeAddr, bsdata []byte) 
 * Check if this is new block and if previous block is fine
 * returns state of processing. if a block data was requested or exists or prev doesn't exist
  */
-func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *blockchain.Block, error) {
+func (n *Node) ReceivedFullBlockFromOtherNode(blockdata []byte) (int, uint, *structures.Block, error) {
 	addstate := uint(blockchain.BCBAddState_error)
 
-	block := &blockchain.Block{}
+	block := &structures.Block{}
 	err := block.DeserializeBlock(blockdata)
 
 	if err != nil {
