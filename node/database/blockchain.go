@@ -1,11 +1,14 @@
 package database
 
 import (
+	"bytes"
+
 	"github.com/boltdb/bolt"
 	"github.com/gelembjuk/democoin/lib/utils"
 )
 
 const blocksBucket = "blocks"
+const blockChainBucket = "blockchain"
 
 type Blockchain struct {
 	DB *BoltDB
@@ -15,6 +18,11 @@ type Blockchain struct {
 func (bc *Blockchain) InitDB() error {
 	err := bc.DB.db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte(blocksBucket))
+
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucket([]byte(blockChainBucket))
 
 		if err != nil {
 			return err
@@ -194,4 +202,199 @@ func (bc *Blockchain) GetFirstHash() ([]byte, error) {
 	}
 
 	return nil, NewNotFoundDBError("firsthash")
+}
+
+// add block to chain
+func (bc *Blockchain) AddToChain(hash, prevHash []byte) error {
+	length := len(hash)
+
+	if length == 0 {
+		return NewHashEmptyDBError()
+	}
+
+	emptyHash := make([]byte, length)
+
+	return bc.DB.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blockChainBucket))
+
+		if b == nil {
+			return NewDBIsNotReadyError()
+		}
+
+		// maybe it already exists in chain. check it
+		// TODO . not sure if we need to do this check. ignore for now
+
+		hashBytes := make([]byte, length*2)
+
+		if len(prevHash) > 0 {
+			// get prev hash and put this hash as next
+			prRecTmp := b.Get(prevHash)
+
+			if len(prRecTmp) < length*2 {
+				return NewHashNotFoundDBError("Previous hash is not found in the chain")
+			}
+
+			prRec := utils.CopyBytes(prRecTmp)
+
+			exNext := make([]byte, length)
+
+			copy(exNext, prRec[length:])
+
+			if bytes.Compare(exNext, emptyHash) > 0 {
+				return NewHashDBError("Previous hash already has a next hash")
+			}
+
+			copy(prRec[length:], hash)
+
+			err := b.Put(prevHash, prRec)
+
+			if err != nil {
+				return err
+			}
+
+			copy(hashBytes[0:], prevHash)
+		}
+
+		return b.Put(hash, hashBytes)
+	})
+}
+
+// remove block from chain
+func (bc *Blockchain) RemoveFromChain(hash []byte) error {
+	length := len(hash)
+
+	if length == 0 {
+		return NewHashEmptyDBError()
+	}
+
+	emptyHash := make([]byte, length)
+
+	return bc.DB.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blockChainBucket))
+
+		if b == nil {
+			return NewDBIsNotReadyError()
+		}
+
+		// get prev hash and put this hash as next
+		hashBytesTmp := b.Get(hash)
+
+		if len(hashBytesTmp) < length*2 {
+			return NewHashNotFoundDBError(" ")
+		}
+
+		hashBytes := utils.CopyBytes(hashBytesTmp)
+
+		nextHash := make([]byte, length)
+
+		copy(nextHash, hashBytes[length:])
+
+		if bytes.Compare(nextHash, emptyHash) > 0 {
+			return NewHashDBError("Only last hash can be removed")
+		}
+
+		prevHash := make([]byte, length)
+		copy(prevHash, hashBytes[0:length])
+
+		if bytes.Compare(prevHash, emptyHash) > 0 {
+
+			prevHashBytesTmp := b.Get(prevHash)
+
+			if len(prevHashBytesTmp) < length*2 {
+				return NewHashNotFoundDBError("Previous hash is not found")
+			}
+			prevHashBytes := utils.CopyBytes(prevHashBytesTmp)
+
+			copy(prevHashBytes[length:], emptyHash)
+
+			err := b.Put(prevHash, prevHashBytes)
+
+			if err != nil {
+				return err
+			}
+
+		}
+
+		return b.Delete(hash)
+	})
+}
+
+func (bc *Blockchain) BlockInChain(hash []byte) (bool, error) {
+	length := len(hash)
+
+	if length == 0 {
+		return false, NewHashEmptyDBError()
+	}
+
+	found := false
+
+	err := bc.DB.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blockChainBucket))
+
+		if b == nil {
+			return NewDBIsNotReadyError()
+		}
+		h := b.Get(hash)
+
+		if len(h) == length*2 {
+			found = true
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return found, nil
+}
+
+func (bc *Blockchain) GetLocationInChain(hash []byte) (bool, []byte, []byte, error) {
+	length := len(hash)
+
+	if length == 0 {
+		return false, nil, nil, NewHashEmptyDBError()
+	}
+	var prevHash []byte
+	var nextHash []byte
+
+	emptyHash := make([]byte, length)
+
+	found := false
+
+	err := bc.DB.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blockChainBucket))
+
+		if b == nil {
+			return NewDBIsNotReadyError()
+		}
+
+		hTmp := b.Get(hash)
+
+		if len(hTmp) == len(hash)*2 {
+			h := utils.CopyBytes(hTmp)
+
+			prevHash = make([]byte, length)
+			nextHash = make([]byte, length)
+			copy(prevHash, h[:length])
+			copy(nextHash, h[length:])
+
+			if bytes.Compare(prevHash, emptyHash) == 0 {
+				prevHash = []byte{}
+			}
+
+			if bytes.Compare(nextHash, emptyHash) == 0 {
+				nextHash = []byte{}
+			}
+
+			found = true
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, nil, nil, err
+	}
+
+	return found, prevHash, nextHash, nil
 }

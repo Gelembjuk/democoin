@@ -8,6 +8,9 @@ import (
 
 const TXVerifyErrorNoInput = "noinput"
 const DBCursorBreak = "cursorbreak"
+const DBHashNotFoundError = "hashnotfound"
+const DBHashEmptyError = "hashisemptyd"
+const DBHashError = "hashemptyd"
 
 type DBError struct {
 	err  string
@@ -44,4 +47,19 @@ func NewDBIsNotReadyError() error {
 
 func NewDBCursorStopError() error {
 	return &DBError{"Break data loop", DBCursorBreak}
+}
+
+func NewHashNotFoundDBError(err string) error {
+	if err == "" {
+		err = "Block hash is not found"
+	}
+	return &DBError{err, DBHashNotFoundError}
+}
+
+func NewHashEmptyDBError() error {
+	return &DBError{"Provided hash is empty", DBHashEmptyError}
+}
+
+func NewHashDBError(err string) error {
+	return &DBError{err, DBHashError}
 }

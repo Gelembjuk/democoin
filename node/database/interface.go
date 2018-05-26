@@ -46,6 +46,11 @@ type BlockchainInterface interface {
 	GetTopHash() ([]byte, error)
 	SaveFirstHash(hash []byte) error
 	GetFirstHash() ([]byte, error)
+
+	GetLocationInChain(hash []byte) (bool, []byte, []byte, error)
+	BlockInChain(hash []byte) (bool, error)
+	RemoveFromChain(hash []byte) error
+	AddToChain(hash, prevHash []byte) error
 }
 
 type TranactionsInterface interface {
