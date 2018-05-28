@@ -1,3 +1,5 @@
+from shutil import copyfile
+
 import _lib
 import _transfers
 import _blocks
@@ -19,7 +21,7 @@ def PrepareNodes():
     
     _lib.CleanTestFolders()
     
-    datadir_tmp = CopyBlockchainWithBlocks()
+    datadir_tmp = CopyBlockchainWithBlocks("_1_")
     
     blocks = _blocks.GetBlocks(datadir_tmp)
     
@@ -38,7 +40,7 @@ def PrepareNodes():
     
     for i in range(1, 6):
         port = str(30000+i)
-        d = blocksnodes.StartNodeAndImport(port, nodeport, "Server "+str(i))
+        d = blocksnodes.StartNodeAndImport(port, nodeport, "Server "+str(i),"_"+str(i+1)+"_")
         datadir_n = d[0]
         address_n = d[1]
         
@@ -165,36 +167,57 @@ def PrepareNodes():
     _lib.FatalAssert(len(blocks2) == blockslen + 2, "Expected "+str(blockslen +2)+" blocks for branch 2")
     
     #configs for cluster 1
-    configfile = "{\"Minter\":\""+address1+"\",\"Port\": "+str(nodeport)+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
+    configfile = getConfig(address1, nodeport, nodes[3]['port'], nodes[4]['port'])
     _lib.SaveConfigFile(datadir, configfile)
     
-    configfile = "{\"Minter\":\""+nodes[3]['address']+"\",\"Port\": "+str(nodes[3]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[4]['port'])+"}]}"
+    configfile = getConfig(nodes[3]['address'], nodes[3]['port'], nodeport, nodes[4]['port'])
     _lib.SaveConfigFile(nodes[3]['datadir'], configfile)
     
-    configfile = "{\"Minter\":\""+nodes[4]['address']+"\",\"Port\": "+str(nodes[4]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodeport)+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[3]['port'])+"}]}"
+    configfile = getConfig(nodes[4]['address'], nodes[4]['port'], nodeport, nodes[3]['port'])
     _lib.SaveConfigFile(nodes[4]['datadir'], configfile)
     
     #config for cluster 2
-    configfile = "{\"Minter\":\""+nodes[0]['address']+"\",\"Port\": "+str(nodes[0]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
+    configfile = getConfig(nodes[0]['address'], nodes[0]['port'], nodes[1]['port'], nodes[2]['port'])
     _lib.SaveConfigFile(nodes[0]['datadir'], configfile)
     
-    configfile = "{\"Minter\":\""+nodes[1]['address']+"\",\"Port\": "+str(nodes[1]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[2]['port'])+"}]}"
+    configfile = getConfig(nodes[1]['address'], nodes[1]['port'], nodes[0]['port'], nodes[2]['port'])
     _lib.SaveConfigFile(nodes[1]['datadir'], configfile)
     
-    configfile = "{\"Minter\":\""+nodes[2]['address']+"\",\"Port\": "+str(nodes[2]['port'])+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(nodes[0]['port'])+"}, {\"Host\": \"localhost\",\"Port\":"+str(nodes[1]['port'])+"}]}"
-    _lib.SaveConfigFile(nodes[1]['datadir'], configfile)
+    configfile = getConfig(nodes[2]['address'], nodes[2]['port'], nodes[0]['port'], nodes[1]['port'])
+    _lib.SaveConfigFile(nodes[2]['datadir'], configfile)
     
-    print os.path.basename(datadir)
+    #print os.path.basename(datadir)
     startnode.StopNode(datadir)
     
+    dstdir = _lib.getCurrentDir()+"/datafortests/bc6nodes_1/"
+    #print dstdir
+    copyfile(datadir+"/blockchain.db", dstdir+"blockchain.t")
+    copyfile(datadir+"/wallet.dat", dstdir+"wallet.t")
+    copyfile(datadir+"/nodeslist.db", dstdir+"nodeslist.t")
+    copyfile(datadir+"/config.json", dstdir+"config.t")
+    
+    i = 2
+    
     for node in nodes:
-        print os.path.basename(node['datadir'])
+        #print os.path.basename(node['datadir'])
         startnode.StopNode(node['datadir'])
+        
+        dstdir = _lib.getCurrentDir()+"/datafortests/bc6nodes_"+str(i)+"/"
+        #print dstdir
+        copyfile(node['datadir']+"/blockchain.db", dstdir+"blockchain.t")
+        copyfile(node['datadir']+"/wallet.dat", dstdir+"wallet.t")
+        copyfile(node['datadir']+"/nodeslist.db", dstdir+"nodeslist.t")
+        copyfile(node['datadir']+"/config.json", dstdir+"config.t")
+        
+        i=i+1
     
     return [datadir, address1, nodes, blockslen+1, datadirs]
+
+def getConfig(minter, port, port2, port3):
+    return "{\"Minter\":\""+minter+"\",\"Port\": "+str(port)+",\"Nodes\":[{\"Host\": \"localhost\",\"Port\":"+str(port2)+"}, {\"Host\": \"localhost\",\"Port\":"+str(port3)+"}],\"Logs\":[\"trace\",\"error\"]}"
    
-def CopyBlockchainWithBlocks():
-    datadir = _lib.CreateTestFolder()
+def CopyBlockchainWithBlocks(suffix = ""):
+    datadir = _lib.CreateTestFolder(suffix)
     _lib.CopyTestData(datadir,"bcwith4blocks")
     
     return datadir
@@ -351,5 +374,11 @@ def Make5BlocksBC():
     blockshashes = _blocks.GetBlocks(datadir)
     
     _lib.FatalAssert(len(blockshashes) == 6,"Should be 6 blocks in blockchain")
+    
+    dstdir = _lib.getCurrentDir()+"/datafortests/bcwith4blocks/"
+    
+    copyfile(datadir+"/blockchain.db", dstdir+"blockchain.t")
+    copyfile(datadir+"/wallet.dat", dstdir+"wallet.t")
+    copyfile(datadir+"/nodeslist.db", dstdir+"nodeslist.t")
     
     return [datadir, address, address2, address3]

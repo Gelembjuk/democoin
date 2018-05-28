@@ -162,7 +162,7 @@ def test(testfilter):
     
 def MintBlock(datadir,minter):
     _lib.StartTest("Force to Mint a block")
-    res = _lib.ExecuteNode(['makeblock','-datadir',datadir,'-minter',minter])
+    res = _lib.ExecuteNode(['makeblock','-datadir',datadir,'-minter',minter,'-logs','trace'])
     _lib.FatalAssertSubstr(res,"New block mined with the hash","Block making failed")
     
     match = re.search( r'New block mined with the hash ([0-9a-zA-Z]+).', res)

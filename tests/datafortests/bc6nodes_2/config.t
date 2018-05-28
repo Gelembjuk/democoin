@@ -1,1 +1,1 @@
-{"Minter":"1J6Dyz8QSBaYpRC2rQCJNbaS2aDxitj67a","Port": 30001,"Nodes":[{"Host": "localhost","Port":30002}, {"Host": "localhost","Port":30003}],"Logs":["trace","error"]}
+{"Minter":"1Lsr5CBWA5cTavBDUXEaB6WA7RPkD4WU9p","Port": 30001,"Nodes":[{"Host": "localhost","Port":30002}, {"Host": "localhost","Port":30003}],"Logs":["trace","error"]}

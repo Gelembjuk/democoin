@@ -175,6 +175,9 @@ func (n *NodeBlockchain) CreateBlockchain(genesis *structures.Block) error {
 
 	err = bcdb.PutBlockOnTop(genesis.Hash, blockdata)
 
+	// add first rec to chain list
+	bcdb.AddToChain(genesis.Hash, []byte{})
+
 	return err
 }
 

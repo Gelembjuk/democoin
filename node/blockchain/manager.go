@@ -129,15 +129,121 @@ func (bc *Blockchain) AddBlock(block *structures.Block) (uint, error) {
 		bc.Logger.Trace.Printf("Set new current hash %x\n", block.Hash)
 
 		if bytes.Compare(lastHash, block.PrevBlockHash) != 0 {
+			// update chain records. it keeps only main chain.
+			// it should replace branches now
+			bc.Logger.Trace.Printf("Replace branches . previous head is %x", lastHash)
+			err := bc.UpdateChainOnNewBranch(lastHash)
+
+			if err != nil {
+				bc.Logger.Trace.Printf("Chain replace error %s", err.Error())
+			}
 			// other branch becomes main branch now.
 			// it is needed to reindex unspent transactions and non confirmed
 			return BCBAddState_addedToParallelTop, nil // added to the top, but on other branch
 		} else {
+			// update blocks index. this is "normal" case
+			bc.Logger.Trace.Printf("Add %x after %x", block.Hash, block.PrevBlockHash)
+			err := bcdb.AddToChain(block.Hash, block.PrevBlockHash)
+
+			if err != nil {
+				bc.Logger.Trace.Printf("Chain add error %s", err.Error())
+			} else {
+				bc.Logger.Trace.Printf("Chain add error. Success")
+			}
 			return BCBAddState_addedToTop, nil
 		}
 	}
 	// block added, but is not on the top
 	return BCBAddState_addedToParallel, nil
+}
+
+//
+// NOTE . Operation is done in memory. On practive we don't expect to have million of
+// hashes in different branch. it can be 1-5 . Depends on consensus can be more. but not millions
+// top hash is already update when we execute this
+func (bc *Blockchain) UpdateChainOnNewBranch(prevTopHash []byte) error {
+	// go over blocks sttarting from top till bock is found in chain
+	newBlocks := []*structures.BlockShort{}
+
+	bc.Logger.Trace.Printf("UCONB start %x", prevTopHash)
+
+	bci, err := NewBlockchainIterator(bc.DB)
+
+	if err != nil {
+		return err
+	}
+
+	bcdb, err := bc.DB.GetBlockchainObject()
+
+	if err != nil {
+		return err
+	}
+
+	// this is the hash that exists in chain. intersaction of old and new branch
+	mergePointHash := []byte{}
+
+	for {
+		block, _ := bci.Next()
+
+		bc.Logger.Trace.Printf("UCONB load from new %x", block.Hash)
+
+		exists, err := bcdb.BlockInChain(block.Hash)
+
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			mergePointHash = block.Hash[:]
+			bc.Logger.Trace.Printf("UCONB it exists %x")
+			break
+		}
+
+		newBlocks = append(newBlocks, block.GetShortCopy())
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+	remHash := prevTopHash
+	// remove back old bbranch from chain
+	for {
+		bc.Logger.Trace.Printf("UCONB go to remove %x", remHash)
+		if bytes.Compare(remHash, mergePointHash) == 0 {
+			// top removing
+			bc.Logger.Trace.Printf("UCONB time to exit")
+			break
+		}
+		_, prevHash, _, err := bcdb.GetLocationInChain(remHash)
+
+		if err != nil {
+			return err
+		}
+
+		err = bcdb.RemoveFromChain(remHash)
+		bc.Logger.Trace.Printf("UCONB removed %x", remHash)
+		if err != nil {
+			return err
+		}
+
+		remHash = prevHash[:]
+	}
+	// at this point , mergePointHash is top in the chain records
+
+	structures.ReverseBlocksShortSlice(newBlocks)
+
+	for _, block := range newBlocks {
+		bc.Logger.Trace.Printf("UCONB add %x after %x", block.Hash, mergePointHash)
+		err := bcdb.AddToChain(block.Hash, mergePointHash)
+
+		if err != nil {
+			return err
+		}
+
+		mergePointHash = block.Hash[:]
+	}
+
+	return nil
 }
 
 /*
@@ -185,6 +291,8 @@ func (bc *Blockchain) DeleteBlock() (*structures.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	bcdb.RemoveFromChain(block.Hash)
 
 	return block, nil
 }

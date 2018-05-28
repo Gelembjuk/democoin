@@ -25,6 +25,7 @@ type BlockShort struct {
 	Height        int
 }
 
+// Reverce list of blocks
 func ReverseBlocksSlice(ss []*Block) {
 	last := len(ss) - 1
 
@@ -35,6 +36,20 @@ func ReverseBlocksSlice(ss []*Block) {
 	for i := 0; i < len(ss)/2; i++ {
 		ss[i], ss[last-i] = ss[last-i], ss[i]
 	}
+}
+
+// Reverce list of blocks for short info
+func ReverseBlocksShortSlice(ss []*BlockShort) {
+	last := len(ss) - 1
+
+	if last < 1 {
+		return
+	}
+
+	for i := 0; i < len(ss)/2; i++ {
+		ss[i], ss[last-i] = ss[last-i], ss[i]
+	}
+
 }
 
 // Serialise BlockShort to bytes

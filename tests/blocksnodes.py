@@ -80,9 +80,9 @@ def test(testfilter):
     #_lib.RemoveTestFolder(datadir)
     _lib.EndTestGroupSuccess()
 
-def StartNodeAndImport(port, importport, title):
+def StartNodeAndImport(port, importport, title, suffix = ""):
     
-    datadir = _lib.CreateTestFolder()
+    datadir = _lib.CreateTestFolder(suffix)
     
     address = initblockchain.ImportBockchain(datadir,"localhost",importport)
     
