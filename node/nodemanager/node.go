@@ -106,6 +106,7 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 				// load them from some external resource
 				n.NodeNet.LoadInitialNodes(geenesisHash)
 			}
+
 		}
 	} else {
 		n.NodeNet.SetNodes(list, true)
@@ -230,6 +231,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	n.Logger.Trace.Printf("Importing first block hash %x", block.Hash)
 	// make blockchain with single block
 	err = n.NodeBC.CreateBlockchain(block)
 
@@ -492,15 +494,15 @@ func (n *Node) AddBlock(block *structures.Block) (uint, error) {
 		return 0, err
 	}
 
-	if addstate == blockchain.BCBAddState_addedToParallel {
+	if addstate == blockchain.BCBAddState_addedToParallel ||
+		addstate == blockchain.BCBAddState_addedToTop ||
+		addstate == blockchain.BCBAddState_addedToParallelTop {
+
 		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
 	}
 
 	if addstate == blockchain.BCBAddState_addedToTop {
 		// only if a block was really added
-
-		// block was added. add transactions to caches
-		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
 
 		// delete block transaction from list of unapproved
 		n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlock(block)
@@ -517,10 +519,6 @@ func (n *Node) AddBlock(block *structures.Block) (uint, error) {
 		}
 
 		if newChain != nil && oldChain != nil {
-			// transaction/block index update
-			n.GetTransactionsManager().GetIndexManager().BlocksRemoved(oldChain)
-			// now index for new aded blocks
-			n.GetTransactionsManager().GetIndexManager().BlocksAdded(newChain)
 
 			// add old blocks back to unspent tranactions
 			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksCancel(oldChain)
@@ -551,6 +549,8 @@ func (n *Node) DropBlock() error {
 	n.GetTransactionsManager().GetUnapprovedTransactionsManager().AddFromCanceled(block.Transactions)
 
 	n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlockCancel(block)
+
+	n.GetTransactionsManager().GetIndexManager().BlockRemoved(block)
 
 	return nil
 }

@@ -103,9 +103,11 @@ func (u *UnApprovedTransactions) CheckInputsWereBefore(
 
 // Returns pending transations info prepared by address
 // Return contains:
-// List of all inputs used by this PubKeyHash
-// List of Outputs that were not yet used in any input returns in the first list
-// List of inputs based on non-approved outputs (sub list of the first list)
+// List of all inputs used by this PubKeyHash in his pending TXs
+// List of Outputs that were not yet used in any input (returned in the first list).
+//		this are outputs that can be still used in new TX
+// List of inputs based on approved outputs (sub list of the first list). From the first list
+//		we dropped inputs where otput is from pending TX
 func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.TXInput,
 	[]*structures.TXOutputIndependent, []structures.TXInput, error) {
 
@@ -117,7 +119,8 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
+	// goes over all pending (unconfirmed) transactions in the cache
+	// check every input for every TX and adds to "inputs" if that input was signed by this pub key
 	err = utdb.ForEach(func(k, txBytes []byte) error {
 		tx := structures.Transaction{}
 		err = tx.DeserializeTransaction(txBytes)
@@ -133,6 +136,8 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 
 			for _, vin := range tx.Vin {
 				if vin.UsesKey(PubKeyHash) {
+					// this input is signed by this pub key.
+					// the input can be from confirmed TX or from pending
 					inputs = append(inputs, vin)
 				}
 			}
@@ -141,8 +146,12 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 			if vout.IsLockedWithKey(PubKeyHash) {
 				voutind := structures.TXOutputIndependent{}
 				// we are settings serialised transaction in place of block hash
-				// we don't have a block for such ransaction , but we need full transaction later
+				// we don't have a block for such transaction , but we need full transaction later
 				voutind.LoadFromSimple(vout, tx.ID, indV, sender, tx.IsCoinbase(), txBytes)
+
+				// "outputs" contains list of outputs of transations in the pending cache
+				// we need it to know later which outputs and used as inputs for other pending transactions
+				// and to know their out value
 				outputs = append(outputs, &voutind)
 			}
 		}
@@ -154,9 +163,11 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 	}
 
 	// outputs not yet used in other pending transactions
+	// not yet spent outputs of pending transactions
 	realoutputs := []*structures.TXOutputIndependent{}
-	// inputs based on approved transactions
-	pendinginputs := []structures.TXInput{}
+
+	// inputs based on approved transactions. sublist of "inputs"
+	approvedinputs := []structures.TXInput{}
 
 	for _, vout := range outputs {
 		used := false
@@ -168,9 +179,11 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 			}
 		}
 		if !used {
+			// add to thi list only if output was not used as input in any pending TX
 			realoutputs = append(realoutputs, vout)
 		}
 	}
+	// find inputs from TXs outs that were already approved
 	for _, vin := range inputs {
 		pendingout := false
 
@@ -183,10 +196,12 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 		}
 
 		if !pendingout {
-			pendinginputs = append(pendinginputs, vin)
+			// this input is not output of any pending TX. so, we presume it is output of
+			// approved TX
+			approvedinputs = append(approvedinputs, vin)
 		}
 	}
-	return inputs, realoutputs, pendinginputs, nil
+	return inputs, realoutputs, approvedinputs, nil
 }
 
 // Get input value for TX in the cache

@@ -382,7 +382,13 @@ func (c *NodeCLI) commandPrintChain() error {
 	for {
 		block := bci.Next()
 
+		if block == nil {
+			fmt.Printf("Somethign went wrong. Next block can not be loaded\n")
+			break
+		}
+
 		if c.Input.Args.View == "short" {
+
 			fmt.Printf("===============\n")
 			fmt.Printf("Hash: %x\n", block.Hash)
 			fmt.Printf("Height: %d, Transactions: %d\n", block.Height, len(block.Transactions)-1)

@@ -46,10 +46,10 @@ func (db *Database) SetConfig(config database.DatabaseConfig) {
 }
 
 func (db *Database) OpenConnection(reason string, sessid string) error {
-	db.Logger.Trace.Printf("OpenConn in DB man %s", reason)
+	//db.Logger.Trace.Printf("OpenConn in DB man %s", reason)
 
 	if db.DB != nil {
-		db.Logger.Trace.Printf("OpenConn connection is already open. ERROR")
+		//db.Logger.Trace.Printf("OpenConn connection is already open. ERROR")
 		debug.PrintStack()
 	}
 	db.PrepareConnection(sessid)
@@ -73,9 +73,9 @@ func (db *Database) PrepareConnection(sessid string) {
 }
 
 func (db *Database) CloseConnection() error {
-	db.Logger.Trace.Printf("CloseConn")
+
 	if db.DB == nil {
-		db.Logger.Trace.Printf("Already closed. ERROR")
+		//db.Logger.Trace.Printf("Already closed. ERROR")
 		return nil
 	}
 	// now allow other go routine to create connection using same object

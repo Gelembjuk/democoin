@@ -20,7 +20,7 @@ func (i *BlockchainIterator) Next() (*structures.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	//fmt.Printf("request block %x", i.currentHash)
 	encodedBlock, err := bcdb.GetBlock(i.currentHash)
 
 	if err != nil {

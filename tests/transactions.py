@@ -112,7 +112,7 @@ def CreateWallet(datadir):
     _lib.StartTestGroup("Create Wallet")
     
     _lib.StartTest("Create one more address")
-    res = _lib.ExecuteNode(['createwallet','-datadir',datadir])
+    res = _lib.ExecuteNode(['createwallet','-datadir',datadir,'-logs','trace'])
     _lib.FatalAssertSubstr(res,"Your new address","Address creation returned wrong result")
 
     _lib.FatalRegex(r'.+: (.+)', res, "Address can not be found in "+res);

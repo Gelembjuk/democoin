@@ -52,7 +52,31 @@ func (ti *TransactionsIndex) BlockAdded(block *structures.Block) error {
 	}
 
 	for _, tx := range block.Transactions {
-		err = txdb.PutTXToBlockLink(tx.ID, block.Hash)
+		// get current lit of blocks
+		blocksHashes, err := txdb.GetBlockHashForTX(tx.ID)
+
+		if err != nil {
+			return err
+		}
+
+		hashes := [][]byte{}
+
+		if blocksHashes != nil {
+			hashes, err = ti.DeserializeHashes(blocksHashes)
+
+			if err != nil {
+				return err
+			}
+		}
+		hashes = append(hashes, block.Hash[:])
+		ti.Logger.Trace.Printf("block add. %x new list %x %d", tx.ID, hashes, len(hashes))
+		blocksHashes, err = ti.SerializeHashes(hashes)
+
+		if err != nil {
+			return err
+		}
+
+		err = txdb.PutTXToBlockLink(tx.ID, blocksHashes)
 
 		if err != nil {
 			return err
@@ -119,7 +143,45 @@ func (ti *TransactionsIndex) BlockRemoved(block *structures.Block) error {
 	}
 
 	for _, tx := range block.Transactions {
-		txdb.DeleteTXToBlockLink(tx.ID)
+		blocksHashes, err := txdb.GetBlockHashForTX(tx.ID)
+
+		if err != nil {
+			return err
+		}
+
+		hashes := [][]byte{}
+
+		if blocksHashes != nil {
+			hashes, err = ti.DeserializeHashes(blocksHashes)
+
+			if err != nil {
+				return err
+			}
+		}
+		ti.Logger.Trace.Printf("block remove. before %s", hashes)
+		newHashes := [][]byte{}
+
+		for _, hash := range hashes {
+			if bytes.Compare(hash, block.Hash) != 0 {
+				newHashes = append(newHashes, hash)
+			}
+		}
+		ti.Logger.Trace.Printf("block remove. after %s", newHashes)
+		if len(newHashes) > 0 {
+			blocksHashes, err = ti.SerializeHashes(newHashes)
+
+			if err != nil {
+				return err
+			}
+
+			err = txdb.PutTXToBlockLink(tx.ID, blocksHashes)
+
+			if err != nil {
+				return err
+			}
+		} else {
+			txdb.DeleteTXToBlockLink(tx.ID)
+		}
 
 		if tx.IsCoinbase() {
 			continue
@@ -229,9 +291,8 @@ func (ti *TransactionsIndex) SerializeOutputs(outs []TransactionsIndexSpentOutpu
 	return buff.Bytes(), nil
 }
 
-/*
-* Deserialize data from bytes loaded fom DB
- */
+// Deserialize data from bytes loaded fom DB
+
 func (ti *TransactionsIndex) DeserializeOutputs(data []byte) ([]TransactionsIndexSpentOutputs, error) {
 	var outputs []TransactionsIndexSpentOutputs
 
@@ -244,22 +305,65 @@ func (ti *TransactionsIndex) DeserializeOutputs(data []byte) ([]TransactionsInde
 	return outputs, nil
 }
 
-func (ti *TransactionsIndex) GetTranactionBlock(txID []byte) ([]byte, error) {
+// Serialise list of hashes
+func (ti *TransactionsIndex) SerializeHashes(hashes [][]byte) ([]byte, error) {
+	var buff bytes.Buffer
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
+}
+
+// Deserialize list of hashes
+
+func (ti *TransactionsIndex) DeserializeHashes(data []byte) ([][]byte, error) {
+	var hashes [][]byte
+
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	return hashes, nil
+}
+
+func (ti *TransactionsIndex) GetTranactionBlocks(txID []byte) ([][]byte, error) {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
 		return nil, err
 	}
 
-	blockHash, err := txdb.GetBlockHashForTX(txID)
+	blockHashBytes, err := txdb.GetBlockHashForTX(txID)
 
 	if err != nil {
+		ti.Logger.Trace.Printf("GetTranactionBlocks Error 1: %s", err.Error())
 		return nil, err
 	}
-	return blockHash, nil
+
+	if blockHashBytes == nil {
+		return [][]byte{}, nil
+	}
+
+	hashes, err := ti.DeserializeHashes(blockHashBytes)
+
+	if err != nil {
+		ti.Logger.Trace.Printf("GetTranactionBlocks Error 2: %s", err.Error())
+		return nil, err
+	}
+
+	return hashes, nil
 }
 
-func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte) ([]TransactionsIndexSpentOutputs, error) {
+// Get list of spent outputs for TX
+// It uses the block and top block hashes to find a range of blocks where a spending can be
+// This index can contains spending in some other parallel branches. We use top and bottom hashes
+// to set a chain where to look for spendings
+func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte, blockHash []byte, topHash []byte) ([]TransactionsIndexSpentOutputs, error) {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -275,8 +379,14 @@ func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte) ([]Transacti
 	res := []TransactionsIndexSpentOutputs{}
 
 	if to != nil {
-		var err error
-		res, err = ti.DeserializeOutputs(to)
+		tmpres, err := ti.DeserializeOutputs(to)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// filter this list by block hashes
+		res, err = ti.filterTranactionOutputsSpent(tmpres, blockHash, topHash)
 
 		if err != nil {
 			return nil, err
@@ -285,29 +395,62 @@ func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte) ([]Transacti
 	return res, nil
 }
 
+func (ti *TransactionsIndex) filterTranactionOutputsSpent(outPuts []TransactionsIndexSpentOutputs,
+	blockHash []byte, topHash []byte) ([]TransactionsIndexSpentOutputs, error) {
+
+	bcMan, err := blockchain.NewBlockchainManager(ti.DB, ti.Logger)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := []TransactionsIndexSpentOutputs{}
+
+	for _, o := range outPuts {
+		present, err := bcMan.CheckBlockIsInRange(o.BlockHash, blockHash, topHash)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if present {
+			res = append(res, o)
+		}
+	}
+
+	return res, nil
+}
+
 // Get full TX, spending status and block hash for TX by ID
-func (ti *TransactionsIndex) GetTransactionAllInfo(txID []byte) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
+func (ti *TransactionsIndex) GetTransactionAllInfo(txID []byte, topHash []byte) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
 	localError := func(err error) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
 		return nil, nil, nil, err
 	}
 
-	blockHash, err := ti.GetTranactionBlock(txID)
-
-	if err != nil {
-		return localError(err)
-	}
-
-	if blockHash == nil {
-		return nil, nil, nil, nil
-	}
-
-	spentOuts, err := ti.GetTranactionOutputsSpent(txID)
+	blockHashes, err := ti.GetTranactionBlocks(txID)
 
 	if err != nil {
 		return localError(err)
 	}
 
 	bcMan, err := blockchain.NewBlockchainManager(ti.DB, ti.Logger)
+
+	if err != nil {
+		return localError(err)
+	}
+
+	// find which of hashes corresponds to provied top
+	blockHash, err := bcMan.ChooseHashUnderTip(blockHashes, topHash)
+
+	if err != nil {
+		return localError(err)
+	}
+
+	if blockHash == nil {
+		return localError(nil)
+	}
+
+	spentOuts, err := ti.GetTranactionOutputsSpent(txID, blockHash, topHash)
 
 	if err != nil {
 		return localError(err)

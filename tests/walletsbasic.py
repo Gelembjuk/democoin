@@ -212,7 +212,7 @@ def test(testfilter):
    
     addb1_2 = _transfers.GetBalance(datadir, address1_2)
    
-    amounttosend2 = "%.8f" % round(am3[0]/2,8)
+    amounttosend2 = "%.8f" % round(am3[0]/2 - 0.00000001,8)
     
     _wallet.Send(walletdatadir2,waddress2_1, address1_2 ,amounttosend2,"localhost", nodeport)
     
@@ -228,7 +228,7 @@ def test(testfilter):
     
     txlist = transactions.GetUnapprovedTransactions(datadir)
    
-    amounttosend2 = "%.8f" % round(am3[1]/2 -0.00000001 ,8)
+    amounttosend2 = "%.8f" % round(am3[1]/2,8)
     
     _wallet.Send(walletdatadir2,waddress2_1, address1_2 ,amounttosend2,"localhost", nodeport)
     
@@ -237,9 +237,9 @@ def test(testfilter):
     addb1_2_3 = _transfers.GetBalance(datadir, address1_2)
     
     _lib.FatalAssert(am3[1] == am3_3[1], "Approved balance should be unchanged")
-    
+
     _lib.FatalAssert(math.fabs(round(am3_2[0] - float(amounttosend2),8) - am3_3[0]) <= 0.00000001, "Total balance should be changed")
-    _lib.FatalAssert(math.fabs(round(am3_2[2] - float(amounttosend2),8) - am3_3[2]) <= 0.00000001, "Pending balance should be changed")
+    _lib.FatalAssert(math.fabs(round(am3_2[2] - float(amounttosend2) - am3_3[2],8)) <= 0.00000001, "Pending balance should be changed")
 
     _lib.FatalAssert(math.fabs(round(addb1_2_3[2] - addb1_2[2],8) - round(am3[2] - am3_3[2],8))  <= 0.00000001, "Pending difference should be same after 2 sends")
     

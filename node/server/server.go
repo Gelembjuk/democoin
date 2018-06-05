@@ -151,7 +151,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	starttime := time.Now().UnixNano()
 	sessid := utils.RandString(5)
 
-	s.Logger.Trace.Printf("New command. Start reading %s", sessid)
+	//s.Logger.Trace.Printf("New command. Start reading %s", sessid)
 
 	command, request, authstring, err := s.readRequest(conn)
 
@@ -251,7 +251,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	default:
 		rerr = errors.New("Unknown command!")
 	}
-	s.Logger.Trace.Println("Close BC after request handled " + sessid)
+
 	requestobj.Node.CloseBlockchain()
 
 	if rerr != nil {
@@ -410,8 +410,6 @@ func (s *NodeServer) BlockBuilder() {
 			return
 		}
 
-		s.Logger.Trace.Printf("Go to make new block attempt")
-
 		// we create separate node object for this thread
 		// pointers are used everywhere. so, it can be some sort of conflict with main thread
 		NodeClone := s.CloneNode()
@@ -434,7 +432,6 @@ func (s *NodeServer) BlockBuilder() {
 			tx, err := NodeClone.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
 
 			if err == nil && tx != nil {
-				s.Logger.Trace.Printf("Sending...")
 				// we send from main node object, not from a clone. because nodes list
 				// can be updated
 				s.Node.SendTransactionToAll(tx)
@@ -464,7 +461,6 @@ func (s *NodeServer) CloneNode() *nodemanager.Node {
 	// clone DB object
 	ndb := orignode.DBConn.Clone()
 	node.DBConn = &ndb
-	s.Logger.Trace.Println("DB conn clonned")
 
 	node.Init()
 

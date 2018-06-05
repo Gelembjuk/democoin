@@ -506,7 +506,7 @@ func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*stru
 }
 
 // returns a list of hashes of all the blocks in the chain
-
+// TODO We need to use index of blocks
 func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*structures.BlockShort {
 	maxcount := 1000
 
@@ -557,42 +557,59 @@ func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*structures.BlockShort {
 // Returns first blocks in block chain
 
 func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, error) {
+	localError := func(err error) ([]*structures.Block, int, error) {
+		return nil, 0, err
+	}
 	_, height, err := bc.GetState()
 
 	if err != nil {
-		return nil, 0, err
+		bc.Logger.Trace.Println("err 1")
+		return localError(err)
 	}
-	var bci *BlockchainIterator
 
-	if height > maxcount-1 {
-		// find a block with height maxcount-1
-		b, err := bc.GetBlockAtHeight(maxcount - 1)
-
-		if err != nil {
-			return nil, 0, err
-		}
-		bci, err = NewBlockchainIteratorFrom(bc.DB, b.Hash)
-	} else {
-		// start from top block
-		bci, err = NewBlockchainIterator(bc.DB)
-	}
+	genesisHash, err := bc.GetGenesisBlockHash()
 
 	if err != nil {
-		return nil, 0, err
+		bc.Logger.Trace.Println("err 2")
+		return localError(err)
+	}
+
+	bcdb, err := bc.DB.GetBlockchainObject()
+
+	if err != nil {
+		bc.Logger.Trace.Println("err 3")
+		return localError(err)
 	}
 
 	blocks := []*structures.Block{}
 
+	hash := genesisHash[:]
+
 	for {
-		block, _ := bci.Next()
+		_, _, nextHash, err := bcdb.GetLocationInChain(hash)
 
-		blocks = append([]*structures.Block{block}, blocks...)
+		if err != nil {
+			bc.Logger.Trace.Println("err 4")
+			return localError(err)
+		}
 
-		if len(block.PrevBlockHash) == 0 {
+		block, err := bc.GetBlock(hash)
+
+		if err != nil {
+			bc.Logger.Trace.Println("err 5")
+			return localError(err)
+		}
+
+		blocks = append(blocks, &block)
+
+		if len(blocks) >= maxcount {
 			break
 		}
+		if len(nextHash) == 0 {
+			break
+		}
+		hash = nextHash[:]
 	}
-
 	return blocks, height, nil
 }
 
@@ -828,4 +845,235 @@ func (bc *Blockchain) GetTransactionNumbersLimits(block *structures.Block) (int,
 	}
 	bc.Logger.Trace.Printf("TX count limits %d - %d", min, config.MaxNumberTransactionInBlock)
 	return min, config.MaxNumberTransactionInBlock, nil
+}
+
+// Receive ist of hashes and return a hash that is in the chain defined by top hash
+func (bc *Blockchain) ChooseHashUnderTip(blockHashes [][]byte, topHash []byte) ([]byte, error) {
+	bc.Logger.Trace.Printf("choose block hash %x for top  %x", blockHashes, topHash)
+	if len(blockHashes) == 0 {
+		return nil, nil
+	}
+
+	bcdb, err := bc.DB.GetBlockchainObject()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(topHash) == 0 {
+		// try to find under primary branch
+
+		for _, blockHash := range blockHashes {
+			exists, err := bcdb.BlockInChain(blockHash)
+
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				// this block hash is under main branch. return it
+				return blockHash, nil
+			}
+		}
+		// noone of blocks is under main hash
+		return nil, nil
+	}
+	// ,aybe one of hashes is equal to top
+	for _, blockHash := range blockHashes {
+		if bytes.Compare(blockHash, topHash) == 0 {
+			return blockHash, nil
+		}
+	}
+	// get top block. we will need info about it below
+	topBlock, err := bc.GetBlock(topHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// check if top hash is in the main chain
+	exists, err := bcdb.BlockInChain(topHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		// our top block is not part of primary chain
+		// we go down in blocks while find one of blocks
+		// or while find first block in the chain. when we find in the chain
+		// we use it as new top
+
+		bci, err := NewBlockchainIteratorFrom(bc.DB, topHash)
+
+		if err != nil {
+			return nil, err
+		}
+
+		foundnewtop := false
+
+		for {
+			block, err := bci.Next()
+
+			if err != nil {
+				return nil, err
+			}
+
+			// check if this block is equal to any requested
+			for _, blockHash := range blockHashes {
+				if bytes.Compare(blockHash, block.Hash) == 0 {
+					// it is found
+					return blockHash, nil
+				}
+			}
+
+			// check if this block is part of main branch
+			exists, err := bcdb.BlockInChain(block.Hash)
+
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				// we now can consider this block as new top and continue with it in next section
+				topBlock = *block
+
+				foundnewtop = true
+				break
+			}
+
+			// check if this is the end of blockchain
+			if len(block.PrevBlockHash) == 0 {
+				break
+			}
+		}
+
+		if !foundnewtop {
+			return nil, nil
+		}
+	}
+
+	// top block is part of  main chain
+	// find in primary chain but it must be lower height than current
+	for _, blockHash := range blockHashes {
+		exists, err := bcdb.BlockInChain(blockHash)
+
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			// this block hash is under main branch too
+			// check if height is lower then top
+			block, err := bc.GetBlock(blockHash)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if block.Height < topBlock.Height {
+				// this block is under primary chain too and is lower then top
+				return blockHash, nil
+			}
+
+		}
+	}
+	// no block found
+	return nil, nil
+}
+
+// Receive ist of hashes and return a hash that is in the chain defined by top hash
+func (bc *Blockchain) CheckBlockIsInRange(blockHash []byte, bottomHash []byte, topHash []byte) (bool, error) {
+
+	bcdb, err := bc.DB.GetBlockchainObject()
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(topHash) > 0 {
+		// this can be block out of main branch
+
+		exists, err := bcdb.BlockInChain(topHash)
+
+		if err != nil {
+			return false, err
+		}
+
+		if !exists {
+			// block is not in main chain
+			bci, err := NewBlockchainIteratorFrom(bc.DB, topHash)
+
+			if err != nil {
+				return false, err
+			}
+
+			for {
+				block, err := bci.Next()
+
+				if err != nil {
+					return false, err
+				}
+
+				if bytes.Compare(blockHash, block.Hash) == 0 {
+					// it is found
+					return true, nil
+				}
+
+				if bytes.Compare(bottomHash, block.Hash) == 0 {
+					// not found
+					return false, nil
+				}
+
+				// check if this block is part of main branch
+				exists, err := bcdb.BlockInChain(block.Hash)
+
+				if err != nil {
+					return false, err
+				}
+				if exists {
+					// we now can consider this block as new top and continue with it in next section
+					topHash = block.Hash[:]
+					break
+				}
+
+				// check if this is the end of blockchain
+				if len(block.PrevBlockHash) == 0 {
+					// we browsed al chain and no bottom found
+					return false, nil
+				}
+			}
+		}
+	} else {
+		// load top hash
+		topHash, err = bcdb.GetTopHash()
+
+		if err != nil {
+			return false, err
+		}
+	}
+	// at this point we know top and bottom hash are both in main branch. we only load all 3 blocks
+	// to get height and compare
+
+	// get top block.
+	topBlock, err := bc.GetBlock(topHash)
+
+	if err != nil {
+		return false, err
+	}
+
+	bottomBlock, err := bc.GetBlock(bottomHash)
+
+	if err != nil {
+		return false, err
+	}
+
+	block, err := bc.GetBlock(blockHash)
+
+	if err != nil {
+		return false, err
+	}
+
+	if block.Height >= bottomBlock.Height && block.Height <= topBlock.Height {
+		return true, nil
+	}
+
+	return false, nil
 }

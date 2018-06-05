@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gelembjuk/democoin/lib"
 	"github.com/gelembjuk/democoin/lib/utils"
@@ -89,7 +90,11 @@ func (n *NodeNetwork) SetNodes(nodes []NodeAddr, replace bool) {
 // If n any known nodes then it will be loaded from the url on a host
 // Accepts genesis block hash. It will be compared to the hash in JSON doc
 func (n *NodeNetwork) LoadInitialNodes(geenesisHash []byte) error {
-	response, err := http.Get(lib.InitialNodesList)
+	timeout := time.Duration(2 * time.Second)
+
+	client := http.Client{Timeout: timeout}
+
+	response, err := client.Get(lib.InitialNodesList)
 
 	if err != nil {
 		return err

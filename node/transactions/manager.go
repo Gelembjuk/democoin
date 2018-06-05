@@ -59,18 +59,22 @@ func (n *Manager) GetAddressesBalance(addresses []string) (map[string]wallet.Wal
 func (n *Manager) GetAddressBalance(address string) (wallet.WalletBalance, error) {
 	balance := wallet.WalletBalance{}
 
+	n.Logger.Trace.Printf("Get balance %s", address)
 	result, err := n.GetUnspentOutputsManager().GetAddressBalance(address)
 
 	if err != nil {
+		n.Logger.Trace.Printf("Error 1 %s", err.Error())
 		return balance, err
 	}
 
 	balance.Approved = result
 
 	// get pending
+	n.Logger.Trace.Printf("Get pending %s", address)
 	p, err := n.GetAddressPendingBalance(address)
 
 	if err != nil {
+		n.Logger.Trace.Printf("Error 2 %s", err.Error())
 		return balance, err
 	}
 	balance.Pending = p
@@ -84,8 +88,9 @@ func (n *Manager) GetAddressBalance(address string) (wallet.WalletBalance, error
 func (n *Manager) GetAddressPendingBalance(address string) (float64, error) {
 	PubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
-	// inputs this is what a wallet spent
-	// outputs this is what a wallet receives
+	// inputs this is what a wallet spent from his real approved balance
+	// outputs this is what a wallet receives (and didn't resulse in other pending TXs)
+	// slice inputs contains only inputs from approved transactions outputs
 	_, outputs, inputs, err := n.GetUnapprovedTransactionsManager().GetPreparedBy(PubKeyHash)
 
 	if err != nil {
@@ -100,7 +105,7 @@ func (n *Manager) GetAddressPendingBalance(address string) (float64, error) {
 		pendingbalance += o.Value
 	}
 
-	// we need to know values for inputs. this are inputs based on TXs that are in unapproved
+	// we need to know values for inputs. this are inputs based on TXs that are in approved
 	// input TX can be confirmed (in unspent outputs) or unconfirmed . we need to look for it in
 	// both places
 	for _, i := range inputs {
@@ -242,10 +247,17 @@ func (n *Manager) GetInputTransactionsState(tx *structures.Transaction,
 
 	for vind, vin := range tx.Vin {
 		//n.Logger.Trace.Printf("Load in tx %x", vin.Txid)
-		txBockHash, err := n.GetIndexManager().GetTranactionBlock(vin.Txid)
+		txBockHashes, err := n.GetIndexManager().GetTranactionBlocks(vin.Txid)
 
 		if err != nil {
 			n.Logger.Trace.Printf("Error %s", err.Error())
+			return nil, nil, err
+		}
+
+		txBockHash, err := bcMan.ChooseHashUnderTip(txBockHashes, tip)
+
+		if err != nil {
+			n.Logger.Trace.Printf("Error getting correct hash %s", err.Error())
 			return nil, nil, err
 		}
 
@@ -288,7 +300,7 @@ func (n *Manager) GetInputTransactionsState(tx *structures.Transaction,
 		} else {
 			//n.Logger.Trace.Printf("tx found")
 			// check if this input was not yet spent somewhere
-			spentouts, err := n.GetIndexManager().GetTranactionOutputsSpent(vin.Txid)
+			spentouts, err := n.GetIndexManager().GetTranactionOutputsSpent(vin.Txid, txBockHash, tip)
 
 			if err != nil {
 				return nil, nil, err

@@ -204,7 +204,7 @@ func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]st
 	}
 
 	UTXOs := []structures.TXOutputIndependent{}
-	u.Logger.Trace.Printf("findoutputs for  %s", address)
+	//u.Logger.Trace.Printf("findoutputs for  %s", address)
 	err = uodb.ForEach(func(txID, txData []byte) error {
 		outs, err := u.DeserializeOutputs(txData)
 
@@ -213,7 +213,7 @@ func (u UnspentTransactions) GetUnspentTransactionsOutputs(address string) ([]st
 		}
 
 		for _, out := range outs {
-			u.Logger.Trace.Printf("output %x %d", out.TXID, out.OIndex)
+			//u.Logger.Trace.Printf("output %x %d", out.TXID, out.OIndex)
 			if out.IsLockedWithKey(pubKeyHash) {
 				UTXOs = append(UTXOs, out)
 			}
@@ -532,19 +532,20 @@ func (u UnspentTransactions) UpdateOnBlocksCancel(blocks []*structures.Block) er
 	return nil
 }
 
-/*
-* This is executed when a block is canceled.
-* All input transactions must be return to "unspent"
-* And all outpt must be deleted from "unspent"
- */
+// This is executed when a block is canceled.
+// All input transactions must be return to "unspent"
+// And all output must be deleted from "unspent"
 func (u UnspentTransactions) UpdateOnBlockCancel(block *structures.Block) error {
 	uodb, err := u.DB.GetUnspentOutputsObject()
 
 	if err != nil {
 		return err
 	}
+
+	//u.Logger.Trace.Printf("block cancel at unspent %x , prev hash %x", block.Hash, block.PrevBlockHash) //REM
+
 	for _, tx := range block.Transactions {
-		u.Logger.Trace.Printf("BC check tx %x", tx.ID) //REM
+		//u.Logger.Trace.Printf("BC check tx %x", tx.ID) //REM
 
 		// delete this transaction from list of unspent
 		uodb.DeleteDataForTransaction(tx.ID)
@@ -556,12 +557,14 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *structures.Block) error 
 		// all input outputs must be added back to unspent
 		// but only if inputs are in current BC
 		for _, vin := range tx.Vin {
-			txi, spending, blockHash, err := u.NewTransactionIndex().GetTransactionAllInfo(vin.Txid)
+			// when we execute cancel, current top can be already changed. we use this block hash as a top
+			// to find this TX
+			txi, spending, blockHash, err := u.NewTransactionIndex().GetTransactionAllInfo(vin.Txid, block.PrevBlockHash)
 
-			u.Logger.Trace.Printf("input tx find input %x", vin.Txid) //REM
+			//u.Logger.Trace.Printf("input tx find input %x", vin.Txid) //REM
 
 			if err != nil {
-				u.Logger.Trace.Printf("error finding tx %x %s", tx.ID, err.Error()) //REM
+				//u.Logger.Trace.Printf("error finding tx %x %s", tx.ID, err.Error()) //REM
 				return err
 			}
 
@@ -571,8 +574,9 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *structures.Block) error 
 				break
 			}
 
-			u.Logger.Trace.Printf("found tx in block %x", blockHash) //REM
-			//u.Logger.Trace.Printf("spendings %s", spending)          //REM
+			//u.Logger.Trace.Printf("found tx in block %x", blockHash)   //REM
+			//u.Logger.Trace.Printf("spendings count %d", len(spending)) //REM
+			//u.Logger.Trace.Printf("spendings count %s", spending)      //REM
 
 			sender, _ := utils.HashPubKey(txi.Vin[0].PubKey)
 
@@ -594,7 +598,7 @@ func (u UnspentTransactions) UpdateOnBlockCancel(block *structures.Block) error 
 					UnspentOuts = append(UnspentOuts, no)
 				}
 			}
-			u.Logger.Trace.Printf("BC tx save as unspent %x %d outputs", vin.Txid, len(UnspentOuts))
+			//u.Logger.Trace.Printf("BC tx save as unspent %x %d outputs", vin.Txid, len(UnspentOuts))
 
 			if len(UnspentOuts) > 0 {
 				txData, err := u.SerializeOutputs(UnspentOuts)
