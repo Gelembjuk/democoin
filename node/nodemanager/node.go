@@ -97,16 +97,16 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 		// load nodes from local storage of nodes
 		if n.NodeNet.GetCountOfKnownNodes() == 0 && n.BlockchainExist() {
 			// there are no any known nodes.
-			/*
-				bcm := n.NodeBC.GetBCManager()
 
-				geenesisHash, err := bcm.GetGenesisBlockHash()
+			bcm := n.NodeBC.GetBCManager()
 
-				if err == nil {
-					// load them from some external resource
-					n.NodeNet.LoadInitialNodes(geenesisHash)
-				}
-			*/
+			geenesisHash, err := bcm.GetGenesisBlockHash()
+
+			if err == nil {
+				// load them from some external resource
+				n.NodeNet.LoadInitialNodes(geenesisHash)
+			}
+
 		}
 	} else {
 		n.NodeNet.SetNodes(list, true)
