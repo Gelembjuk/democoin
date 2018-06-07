@@ -834,7 +834,7 @@ func (c *NodeCLI) commandAddNode() error {
 			return err
 		}
 	} else {
-		c.Node.NodeNet.AddNodeToKnown(newaddr)
+		c.Node.AddNodeToKnown(newaddr, false)
 	}
 
 	fmt.Println("Success!")

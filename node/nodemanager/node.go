@@ -97,16 +97,16 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 		// load nodes from local storage of nodes
 		if n.NodeNet.GetCountOfKnownNodes() == 0 && n.BlockchainExist() {
 			// there are no any known nodes.
+			/*
+				bcm := n.NodeBC.GetBCManager()
 
-			bcm := n.NodeBC.GetBCManager()
+				geenesisHash, err := bcm.GetGenesisBlockHash()
 
-			geenesisHash, err := bcm.GetGenesisBlockHash()
-
-			if err == nil {
-				// load them from some external resource
-				n.NodeNet.LoadInitialNodes(geenesisHash)
-			}
-
+				if err == nil {
+					// load them from some external resource
+					n.NodeNet.LoadInitialNodes(geenesisHash)
+				}
+			*/
 		}
 	} else {
 		n.NodeNet.SetNodes(list, true)
@@ -297,6 +297,21 @@ func (n *Node) SendTransactionToAll(tx *structures.Transaction) {
 	}
 }
 
+// Add node
+// We need this for case when we want to do some more actions after node added
+func (n *Node) AddNodeToKnown(addr net.NodeAddr, sendversion bool) {
+	// this is just aliace. check function will do all work
+	// it will check if addres is in list, if no, it will send list of all known
+	// nodes to that address and ad it to known
+	added := n.CheckAddressKnown(addr)
+
+	if added && sendversion {
+		n.Logger.Trace.Printf("Added node %s\n", addr.NodeAddrToString())
+		// end version to this node
+		n.SendVersionToNodes([]net.NodeAddr{addr})
+	}
+}
+
 // Send block to all known nodes
 // This is used in case when new block was received from other node or
 // created by this node. We will notify our network about new block
@@ -345,14 +360,18 @@ func (n *Node) SendVersionToNodes(nodes []net.NodeAddr) {
 * Check if the address is known . If not then add to known
 * and send list of all addresses to that node
  */
-func (n *Node) CheckAddressKnown(addr net.NodeAddr) {
+func (n *Node) CheckAddressKnown(addr net.NodeAddr) bool {
 	if !n.NodeNet.CheckIsKnown(addr) {
 		// send him all addresses
 		n.Logger.Trace.Printf("sending list of address to %s , %s", addr.NodeAddrToString(), n.NodeNet.Nodes)
 		n.NodeClient.SendAddrList(addr, n.NodeNet.Nodes)
 
 		n.NodeNet.AddNodeToKnown(addr)
+
+		return true
 	}
+
+	return false
 }
 
 /*

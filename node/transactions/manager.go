@@ -517,3 +517,18 @@ func (n *Manager) BlockAdddedToTop(block *structures.Block) error {
 	n.GetUnspentOutputsManager().UpdateOnBlockAdd(block)
 	return nil
 }
+
+// check if transaction exists. it checks in all places. in approved and pending
+func (n *Manager) GetIfExists(txid []byte) (*structures.Transaction, error) {
+	// check in pending first
+	tx, err := n.GetUnapprovedTransactionsManager().GetIfExists(txid)
+
+	if !(tx == nil && err == nil) {
+		return tx, err
+	}
+
+	// not exist on pending and no error
+	// try to check in approved . it will look only in primary branch
+	tx, _, _, err = n.GetIndexManager().GetTransactionAllInfo(txid, []byte{})
+	return tx, err
+}

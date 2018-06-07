@@ -114,8 +114,9 @@ func (n *NodeBlockMaker) PrepareNewBlock() (*structures.Block, error) {
 				// this can be case when a transaction is based on other unapproved transaction
 				// and that transaction was created in same second
 				n.Logger.Trace.Printf("Minting: Ignore transaction %x. Verify failed with error: %s\n", tx.ID, err.Error())
+				// we delete this transaction. no sense to keep it
+				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
 				continue
-				//return nil, err
 			}
 
 			if vtx {

@@ -249,9 +249,7 @@ func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*structures.Transacti
 
 }
 
-/*
-* Get all unapproved transactions
- */
+// Get all unapproved transactions
 func (u *UnApprovedTransactions) GetTransactions(number int) ([]*structures.Transaction, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 

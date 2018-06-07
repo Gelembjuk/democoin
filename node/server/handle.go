@@ -490,7 +490,7 @@ func (s *NodeServerRequest) handleInv() error {
 
 		s.Logger.Trace.Printf("Check if TX exists %x\n", txID)
 
-		tx, err := s.Node.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
+		tx, err := s.Node.GetTransactionsManager().GetIfExists(txID)
 
 		if tx == nil && err == nil {
 			// not exists
@@ -650,10 +650,12 @@ func (s *NodeServerRequest) handleTx() error {
 		return err
 	}
 
-	if txe, err := s.Node.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(tx.ID); err == nil && txe != nil {
+	if txe, err := s.Node.GetTransactionsManager().GetIfExists(tx.ID); err == nil && txe != nil {
+		s.Logger.Trace.Println("Received transaction. It already exists: %x ", tx.ID)
 		// exists , nothing to do, it was already processed before
 		return nil
 	}
+	s.Logger.Trace.Println("Received transaction. It does not exists: %x ", tx.ID)
 	// this will also verify a transaction
 	err = s.Node.GetTransactionsManager().ReceivedNewTransaction(&tx)
 
@@ -780,13 +782,7 @@ func (s *NodeServerRequest) handleAddNode() error {
 		return err
 	}
 
-	added := s.S.Node.NodeNet.AddNodeToKnown(payload.Node)
-
-	if added {
-		s.Logger.Trace.Printf("Added node %s\n", payload.Node.NodeAddrToString())
-		// end version to this node
-		s.Node.SendVersionToNodes([]net.NodeAddr{payload.Node})
-	}
+	s.S.Node.AddNodeToKnown(payload.Node, true)
 
 	s.Response = []byte{}
 

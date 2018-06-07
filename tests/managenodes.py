@@ -199,6 +199,19 @@ def GetNodes(datadir):
 
     return nodeslist
 
+def WaitNodes(datadir, explen, maxtime = 10):
+    nodes = []
+    i = 0
+    while True:
+        nodes = GetNodes(datadir)
+        
+        if len(nodes) >= explen or i >= maxtime:
+            break
+        time.sleep(1)
+        i = i + 1
+        
+    return nodes
+
 def RemoveNode(datadir, nodehost,nodeport):
     _lib.StartTest("Remove node "+nodehost+":"+str(nodeport))
     res = _lib.ExecuteNode(['removenode','-datadir',datadir,'-nodehost',nodehost,'-nodeport',nodeport])
