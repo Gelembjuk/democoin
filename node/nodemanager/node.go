@@ -117,8 +117,8 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 /*
 * Init block maker object. It is used to make new blocks
  */
-func (n *Node) initBlockMaker() (*consensus.NodeBlockMaker, error) {
-	return consensus.NewConsensusManager(n.DBConn.DB, n.Logger).NewBlockMaker(n.MinterAddress), nil
+func (n *Node) initBlockMaker() (consensus.ConsensusInterface, error) {
+	return consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB, n.Logger)
 }
 
 // Open Blockchain  DB. This must be called before any operation with blockchain or cached data
@@ -167,7 +167,9 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 
 	n.Logger.Trace.Printf("Complete genesis block proof of work\n")
 
-	err = Minter.CompleteBlock(genesisBlock)
+	Minter.SetPreparedBlock(genesisBlock)
+
+	genesisBlock, err = Minter.CompleteBlock()
 
 	if err != nil {
 		return err
@@ -415,83 +417,48 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	// check how many transactions are ready to be added to a block
 	Minter, _ := n.initBlockMaker()
 
-	// check how many transactions are ready to be added to a block
-	if !Minter.CheckUnapprovedCache() {
-		n.Logger.Trace.Println("No anough transactions for block")
-
-		return nil, nil
-	}
-
-	if !Minter.CheckGoodTimeToMakeBlock() {
-		n.Logger.Trace.Println("Not good time to do a block")
-		return nil, nil
-	}
-	n.Logger.Trace.Println("Prepare new bock making")
-	// makes a block transactions list. This will not yet have a block hash
-	// can return nil if no enough transactions to make a block
-	blockorig, err := Minter.PrepareNewBlock()
+	prepres, err := Minter.PrepareNewBlock()
 
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
-	var block *structures.Block
-	block = nil
-
-	if blockorig != nil {
-		n.Logger.Trace.Printf("Prepared new block with %d transactions", len(blockorig.Transactions))
-		// do copy of a block. as original can contains some references to the DB and it will be closed
-		block = blockorig.Copy()
+	if prepres != consensus.BlockPrepare_Done {
+		n.Logger.Trace.Println("No anough transactions to make a block")
+		return nil, nil
 	}
 
 	// close it while doing the proof of work
 	n.CloseBlockchain()
 
-	// complete the block. add proof of work
-	if block != nil {
+	block, err := Minter.CompleteBlock()
 
-		n.Logger.Trace.Printf("Prepared new block with %d transactions", len(block.Transactions))
-
-		// this will do MINING of a block
-
-		err := Minter.CompleteBlock(block)
-
-		if err != nil {
-			return nil, err
-		}
-
-		n.Logger.Trace.Printf("Add block to the blockchain. Hash %x\n", block.Hash)
-
-		// open BC DB again
-		n.OpenBlockchain("AddNewMadeBlock")
-		Minter.SetDBManager(n.DBConn.DB)
-
-		// final correction. while we did minting, there can be something changes
-		// some other block could be added to the blockchain in parallel process
-
-		err = Minter.FinalBlockCheck(block)
-
-		if err != nil {
-			n.Logger.Trace.Printf("Final check is not passed. Error: %s", err.Error())
-			return nil, err
-		}
-
-		// add new block to local blockchain. this will check a block again
-		// TODO we need to skip checking. no sense, we did it right
-		_, err = n.AddBlock(block)
-
-		if err != nil {
-			return nil, err
-		}
-		// send new block to all known nodes
-		n.SendBlockToAll(block, net.NodeAddr{} /*nothing to skip*/)
-
-		n.Logger.Trace.Println("Block done. Sent to all")
-
-		return block.Hash, nil
+	if err != nil {
+		n.Logger.Trace.Printf("Block completion error. %s", err)
+		return nil, err
 	}
-	n.Logger.Trace.Println("No anough transactions to make a block")
-	return nil, nil
+
+	n.Logger.Trace.Printf("Add block to the blockchain. Hash %x\n", block.Hash)
+
+	// open BC DB again
+	n.OpenBlockchain("AddNewMadeBlock")
+	// We set DB again because after close it could be update
+	Minter.SetDBManager(n.DBConn.DB)
+
+	// add new block to local blockchain. this will check a block again
+	// TODO we need to skip checking. no sense, we did it right
+	_, err = n.AddBlock(block)
+
+	if err != nil {
+		return nil, err
+	}
+	// send new block to all known nodes
+	n.SendBlockToAll(block, net.NodeAddr{} /*nothing to skip*/)
+
+	n.Logger.Trace.Println("Block done. Sent to all")
+
+	return block.Hash, nil
+
 }
 
 // Add new block to blockchain.

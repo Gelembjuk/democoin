@@ -2,7 +2,6 @@ package nodemanager
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/lib/wallet"
@@ -320,8 +319,13 @@ func (n *NodeBlockchain) AddBlock(block *structures.Block) (uint, error) {
 		return blockchain.BCBAddState_notAddedNoPrev, nil
 	}
 
+	Minter, err := consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB, n.Logger)
+
+	if err != nil {
+		return 0, err
+	}
 	// verify this block against rules.
-	err = n.VerifyBlock(block)
+	err = Minter.VerifyBlock(block)
 
 	if err != nil {
 		return 0, err
@@ -390,79 +394,4 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*structures.BlockShort, 
 	blocks := n.GetBCManager().GetNextBlocks(hash)
 
 	return blocks, nil
-}
-
-// Verify a block against blockchain
-// RULES
-// 0. Verification is done agains blockchain branch starting from prevblock, not current top branch
-// 1. There can be only 1 transaction make reward per block
-// 2. number of transactions must be in correct ranges (reward transaction is not calculated)
-// 3. transactions can have as input other transaction from this block and it must be listed BEFORE
-//   (output must be before input in same block)
-// 4. all inputs must be in blockchain (correct unspent inputs)
-// 5. Additionally verify each transaction agains signatures, total amount, balance etc
-// 6. Verify hash is correc agains rules
-func (n *NodeBlockchain) VerifyBlock(block *structures.Block) error {
-	//6. Verify hash
-
-	pow := consensus.NewProofOfWork(block)
-
-	valid, err := pow.Validate()
-
-	if err != nil {
-		return err
-	}
-
-	if !valid {
-		return errors.New("Block hash is not valid")
-	}
-	n.Logger.Trace.Println("block hash verified")
-	// 2. check number of TX
-	txnum := len(block.Transactions) - 1 /*minus coinbase TX*/
-
-	bcm := n.GetBCManager()
-
-	min, max, err := bcm.GetTransactionNumbersLimits(block)
-
-	if err != nil {
-		return err
-	}
-
-	if txnum < min {
-		return errors.New("Number of transactions is too low")
-	}
-
-	if txnum > max {
-		return errors.New("Number of transactions is too high")
-	}
-
-	// 1
-	coinbaseused := false
-
-	prevTXs := []*structures.Transaction{}
-
-	for _, tx := range block.Transactions {
-		if tx.IsCoinbase() {
-			if coinbaseused {
-				return errors.New("2 coin base TX in the block")
-			}
-			coinbaseused = true
-		}
-		vtx, err := n.getTransactionsManager().VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
-
-		if err != nil {
-			return err
-		}
-
-		if !vtx {
-			return errors.New(fmt.Sprintf("Transaction in a block is not valid: %x", tx.ID))
-		}
-
-		prevTXs = append(prevTXs, tx)
-	}
-	// 1.
-	if !coinbaseused {
-		return errors.New("No coinbase TX in the block")
-	}
-	return nil
 }

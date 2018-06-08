@@ -169,6 +169,7 @@ func (n *Manager) VerifyTransactionQuick(tx *structures.Transaction) (bool, erro
 	notFoundInputs, inputTXs, err := n.GetUnspentOutputsManager().VerifyTransactionsOutputsAreNotSpent(tx.Vin)
 
 	if err != nil {
+		n.Logger.Trace.Printf("VT error 1: %s", err.Error())
 		return false, err
 	}
 

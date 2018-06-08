@@ -651,11 +651,11 @@ func (s *NodeServerRequest) handleTx() error {
 	}
 
 	if txe, err := s.Node.GetTransactionsManager().GetIfExists(tx.ID); err == nil && txe != nil {
-		s.Logger.Trace.Println("Received transaction. It already exists: %x ", tx.ID)
+		s.Logger.Trace.Printf("Received transaction. It already exists: %x ", tx.ID)
 		// exists , nothing to do, it was already processed before
 		return nil
 	}
-	s.Logger.Trace.Println("Received transaction. It does not exists: %x ", tx.ID)
+	s.Logger.Trace.Printf("Received transaction. It does not exists: %x ", tx.ID)
 	// this will also verify a transaction
 	err = s.Node.GetTransactionsManager().ReceivedNewTransaction(&tx)
 

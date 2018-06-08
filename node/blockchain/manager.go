@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/gelembjuk/democoin/lib/utils"
-	"github.com/gelembjuk/democoin/node/config"
 	"github.com/gelembjuk/democoin/node/database"
 	"github.com/gelembjuk/democoin/node/structures"
 )
@@ -821,30 +820,6 @@ func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 	}
 
 	return genesisHash, nil
-}
-
-//Get minimum and maximum number of transaction allowed in block for current chain
-func (bc *Blockchain) GetTransactionNumbersLimits(block *structures.Block) (int, int, error) {
-	var min int
-
-	if block == nil {
-		bestHeight, err := bc.GetBestHeight()
-
-		if err != nil {
-			return 0, 0, err
-		}
-		min = bestHeight + 1
-	} else {
-		min = block.Height
-	}
-
-	if min > config.MaxMinNumberTransactionInBlock {
-		min = config.MaxMinNumberTransactionInBlock
-	} else if min < 1 {
-		min = 1
-	}
-	bc.Logger.Trace.Printf("TX count limits %d - %d", min, config.MaxNumberTransactionInBlock)
-	return min, config.MaxNumberTransactionInBlock, nil
 }
 
 // Receive ist of hashes and return a hash that is in the chain defined by top hash
