@@ -17,10 +17,7 @@ import (
 	"github.com/gelembjuk/democoin/node/transactions"
 )
 
-/*
-* This structure is central part of the application. only it can acces to blockchain and inside it all operation are done
- */
-
+// This structure is central part of the application. only it can acces to blockchain and inside it all operation are done
 type Node struct {
 	NodeBC  NodeBlockchain
 	NodeNet net.NodeNetwork
@@ -34,10 +31,8 @@ type Node struct {
 	SessionID     string
 }
 
-/*
-* Init node.
-* Init interfaces of all DBs, blockchain, unspent transactions, unapproved transactions
- */
+// Init node.
+// Init interfaces of all DBs, blockchain, unspent transactions, unapproved transactions
 func (n *Node) Init() {
 	n.NodeNet.Init()
 	n.NodeNet.Logger = n.Logger
@@ -57,16 +52,17 @@ func (n *Node) Init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
+// Build transaction manager structure
 func (n *Node) GetTransactionsManager() *transactions.Manager {
-	return transactions.NewManager(n.DBConn.DB, n.Logger)
-}
-func (n *Node) GetBCManager() (*blockchain.Blockchain, error) {
-	return blockchain.NewBlockchainManager(n.DBConn.DB, n.Logger)
+	return transactions.NewManager(n.DBConn.DB(), n.Logger)
 }
 
-/*
-* Init network client object. It is used to communicate with other nodes
- */
+// Build BC manager structure
+func (n *Node) GetBCManager() (*blockchain.Blockchain, error) {
+	return blockchain.NewBlockchainManager(n.DBConn.DB(), n.Logger)
+}
+
+// Init network client object. It is used to communicate with other nodes
 func (n *Node) InitClient() error {
 	if n.NodeClient != nil {
 		return nil
@@ -82,9 +78,7 @@ func (n *Node) InitClient() error {
 	return nil
 }
 
-/*
-* Load list of other nodes addresses
- */
+// Load list of other nodes addresses
 func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 	if n.DBConn.OpenConnectionIfNeeded("CheckNodesAndGenesis", n.SessionID) {
 		defer n.DBConn.CloseConnection()
@@ -114,48 +108,26 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 	return nil
 }
 
-/*
-* Init block maker object. It is used to make new blocks
- */
+// Init block maker object. It is used to make new blocks
 func (n *Node) initBlockMaker() (consensus.ConsensusInterface, error) {
-	return consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB, n.Logger)
+	return consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB(), n.Logger)
 }
 
-// Open Blockchain  DB. This must be called before any operation with blockchain or cached data
-func (n *Node) OpenBlockchain(reason string) error {
-	err := n.DBConn.OpenConnection(reason, n.SessionID)
+// Check if blockchain already exists. If no, we will not allow most of operations
+// It is needed to create it first
 
-	if err != nil {
-		n.Logger.Trace.Printf("OpenConn error %s", err.Error())
-		return err
-	}
-
-	return nil
-}
-
-// Closes Blockchain DB connection
-func (n *Node) CloseBlockchain() {
-	n.DBConn.CloseConnection()
-}
-
-/*
-* Check if blockchain already exists. If no, we will not allow most of operations
-* It is needed to create it first
- */
 func (n *Node) BlockchainExist() bool {
 
-	if n.DBConn.OpenConnectionIfNeeded("CheckBCExists", "") {
-		defer n.DBConn.CloseConnection()
-	}
+	exists, _ := n.DBConn.DB().CheckDBExists()
 
-	exists, _ := n.DBConn.DB.CheckDBExists()
+	// close DB. We do this check almost for any operation
+	// we don't need to keep connection for evey of them
+	n.DBConn.CloseConnection()
 
 	return exists
 }
 
-/*
-* Create new blockchain, add genesis block witha given text
- */
+// Create new blockchain, add genesis block witha given text
 func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 	genesisBlock, err := n.NodeBC.PrepareGenesisBlock(address, genesisCoinbaseData)
 
@@ -188,7 +160,7 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 
 	n.GetTransactionsManager().BlockAdddedToTop(genesisBlock)
 
-	n.CloseBlockchain()
+	n.DBConn.CloseConnection()
 
 	n.Logger.Trace.Printf("Blockchain ready!\n")
 
@@ -240,10 +212,8 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 	if err != nil {
 		return false, errors.New(fmt.Sprintf("Create DB abd add first block: %", err.Error()))
 	}
-	// open block chain now
-	n.OpenBlockchain("InitAfterImport")
 
-	defer n.CloseBlockchain()
+	defer n.DBConn.CloseConnection()
 
 	n.GetTransactionsManager().BlockAdddedToTop(block)
 
@@ -405,14 +375,6 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return nil, errors.New("Minter address is not provided")
 	}
 
-	err := n.OpenBlockchain("TryToMakeBlock1")
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer n.CloseBlockchain()
-
 	n.Logger.Trace.Println("Create block maker")
 	// check how many transactions are ready to be added to a block
 	Minter, _ := n.initBlockMaker()
@@ -429,7 +391,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	}
 
 	// close it while doing the proof of work
-	n.CloseBlockchain()
+	n.DBConn.CloseConnection()
 
 	block, err := Minter.CompleteBlock()
 
@@ -440,10 +402,8 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 	n.Logger.Trace.Printf("Add block to the blockchain. Hash %x\n", block.Hash)
 
-	// open BC DB again
-	n.OpenBlockchain("AddNewMadeBlock")
 	// We set DB again because after close it could be update
-	Minter.SetDBManager(n.DBConn.DB)
+	Minter.SetDBManager(n.DBConn.DB())
 
 	// add new block to local blockchain. this will check a block again
 	// TODO we need to skip checking. no sense, we did it right
@@ -454,6 +414,8 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	}
 	// send new block to all known nodes
 	n.SendBlockToAll(block, net.NodeAddr{} /*nothing to skip*/)
+
+	n.DBConn.CloseConnection()
 
 	n.Logger.Trace.Println("Block done. Sent to all")
 

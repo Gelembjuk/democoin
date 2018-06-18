@@ -184,7 +184,7 @@ def test(testfilter):
     
 def GetNodes(datadir):
     _lib.StartTest("Get nodes")
-    res = _lib.ExecuteNode(['shownodes','-datadir',datadir])
+    res = _lib.ExecuteNode(['shownodes','-datadir',datadir,'-logs','trace'])
     
     _lib.FatalAssertSubstr(res,"Nodes:","Output should contain list of nodes")
 
@@ -214,12 +214,12 @@ def WaitNodes(datadir, explen, maxtime = 10):
 
 def RemoveNode(datadir, nodehost,nodeport):
     _lib.StartTest("Remove node "+nodehost+":"+str(nodeport))
-    res = _lib.ExecuteNode(['removenode','-datadir',datadir,'-nodehost',nodehost,'-nodeport',nodeport])
+    res = _lib.ExecuteNode(['removenode','-datadir',datadir,'-nodehost',nodehost,'-nodeport',nodeport,'-logs','trace'])
     _lib.FatalAssertSubstr(res,"Success!","Output should contain success message")
     
 def AddNode(datadir, nodehost,nodeport):
     _lib.StartTest("Add node "+nodehost+":"+str(nodeport))
-    res = _lib.ExecuteNode(['addnode','-datadir',datadir,'-nodehost',nodehost,'-nodeport',nodeport])
+    res = _lib.ExecuteNode(['addnode','-datadir',datadir,'-nodehost',nodehost,'-nodeport',nodeport,'-logs','trace'])
     _lib.FatalAssertSubstr(res,"Success!","Output should contain success message")
 
 def RemoveAllNodes(datadir):

@@ -10,10 +10,8 @@ type NodesListStorage struct {
 }
 
 func (s NodesListStorage) GetNodes() ([]net.NodeAddr, error) {
-	if s.DBConn.OpenConnectionIfNeeded("GetNodes", s.SessionID) {
-		defer s.DBConn.CloseConnection()
-	}
-	nddb, err := s.DBConn.DB.GetNodesObject()
+
+	nddb, err := s.DBConn.DB().GetNodesObject()
 
 	if err != nil {
 		return nil, err
@@ -33,13 +31,14 @@ func (s NodesListStorage) GetNodes() ([]net.NodeAddr, error) {
 	return nodes, nil
 }
 func (s NodesListStorage) AddNodeToKnown(addr net.NodeAddr) {
-	s.DBConn.Logger.Trace.Printf("AddNodeToKnown %s", addr.NodeAddrToString())
-
-	if s.DBConn.OpenConnectionIfNeeded("AddNode", s.SessionID) {
-
+	if !s.DBConn.CheckConnectionIsOpen() {
+		// if connection is not opened when this function is called, we have to close it
+		// we do this because this structre can be shared between threads.
 		defer s.DBConn.CloseConnection()
 	}
-	nddb, err := s.DBConn.DB.GetNodesObject()
+	s.DBConn.Logger.Trace.Printf("AddNodeToKnown %s", addr.NodeAddrToString())
+
+	nddb, err := s.DBConn.DB().GetNodesObject()
 
 	if err != nil {
 		return
@@ -52,10 +51,12 @@ func (s NodesListStorage) AddNodeToKnown(addr net.NodeAddr) {
 	return
 }
 func (s NodesListStorage) RemoveNodeFromKnown(addr net.NodeAddr) {
-	if s.DBConn.OpenConnectionIfNeeded("RemoveNode", s.SessionID) {
+	if !s.DBConn.CheckConnectionIsOpen() {
+		// if connection is not opened when this function is called, we have to close it
+		// we do this because this structre can be shared between threads.
 		defer s.DBConn.CloseConnection()
 	}
-	nddb, err := s.DBConn.DB.GetNodesObject()
+	nddb, err := s.DBConn.DB().GetNodesObject()
 
 	if err != nil {
 		return
@@ -66,10 +67,8 @@ func (s NodesListStorage) RemoveNodeFromKnown(addr net.NodeAddr) {
 	return
 }
 func (s NodesListStorage) GetCountOfKnownNodes() (int, error) {
-	if s.DBConn.OpenConnectionIfNeeded("GetCount", s.SessionID) {
-		defer s.DBConn.CloseConnection()
-	}
-	nddb, err := s.DBConn.DB.GetNodesObject()
+
+	nddb, err := s.DBConn.DB().GetNodesObject()
 
 	if err != nil {
 		return 0, err

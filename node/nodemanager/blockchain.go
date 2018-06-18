@@ -62,12 +62,12 @@ func (bci *BlocksIterator) Next() *BlockInfo {
 }
 
 func (n *NodeBlockchain) GetBCManager() *blockchain.Blockchain {
-	bcm, _ := blockchain.NewBlockchainManager(n.DBConn.DB, n.Logger)
+	bcm, _ := blockchain.NewBlockchainManager(n.DBConn.DB(), n.Logger)
 	return bcm
 }
 
 func (n *NodeBlockchain) getTransactionsManager() *transactions.Manager {
-	return transactions.NewManager(n.DBConn.DB, n.Logger)
+	return transactions.NewManager(n.DBConn.DB(), n.Logger)
 }
 
 // Checks if a block exists in the chain. It will go over blocks list
@@ -142,24 +142,16 @@ func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string
 func (n *NodeBlockchain) CreateBlockchain(genesis *structures.Block) error {
 	n.Logger.Trace.Println("Init DB")
 
-	// this creates DB connection object but doesn't try to connect to DB
-	n.DBConn.PrepareConnection("")
+	n.DBConn.CloseConnection() // close in case if it was opened before
 
-	err := n.DBConn.DB.InitDatabase()
-
-	// clean DB connection object. it will be opened later again
-	n.DBConn.CleanConnection()
+	err := n.DBConn.InitDatabase()
 
 	if err != nil {
 		n.Logger.Error.Printf("Can not init DB: %s", err.Error())
 		return err
 	}
-	n.DBConn.OpenConnection("AddGeneis", "")
 
-	defer n.DBConn.CloseConnection()
-
-	n.Logger.Trace.Println("Go to create DB connection")
-	bcdb, err := n.DBConn.DB.GetBlockchainObject()
+	bcdb, err := n.DBConn.DB().GetBlockchainObject()
 
 	if err != nil {
 		n.Logger.Error.Printf("Can not create conn object: %s", err.Error())
@@ -192,7 +184,7 @@ func (n *NodeBlockchain) CreateBlockchain(genesis *structures.Block) error {
 
 // Creates iterator to go over blockchain
 func (n *NodeBlockchain) GetBlockChainIterator() (*BlocksIterator, error) {
-	bcicore, err := blockchain.NewBlockchainIterator(n.DBConn.DB)
+	bcicore, err := blockchain.NewBlockchainIterator(n.DBConn.DB())
 
 	if err != nil {
 		return nil, err
@@ -213,7 +205,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 	if !w.ValidateAddress(address) {
 		return result, errors.New("Address is not valid")
 	}
-	bci, err := blockchain.NewBlockchainIterator(n.DBConn.DB)
+	bci, err := blockchain.NewBlockchainIterator(n.DBConn.DB())
 
 	if err != nil {
 		return nil, err
@@ -319,7 +311,7 @@ func (n *NodeBlockchain) AddBlock(block *structures.Block) (uint, error) {
 		return blockchain.BCBAddState_notAddedNoPrev, nil
 	}
 
-	Minter, err := consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB, n.Logger)
+	Minter, err := consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB(), n.Logger)
 
 	if err != nil {
 		return 0, err

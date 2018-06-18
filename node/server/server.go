@@ -179,7 +179,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	request = nil
 
 	// open blockchain. and close in the end ofthis function
-	err = requestobj.Node.OpenBlockchain("HandleCommand " + command)
+	err = requestobj.Node.DBConn.OpenConnection("HandleCommand "+command, sessid)
 
 	if err != nil {
 		s.sendErrorBack(conn, errors.New("Blockchain open Error: "+err.Error()))
@@ -252,7 +252,7 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 		rerr = errors.New("Unknown command!")
 	}
 
-	requestobj.Node.CloseBlockchain()
+	requestobj.Node.DBConn.CloseConnection()
 
 	if rerr != nil {
 		s.Logger.Error.Println("Network Command Handle Error: ", rerr.Error())
@@ -427,7 +427,6 @@ func (s *NodeServer) BlockBuilder() {
 			// block was not created and txID is real transaction ID
 			// send this transaction to all other nodes.
 			// blockchain should be closed in this place
-			NodeClone.OpenBlockchain("SendTxToAll")
 
 			tx, err := NodeClone.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
 
@@ -440,9 +439,8 @@ func (s *NodeServer) BlockBuilder() {
 			} else if tx == nil {
 				s.Logger.Trace.Printf("Error: TX %x is not found", txID)
 			}
-
-			NodeClone.CloseBlockchain()
 		}
+		NodeClone.DBConn.CloseConnection()
 	}
 }
 

@@ -114,7 +114,7 @@ func (bdm *BoltDBManager) InitDatabase() error {
 	if err != nil {
 		return err
 	}
-	bdm.Logger.Trace.Println("get BC object ")
+
 	bc, err := bdm.GetBlockchainObject()
 
 	if err != nil {
@@ -177,6 +177,8 @@ func (bdm *BoltDBManager) InitDatabase() error {
 
 	return nil
 }
+
+// Check if database was already inited
 func (bdm *BoltDBManager) CheckDBExists() (bool, error) {
 	bc, err := bdm.GetBlockchainObject()
 
@@ -197,6 +199,7 @@ func (bdm *BoltDBManager) CheckDBExists() (bool, error) {
 	return false, nil
 }
 
+// returns BlockChain Database structure. does al init
 func (bdm *BoltDBManager) GetBlockchainObject() (BlockchainInterface, error) {
 	conn, err := bdm.getConnectionForObject(ClassNameBlockchain)
 
@@ -209,6 +212,8 @@ func (bdm *BoltDBManager) GetBlockchainObject() (BlockchainInterface, error) {
 
 	return &bc, nil
 }
+
+// returns Transaction Index Database structure. does al init
 func (bdm *BoltDBManager) GetTransactionsObject() (TranactionsInterface, error) {
 	conn, err := bdm.getConnectionForObject(ClassNameTransactions)
 
@@ -221,6 +226,8 @@ func (bdm *BoltDBManager) GetTransactionsObject() (TranactionsInterface, error) 
 
 	return &txs, nil
 }
+
+// returns Unapproved Transaction Database structure. does al init
 func (bdm *BoltDBManager) GetUnapprovedTransactionsObject() (UnapprovedTransactionsInterface, error) {
 	conn, err := bdm.getConnectionForObject(ClassNameUnspentOutputs)
 
@@ -233,6 +240,8 @@ func (bdm *BoltDBManager) GetUnapprovedTransactionsObject() (UnapprovedTransacti
 
 	return &uos, nil
 }
+
+// returns Unspent Transactions Database structure. does al init
 func (bdm *BoltDBManager) GetUnspentOutputsObject() (UnspentOutputsInterface, error) {
 	conn, err := bdm.getConnectionForObject(ClassNameUnapprovedTransactions)
 
@@ -245,6 +254,8 @@ func (bdm *BoltDBManager) GetUnspentOutputsObject() (UnspentOutputsInterface, er
 
 	return &uts, nil
 }
+
+// returns Nodes Database structure. does al init
 func (bdm *BoltDBManager) GetNodesObject() (NodesInterface, error) {
 	conn, err := bdm.getConnectionForObject(ClassNameNodes)
 
@@ -257,9 +268,13 @@ func (bdm *BoltDBManager) GetNodesObject() (NodesInterface, error) {
 
 	return &ns, nil
 }
+
+// returns
 func (bdm *BoltDBManager) getConnectionForObject(name string) (*BoltDB, error) {
 	return bdm.getConnectionForObjectWithCheck(name, false)
 }
+
+// returns DB connection, creates it if needed .
 func (bdm *BoltDBManager) getConnectionForObjectWithCheck(name string, ignoremissed bool) (*BoltDB, error) {
 	if !bdm.openedConn {
 		return nil, errors.New("Connection was not inited")

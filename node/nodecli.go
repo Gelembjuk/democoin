@@ -155,6 +155,8 @@ func (c NodeCLI) ExecuteCommand() error {
 		}
 	}
 
+	defer c.Node.DBConn.CloseConnection()
+
 	if c.Command == "createblockchain" {
 		return c.commandCreateBlockchain()
 
@@ -235,9 +237,8 @@ func (c NodeCLI) createDaemonManager() (*server.NodeDaemon, error) {
 	return &nd, nil
 }
 
-/*
-* Execute server management command
- */
+// Execute server management command
+
 func (c NodeCLI) ExecuteManageCommand() error {
 	noddaemon, err := c.createDaemonManager()
 
@@ -265,9 +266,7 @@ func (c NodeCLI) ExecuteManageCommand() error {
 	return errors.New("Unknown node manage command")
 }
 
-/*
-* Creates wallet object for operation related to wallets list management
- */
+// Creates wallet object for operation related to wallets list management
 func (c *NodeCLI) getWalletsCLI() (*wallet.WalletCLI, error) {
 	winput := wallet.AppInput{}
 	winput.Command = c.Input.Command
@@ -297,10 +296,8 @@ func (c *NodeCLI) getWalletsCLI() (*wallet.WalletCLI, error) {
 	return &walletscli, nil
 }
 
-/*
-* Forwards a command to wallet object. This is needed for cases when a node must do some
-* operation with local wallets
- */
+// Forwards a command to wallet object. This is needed for cases when a node does some
+// operation with local wallets
 func (c *NodeCLI) forwardCommandToWallet() error {
 	walletscli, err := c.getWalletsCLI()
 
@@ -311,10 +308,8 @@ func (c *NodeCLI) forwardCommandToWallet() error {
 	return walletscli.ExecuteCommand()
 }
 
-/*
-* Forwards a command to wallet object. This is needed for cases when a node must do some
-* operation with local wallets
- */
+// Create Network Client object. We do this when a node server is running and we need to send
+// command to it (indtead of accessing database directly)
 func (c *NodeCLI) getLocalNetworkClient() nodeclient.NodeClient {
 	nc := *c.Node.NodeClient
 	nc.NodeAddress.Port = c.AlreadyRunningPort
@@ -322,9 +317,7 @@ func (c *NodeCLI) getLocalNetworkClient() nodeclient.NodeClient {
 	return nc
 }
 
-/*
-* To create new blockchain from scratch
- */
+// To create new blockchain from scratch
 func (c *NodeCLI) commandCreateBlockchain() error {
 	err := c.Node.CreateBlockchain(c.Input.Args.Address, c.Input.Args.Genesis)
 
@@ -337,9 +330,7 @@ func (c *NodeCLI) commandCreateBlockchain() error {
 	return nil
 }
 
-/*
-* To init blockchain loaded from other node. Is executed for new nodes if blockchain already exists
- */
+// To init blockchain loaded from other node. Is executed for new nodes if blockchain already exists
 func (c *NodeCLI) commandInitBlockchain() error {
 	// try to open existent BC to check if it exists
 	if c.Node.BlockchainExist() {
@@ -360,17 +351,9 @@ func (c *NodeCLI) commandInitBlockchain() error {
 	return nil
 }
 
-/*
-* Print fulll blockchain
- */
+// Print full blockchain
+
 func (c *NodeCLI) commandPrintChain() error {
-	err := c.Node.OpenBlockchain("PrintChain")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
-
 	bci, err := c.Node.NodeBC.GetBlockChainIterator()
 
 	if err != nil {
@@ -437,16 +420,8 @@ func (c *NodeCLI) commandPrintChain() error {
 	return nil
 }
 
-/*
-* Show contacts of a cache of unapproved transactions
- */
+// Show contents of a cache of unapproved transactions (transactions pool)
 func (c *NodeCLI) commandUnapprovedTransactions() error {
-	err := c.Node.OpenBlockchain("UnapprovedTransactions")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 
 	if c.Input.Args.Clean {
 		// clean cache
@@ -464,21 +439,12 @@ func (c *NodeCLI) commandUnapprovedTransactions() error {
 	return nil
 }
 
-/*
-* Show all wallets and balances for each of them
- */
+// Show all wallets and balances for each of them
 func (c *NodeCLI) commandAddressesBalance() error {
 	if c.AlreadyRunningPort > 0 {
 		// run in wallet mode.
 		return c.forwardCommandToWallet()
 	}
-
-	err := c.Node.OpenBlockchain("AddressBalance")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 
 	walletscli, err := c.getWalletsCLI()
 
@@ -494,6 +460,7 @@ func (c *NodeCLI) commandAddressesBalance() error {
 	}
 	fmt.Println("Balance for all addresses:")
 	fmt.Println()
+
 	for address, balance := range result {
 		fmt.Printf("%s: %.8f (Approved - %.8f, Pending - %.8f)\n", address, balance.Total, balance.Approved, balance.Pending)
 	}
@@ -501,22 +468,13 @@ func (c *NodeCLI) commandAddressesBalance() error {
 	return nil
 }
 
-/*
-* SHow history for a wallet
- */
+// Show history for a wallet
 func (c *NodeCLI) commandAddressHistory() error {
 	if c.AlreadyRunningPort > 0 {
 		c.Input.Command = "showhistory"
 		// run in wallet mode.
 		return c.forwardCommandToWallet()
 	}
-
-	err := c.Node.OpenBlockchain("AddressHistory")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 
 	result, err := c.Node.NodeBC.GetAddressHistory(c.Input.Args.Address)
 
@@ -536,21 +494,12 @@ func (c *NodeCLI) commandAddressHistory() error {
 	return nil
 }
 
-/*
-* Show unspent transactions outputs for address
- */
+// Show unspent transactions outputs for address
 func (c *NodeCLI) commandShowUnspent() error {
 	if c.AlreadyRunningPort > 0 {
 		// run in wallet mode.
 		return c.forwardCommandToWallet()
 	}
-
-	err := c.Node.OpenBlockchain("ShowUnspent")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 
 	result, err := c.Node.GetTransactionsManager().GetUnspentOutputsManager().GetUnspentTransactionsOutputs(c.Input.Args.Address)
 
@@ -577,21 +526,12 @@ func (c *NodeCLI) commandShowUnspent() error {
 	return nil
 }
 
-/*
-* Display balance for address
- */
+// Display balance for address
 func (c *NodeCLI) commandGetBalance() error {
 	if c.AlreadyRunningPort > 0 {
 		// run in wallet mode.
 		return c.forwardCommandToWallet()
 	}
-
-	err := c.Node.OpenBlockchain("GetBalance")
-
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 
 	balance, err := c.Node.GetTransactionsManager().GetAddressBalance(c.Input.Args.Address)
 
@@ -605,9 +545,7 @@ func (c *NodeCLI) commandGetBalance() error {
 	return nil
 }
 
-/*
-* Send money to other address
- */
+// Send money to other address
 func (c *NodeCLI) commandSend() error {
 	if c.AlreadyRunningPort > 0 {
 
@@ -615,12 +553,7 @@ func (c *NodeCLI) commandSend() error {
 		return c.forwardCommandToWallet()
 	}
 	c.Logger.Trace.Println("Send with dirct access to DB ")
-	err := c.Node.OpenBlockchain("SendDirect")
 
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
 	// else, access directtly to the DB
 
 	walletscli, err := c.getWalletsCLI()
@@ -647,18 +580,10 @@ func (c *NodeCLI) commandSend() error {
 	return nil
 }
 
-/*
-* Reindex DB of unspent transactions and transaction pointers
- */
+// Reindex DB of unspent transactions and transaction pointers
 func (c *NodeCLI) commandReindexCache() error {
-	err := c.Node.OpenBlockchain("ReindexCache")
 
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
-
-	err = c.Node.GetTransactionsManager().GetIndexManager().Reindex()
+	err := c.Node.GetTransactionsManager().GetIndexManager().Reindex()
 
 	if err != nil {
 		return err
@@ -674,9 +599,7 @@ func (c *NodeCLI) commandReindexCache() error {
 	return nil
 }
 
-/*
-* Try to mine a block if there is anough unapproved transactions
- */
+// Try to mine a block if there is anough unapproved transactions
 func (c *NodeCLI) commandMakeBlock() error {
 	block, err := c.Node.TryToMakeBlock()
 
@@ -693,18 +616,10 @@ func (c *NodeCLI) commandMakeBlock() error {
 	return nil
 }
 
-/*
-* Cancel transaction if it is not yet in a block
- */
+// Cancel transaction if it is not yet in a block
 func (c *NodeCLI) commandCancelTransaction() error {
-	err := c.Node.OpenBlockchain("CancelTransaction")
 
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
-
-	err = c.Node.GetTransactionsManager().CancelTransaction(c.Input.Args.Transaction)
+	err := c.Node.GetTransactionsManager().CancelTransaction(c.Input.Args.Transaction)
 
 	if err != nil {
 		return err
@@ -716,18 +631,10 @@ func (c *NodeCLI) commandCancelTransaction() error {
 	return nil
 }
 
-/*
-* Drops last block from the top of blockchain
- */
+// Drops last block from the top of blockchain
 func (c *NodeCLI) commandDropBlock() error {
-	err := c.Node.OpenBlockchain("DropBlock")
 
-	if err != nil {
-		return err
-	}
-	defer c.Node.CloseBlockchain()
-
-	err = c.Node.DropBlock()
+	err := c.Node.DropBlock()
 
 	if err != nil {
 		return err
@@ -754,9 +661,7 @@ func (c *NodeCLI) commandDropBlock() error {
 	return nil
 }
 
-/*
-* Shows server state
- */
+// Shows server state
 func (c *NodeCLI) commandShowState(daemon *server.NodeDaemon) error {
 	Runnning, ProcessID, Port, err := daemon.GetServerState()
 
