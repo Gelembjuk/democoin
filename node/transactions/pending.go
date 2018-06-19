@@ -12,15 +12,14 @@ import (
 	"github.com/gelembjuk/democoin/node/structures"
 )
 
-type UnApprovedTransactions struct {
+type unApprovedTransactions struct {
 	DB     database.DBManager
 	Logger *utils.LoggerMan
 }
-type UnApprovedTransactionsIteratorInterface func(txhash, txstr string)
 
 // Check if transaction inputs are pointed to some prepared transactions.
 // Check conflicts too. Same output can not be repeated twice
-func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs map[int]structures.TXInput, inputTXs map[int]*structures.Transaction) error {
+func (u *unApprovedTransactions) CheckInputsArePrepared(inputs map[int]structures.TXInput, inputTXs map[int]*structures.Transaction) error {
 	checked := map[string][]int{}
 
 	for vinInd, vin := range inputs {
@@ -60,7 +59,7 @@ func (u *UnApprovedTransactions) CheckInputsArePrepared(inputs map[int]structure
 // and input transactions for this tx
 // Check conflicts too. Same output can not be repeated twice
 
-func (u *UnApprovedTransactions) CheckInputsWereBefore(
+func (u *unApprovedTransactions) CheckInputsWereBefore(
 	inputs map[int]structures.TXInput, prevTXs []*structures.Transaction,
 	inputTXs map[int]*structures.Transaction) (map[int]*structures.Transaction, error) {
 
@@ -108,7 +107,7 @@ func (u *UnApprovedTransactions) CheckInputsWereBefore(
 //		this are outputs that can be still used in new TX
 // List of inputs based on approved outputs (sub list of the first list). From the first list
 //		we dropped inputs where otput is from pending TX
-func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.TXInput,
+func (u *unApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.TXInput,
 	[]*structures.TXOutputIndependent, []structures.TXInput, error) {
 
 	inputs := []structures.TXInput{}
@@ -205,7 +204,7 @@ func (u *UnApprovedTransactions) GetPreparedBy(PubKeyHash []byte) ([]structures.
 }
 
 // Get input value for TX in the cache
-func (u *UnApprovedTransactions) GetInputValue(input structures.TXInput) (float64, error) {
+func (u *unApprovedTransactions) GetInputValue(input structures.TXInput) (float64, error) {
 	u.Logger.Trace.Printf("Find TX %x in unapproved", input.Txid)
 	tx, err := u.GetIfExists(input.Txid)
 
@@ -221,7 +220,7 @@ func (u *UnApprovedTransactions) GetInputValue(input structures.TXInput) (float6
 }
 
 // Check if transaction exists in a cache of unapproved
-func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*structures.Transaction, error) {
+func (u *unApprovedTransactions) GetIfExists(txid []byte) (*structures.Transaction, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
@@ -250,7 +249,7 @@ func (u *UnApprovedTransactions) GetIfExists(txid []byte) (*structures.Transacti
 }
 
 // Get all unapproved transactions
-func (u *UnApprovedTransactions) GetTransactions(number int) ([]*structures.Transaction, error) {
+func (u *unApprovedTransactions) GetTransactions(number int) ([]*structures.Transaction, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
@@ -289,7 +288,7 @@ func (u *UnApprovedTransactions) GetTransactions(number int) ([]*structures.Tran
 
 // Get number of unapproved transactions in a cache
 
-func (u *UnApprovedTransactions) GetCount() (int, error) {
+func (u *unApprovedTransactions) GetCount() (int, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
@@ -302,7 +301,7 @@ func (u *UnApprovedTransactions) GetCount() (int, error) {
 // Add new transaction for the list of unapproved
 // Before to call this function we checked that transaction is valid
 // Now we need to check if there are no conflicts with other transactions in the cache
-func (u *UnApprovedTransactions) Add(txadd *structures.Transaction) error {
+func (u *unApprovedTransactions) Add(txadd *structures.Transaction) error {
 	conflicts, err := u.DetectConflictsForNew(txadd)
 
 	if err != nil {
@@ -339,7 +338,7 @@ func (u *UnApprovedTransactions) Add(txadd *structures.Transaction) error {
 /*
 * Delete transaction from a cache. When transaction becomes part ofa block
  */
-func (u *UnApprovedTransactions) Delete(txid []byte) (bool, error) {
+func (u *unApprovedTransactions) Delete(txid []byte) (bool, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
@@ -368,7 +367,7 @@ func (u *UnApprovedTransactions) Delete(txid []byte) (bool, error) {
 /*
 * Remove given blocks transavtions from unapproved . For case when list of blocks are added to primary blockchain branch
  */
-func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*structures.Block) error {
+func (u *unApprovedTransactions) DeleteFromBlocks(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := u.DeleteFromBlock(block)
@@ -385,7 +384,7 @@ func (u *UnApprovedTransactions) DeleteFromBlocks(blocks []*structures.Block) er
 * Remove all transactions from this cache listed in a block.
 * Is used when new block added and transactions are approved now
  */
-func (u *UnApprovedTransactions) DeleteFromBlock(block *structures.Block) error {
+func (u *unApprovedTransactions) DeleteFromBlock(block *structures.Block) error {
 	// try to delete each transaction from this block
 	u.Logger.Trace.Printf("UnApprTXs: remove on block add %x", block.Hash)
 
@@ -401,7 +400,7 @@ func (u *UnApprovedTransactions) DeleteFromBlock(block *structures.Block) error 
 // Is used for cases when it is needed to do something with all cached transactions.
 // For example, to print them.
 
-func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransactionsIteratorInterface) (int, error) {
+func (u *unApprovedTransactions) forEachUnapprovedTransaction(callback UnApprovedTransactionCallbackInterface) (int, error) {
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
 	if err != nil {
@@ -432,7 +431,7 @@ func (u *UnApprovedTransactions) IterateTransactions(callback UnApprovedTransact
 // Check if this new transaction conflicts with any other transaction in the cache
 // It is not allowed 2 prepared transactions have same inputs
 // we return first found transaction taht conflicts
-func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *structures.Transaction) (*structures.Transaction, error) {
+func (u *unApprovedTransactions) DetectConflictsForNew(txcheck *structures.Transaction) (*structures.Transaction, error) {
 	// it i needed to go over all tranactions in cache and check each of them if input is same as in this tx
 	utdb, err := u.DB.GetUnapprovedTransactionsObject()
 
@@ -485,7 +484,7 @@ func (u *UnApprovedTransactions) DetectConflictsForNew(txcheck *structures.Trans
 * For building of a block we should use only one of them.
 * Transaction can be used more 1 time in a block. But each time must be differeent output index
  */
-func (u *UnApprovedTransactions) DetectConflicts(txs []*structures.Transaction) ([]*structures.Transaction, []*structures.Transaction, error) {
+func (u *unApprovedTransactions) DetectConflicts(txs []*structures.Transaction) ([]*structures.Transaction, []*structures.Transaction, error) {
 	goodtransactions := []*structures.Transaction{}
 	conflicts := []*structures.Transaction{}
 
@@ -531,26 +530,8 @@ func (u *UnApprovedTransactions) DetectConflicts(txs []*structures.Transaction) 
 	return goodtransactions, conflicts, nil
 }
 
-/*
-* Many blocks canceled. Make their transactions to be unapproved.
-* Blocks can be canceled when other branch of blockchain becomes primary
- */
-func (u *UnApprovedTransactions) AddFromBlocksCancel(blocks []*structures.Block) error {
-	for _, block := range blocks {
-
-		err := u.AddFromCanceled(block.Transactions)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-/*
-* Is used for case when a block canceled. all transactions from a block are back to unapproved cache
- */
-func (u *UnApprovedTransactions) AddFromCanceled(txs []*structures.Transaction) error {
+// Is used for case when a block canceled. all transactions from a block are back to unapproved cache
+func (u *unApprovedTransactions) AddFromCanceled(txs []*structures.Transaction) error {
 	for _, tx := range txs {
 		if !tx.IsCoinbase() {
 			err := u.Add(tx)
@@ -566,7 +547,9 @@ func (u *UnApprovedTransactions) AddFromCanceled(txs []*structures.Transaction) 
 	return nil
 
 }
-func (u *UnApprovedTransactions) CleanUnapprovedCache() error {
+
+// Remove all unapproced transactions from the pool
+func (u *unApprovedTransactions) CleanUnapprovedCache() error {
 
 	u.Logger.Trace.Println("Clean Unapproved Transactions cache: Prepare")
 

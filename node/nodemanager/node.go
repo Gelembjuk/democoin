@@ -53,7 +53,7 @@ func (n *Node) Init() {
 }
 
 // Build transaction manager structure
-func (n *Node) GetTransactionsManager() *transactions.Manager {
+func (n *Node) GetTransactionsManager() transactions.TransactionsManagerInterface {
 	return transactions.NewManager(n.DBConn.DB(), n.Logger)
 }
 
@@ -158,7 +158,7 @@ func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
 
 	n.DBConn.OpenConnection("InitAfterCreate", "")
 
-	n.GetTransactionsManager().BlockAdddedToTop(genesisBlock)
+	n.GetTransactionsManager().BlockAdded(genesisBlock, true)
 
 	n.DBConn.CloseConnection()
 
@@ -215,7 +215,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 
 	defer n.DBConn.CloseConnection()
 
-	n.GetTransactionsManager().BlockAdddedToTop(block)
+	n.GetTransactionsManager().BlockAdded(block, true)
 
 	MH := block.Height
 
@@ -242,7 +242,7 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 				return false, err
 			}
 
-			n.GetTransactionsManager().BlockAdddedToTop(block)
+			n.GetTransactionsManager().BlockAdded(block, true)
 
 			MH = block.Height
 		}
@@ -352,8 +352,16 @@ func (n *Node) CheckAddressKnown(addr net.NodeAddr) bool {
  */
 func (n *Node) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount float64) ([]byte, error) {
 	// get pubkey of the wallet with "from" address
+	if to == "" {
+		return nil, errors.New("Recipient address is not provided")
+	}
+	w := wallet.Wallet{}
 
-	tx, err := n.GetTransactionsManager().Send(PubKey, privKey, to, amount)
+	if !w.ValidateAddress(to) {
+		return nil, errors.New("Recipient address is not valid")
+	}
+
+	tx, err := n.GetTransactionsManager().CreateTransaction(PubKey, privKey, to, amount)
 
 	if err != nil {
 		return nil, err
@@ -446,19 +454,10 @@ func (n *Node) AddBlock(block *structures.Block) (uint, error) {
 		addstate == blockchain.BCBAddState_addedToTop ||
 		addstate == blockchain.BCBAddState_addedToParallelTop {
 
-		n.GetTransactionsManager().GetIndexManager().BlockAdded(block)
+		n.GetTransactionsManager().BlockAdded(block, addstate == blockchain.BCBAddState_addedToTop)
 	}
 
-	if addstate == blockchain.BCBAddState_addedToTop {
-		// only if a block was really added
-
-		// delete block transaction from list of unapproved
-		n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlock(block)
-
-		// reindes unspent transactions cache based on block added
-		n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlockAdd(block)
-
-	} else if addstate == blockchain.BCBAddState_addedToParallelTop {
+	if addstate == blockchain.BCBAddState_addedToParallelTop {
 		// get 2 blocks branches that replaced each other
 		newChain, oldChain, err := n.NodeBC.GetBranchesReplacement(curLastHash, []byte{})
 
@@ -467,16 +466,24 @@ func (n *Node) AddBlock(block *structures.Block) (uint, error) {
 		}
 
 		if newChain != nil && oldChain != nil {
+			for _, block := range oldChain {
 
-			// add old blocks back to unspent tranactions
-			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksCancel(oldChain)
-			// remove new blocks from unspent transactions
-			n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlocksAdd(newChain)
+				err := n.GetTransactionsManager().BlockRemovedFromPrimaryChain(block)
 
-			// transactions from old blocks become unapproved
-			n.GetTransactionsManager().GetUnapprovedTransactionsManager().AddFromBlocksCancel(oldChain)
-			// transactions from new chain becomes approved
-			n.GetTransactionsManager().GetUnapprovedTransactionsManager().DeleteFromBlocks(newChain)
+				if err != nil {
+
+					return 0, err
+				}
+			}
+			for _, block := range newChain {
+
+				err := n.GetTransactionsManager().BlockAddedToPrimaryChain(block)
+
+				if err != nil {
+
+					return 0, err
+				}
+			}
 		}
 	}
 
@@ -494,11 +501,7 @@ func (n *Node) DropBlock() error {
 		return err
 	}
 
-	n.GetTransactionsManager().GetUnapprovedTransactionsManager().AddFromCanceled(block.Transactions)
-
-	n.GetTransactionsManager().GetUnspentOutputsManager().UpdateOnBlockCancel(block)
-
-	n.GetTransactionsManager().GetIndexManager().BlockRemoved(block)
+	n.GetTransactionsManager().BlockRemoved(block)
 
 	return nil
 }
@@ -582,7 +585,7 @@ func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
 	}
 	result.BlocksNumber = bh + 1
 
-	unappr, err := n.GetTransactionsManager().GetUnapprovedTransactionsManager().GetCount()
+	unappr, err := n.GetTransactionsManager().GetUnapprovedCount()
 
 	if err != nil {
 		return result, err
@@ -590,8 +593,7 @@ func (n *Node) GetNodeState() (nodeclient.ComGetNodeState, error) {
 
 	result.TransactionsCached = unappr
 
-	unspent, err := n.GetTransactionsManager().GetUnspentOutputsManager().CountUnspentOutputs()
-
+	unspent, err := n.GetTransactionsManager().GetUnspentCount()
 	if err != nil {
 		return result, err
 	}

@@ -64,18 +64,16 @@ func (n *NodeBlockMaker) IsBlockPrepared() bool {
 	return n.PreparedBlock != nil
 }
 
-func (n *NodeBlockMaker) getTransactionsManager() *transactions.Manager {
+// Transaction operations and cache manager
+func (n *NodeBlockMaker) getTransactionsManager() transactions.TransactionsManagerInterface {
 	return transactions.NewManager(n.DB, n.Logger)
 }
 
+// Blockchain DB manager.
 func (n *NodeBlockMaker) getBlockchainManager() *blockchain.Blockchain {
 	bcm, _ := blockchain.NewBlockchainManager(n.DB, n.Logger)
 
 	return bcm
-}
-
-func (n *NodeBlockMaker) GetUnapprovedTransactionsManager() *transactions.UnApprovedTransactions {
-	return n.getTransactionsManager().GetUnapprovedTransactionsManager()
 }
 
 // Checks if this is good time for this node to make a block
@@ -87,7 +85,7 @@ func (n *NodeBlockMaker) checkGoodTimeToMakeBlock() bool {
 
 // Check if there are abough unapproved transactions to make a block
 func (n *NodeBlockMaker) checkUnapprovedCache() bool {
-	count, err := n.GetUnapprovedTransactionsManager().GetCount()
+	count, err := n.getTransactionsManager().GetUnapprovedCount()
 
 	if err != nil {
 		n.Logger.Trace.Printf("Error when check unapproved cache: %s", err.Error())
@@ -115,7 +113,7 @@ func (n *NodeBlockMaker) SetPreparedBlock(block *structures.Block) error {
 
 func (n *NodeBlockMaker) doPrepareNewBlock() error {
 	// firstly, check count of transactions to know if there are enough
-	count, err := n.GetUnapprovedTransactionsManager().GetCount()
+	count, err := n.getTransactionsManager().GetUnapprovedCount()
 
 	if err != nil {
 		return err
@@ -134,73 +132,10 @@ func (n *NodeBlockMaker) doPrepareNewBlock() error {
 			count = max
 		}
 		// get unapproved transactions
-		txlist, err := n.GetUnapprovedTransactionsManager().GetTransactions(count)
+		txs, err := n.getTransactionsManager().GetUnapprovedTransactionsForNewBlock(count)
 
 		if err != nil {
 			return err
-		}
-
-		n.Logger.Trace.Printf("Minting: Found %d transaction to mine\n", len(txlist))
-
-		txs := []*structures.Transaction{}
-
-		for _, tx := range txlist {
-			n.Logger.Trace.Printf("Minting: Go to verify: %x\n", tx.ID)
-
-			// we need to verify each transaction
-			// we will do full deep check of transaction
-			// also, a transaction can have input from other transaction from thi block
-			vtx, err := n.getTransactionsManager().VerifyTransactionDeep(tx, txs, []byte{})
-
-			if err != nil {
-				// this can be case when a transaction is based on other unapproved transaction
-				// and that transaction was created in same second
-				n.Logger.Trace.Printf("Minting: Ignore transaction %x. Verify failed with error: %s\n", tx.ID, err.Error())
-				// we delete this transaction. no sense to keep it
-				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
-				continue
-			}
-
-			if vtx {
-				// transaction is valid
-				txs = append(txs, tx)
-			} else {
-				// the transaction is invalid. some input was already used in other confirmed transaction
-				// or somethign wrong with signatures.
-				// remove this transaction from the DB of unconfirmed transactions
-				n.Logger.Trace.Printf("Minting: Delete transaction used in other block before: %x\n", tx.ID)
-				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
-			}
-		}
-		txlist = nil
-
-		n.Logger.Trace.Printf("Minting: After verification %d transaction are left\n", len(txs))
-
-		if len(txs) == 0 {
-			return errors.New("All transactions are invalid! Waiting for new ones...")
-		}
-		// check if total count is still good
-		if len(txs) < min {
-			return errors.New("No enought valid transactions! Waiting for new ones...")
-		}
-
-		// there is anough of "good" transactions. where inputs were not yet used in other confirmed transactions
-		// now it is needed to check if transactions don't conflict one to other
-		var badtransactions []*structures.Transaction
-		txs, badtransactions, err = n.GetUnapprovedTransactionsManager().DetectConflicts(txs)
-
-		n.Logger.Trace.Printf("Minting: After conflict detection %d - fine, %d - conflicts\n", len(txs), len(badtransactions))
-
-		if err != nil {
-			return err
-		}
-
-		if len(badtransactions) > 0 {
-			// there are conflicts! remove conflicting transactions
-			for _, tx := range badtransactions {
-				n.Logger.Trace.Printf("Delete conflicting transaction: %x\n", tx.ID)
-				n.GetUnapprovedTransactionsManager().Delete(tx.ID)
-			}
 		}
 
 		if len(txs) < min {
@@ -358,7 +293,7 @@ func (n *NodeBlockMaker) VerifyBlock(block *structures.Block) error {
 			}
 			coinbaseused = true
 		}
-		vtx, err := n.getTransactionsManager().VerifyTransactionDeep(tx, prevTXs, block.PrevBlockHash)
+		vtx, err := n.getTransactionsManager().VerifyTransaction(tx, prevTXs, block.PrevBlockHash)
 
 		if err != nil {
 			return err

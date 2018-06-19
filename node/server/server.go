@@ -428,7 +428,7 @@ func (s *NodeServer) BlockBuilder() {
 			// send this transaction to all other nodes.
 			// blockchain should be closed in this place
 
-			tx, err := NodeClone.GetTransactionsManager().GetUnapprovedTransactionsManager().GetIfExists(txID)
+			tx, err := NodeClone.GetTransactionsManager().GetIfUnapprovedExists(txID)
 
 			if err == nil && tx != nil {
 				// we send from main node object, not from a clone. because nodes list

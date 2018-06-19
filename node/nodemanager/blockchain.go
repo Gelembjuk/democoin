@@ -66,7 +66,7 @@ func (n *NodeBlockchain) GetBCManager() *blockchain.Blockchain {
 	return bcm
 }
 
-func (n *NodeBlockchain) getTransactionsManager() *transactions.Manager {
+func (n *NodeBlockchain) getTransactionsManager() transactions.TransactionsManagerInterface {
 	return transactions.NewManager(n.DBConn.DB(), n.Logger)
 }
 

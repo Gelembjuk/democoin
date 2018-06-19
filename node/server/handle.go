@@ -67,25 +67,21 @@ func (s *NodeServerRequest) handleGetUnspent() error {
 		return err
 	}
 
-	UST, err := s.Node.GetTransactionsManager().GetUnspentOutputsManager().GetUnspentTransactionsOutputs(payload.Address)
+	err = s.Node.GetTransactionsManager().ForEachUnspentOutput(payload.Address,
+		func(fromaddr string, value float64, txID []byte, output int, isbase bool) error {
+			ut := nodeclient.ComUnspentTransaction{}
+			ut.Amount = value
+			ut.TXID = txID
+			ut.Vout = output
+			ut.From = fromaddr
+			ut.IsBase = isbase
+
+			result.Transactions = append(result.Transactions, ut)
+			return nil
+		})
 
 	if err != nil {
 		return err
-	}
-
-	for _, t := range UST {
-		ut := nodeclient.ComUnspentTransaction{}
-		ut.Amount = t.Value
-		ut.TXID = t.TXID
-		ut.Vout = t.OIndex
-		ut.IsBase = t.IsBase
-
-		if t.IsBase {
-			ut.From = "Base Coin"
-		} else {
-			ut.From, _ = utils.PubKeyHashToAddres(t.SendPubKeyHash)
-		}
-		result.Transactions = append(result.Transactions, ut)
 	}
 
 	s.Response, err = net.GobEncode(result)
@@ -606,8 +602,7 @@ func (s *NodeServerRequest) handleGetData() error {
 
 	if payload.Type == "tx" {
 
-		if txe, err := s.Node.GetTransactionsManager().
-			GetUnapprovedTransactionsManager().GetIfExists(payload.ID); err == nil && txe != nil {
+		if txe, err := s.Node.GetTransactionsManager().GetIfUnapprovedExists(payload.ID); err == nil && txe != nil {
 
 			s.Logger.Trace.Printf("Return transaction with ID %x to %s\n", payload.ID, payload.AddrFrom.NodeAddrToString())
 			// exists

@@ -429,11 +429,13 @@ func (c *NodeCLI) commandUnapprovedTransactions() error {
 		return c.Node.GetTransactionsManager().CleanUnapprovedCache()
 	}
 
-	total, _ := c.Node.GetTransactionsManager().IterateUnapprovedTransactions(
-		func(txhash, txstr string) {
+	total, _ := c.Node.GetTransactionsManager().ForEachUnapprovedTransaction(
+		func(txhash, txstr string) error {
 			fmt.Printf("============ Transaction %x ============\n", txhash)
 
 			fmt.Println(txstr)
+
+			return nil
 		})
 	fmt.Printf("\nTotal transactions: %d\n", total)
 	return nil
@@ -452,12 +454,17 @@ func (c *NodeCLI) commandAddressesBalance() error {
 		return err
 	}
 	// get addresses in local wallets
+	result := map[string]wallet.WalletBalance{}
 
-	result, err := c.Node.GetTransactionsManager().GetAddressesBalance(walletscli.WalletsObj.GetAddresses())
+	for _, address := range walletscli.WalletsObj.GetAddresses() {
+		balance, err := c.Node.GetTransactionsManager().GetAddressBalance(address)
 
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		result[string(address)] = balance
 	}
+
 	fmt.Println("Balance for all addresses:")
 	fmt.Println()
 
@@ -501,24 +508,17 @@ func (c *NodeCLI) commandShowUnspent() error {
 		return c.forwardCommandToWallet()
 	}
 
-	result, err := c.Node.GetTransactionsManager().GetUnspentOutputsManager().GetUnspentTransactionsOutputs(c.Input.Args.Address)
+	balance := float64(0)
+
+	err := c.Node.GetTransactionsManager().ForEachUnspentOutput(c.Input.Args.Address,
+		func(fromaddr string, value float64, txID []byte, output int, isbase bool) error {
+			fmt.Printf("%f\t from\t%s in transaction %x output #%d\n", value, fromaddr, txID, output)
+			balance += value
+			return nil
+		})
 
 	if err != nil {
 		return err
-	}
-
-	balance := float64(0)
-
-	for _, rec := range result {
-		var addr string
-		if len(rec.SendPubKeyHash) > 0 {
-			addr, _ = utils.PubKeyHashToAddres(rec.SendPubKeyHash)
-		} else {
-			addr = "Coint base"
-		}
-
-		fmt.Printf("%f\t from\t%s in transaction %s output #%d\n", rec.Value, addr, hex.EncodeToString(rec.TXID), rec.OIndex)
-		balance += rec.Value
 	}
 
 	fmt.Printf("\nBalance - %f\n", balance)
@@ -580,22 +580,15 @@ func (c *NodeCLI) commandSend() error {
 	return nil
 }
 
-// Reindex DB of unspent transactions and transaction pointers
+// Reindex cache of transactions information
 func (c *NodeCLI) commandReindexCache() error {
-
-	err := c.Node.GetTransactionsManager().GetIndexManager().Reindex()
-
-	if err != nil {
-		return err
-	}
-
-	count, err := c.Node.GetTransactionsManager().GetUnspentOutputsManager().Reindex()
+	info, err := c.Node.GetTransactionsManager().ReindexData()
 
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Done! There are %d transactions in the UTXO set.\n", count)
+	fmt.Printf("Done! There are %d transactions in the UTXO set.\n", info["unspentoutputs"])
 	return nil
 }
 
@@ -618,8 +611,12 @@ func (c *NodeCLI) commandMakeBlock() error {
 
 // Cancel transaction if it is not yet in a block
 func (c *NodeCLI) commandCancelTransaction() error {
+	txID, err := hex.DecodeString(c.Input.Args.Transaction)
+	if err != nil {
+		return err
+	}
 
-	err := c.Node.GetTransactionsManager().CancelTransaction(c.Input.Args.Transaction)
+	err = c.Node.GetTransactionsManager().CancelTransaction(txID)
 
 	if err != nil {
 		return err

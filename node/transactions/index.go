@@ -11,7 +11,7 @@ import (
 	"github.com/gelembjuk/democoin/node/structures"
 )
 
-type TransactionsIndex struct {
+type transactionsIndex struct {
 	DB     database.DBManager
 	Logger *utils.LoggerMan
 }
@@ -23,14 +23,14 @@ type TransactionsIndexSpentOutputs struct {
 	BlockHash   []byte
 }
 
-func NewTransactionIndex(DB database.DBManager, Logger *utils.LoggerMan) *TransactionsIndex {
-	return &TransactionsIndex{DB, Logger}
+func newTransactionIndex(DB database.DBManager, Logger *utils.LoggerMan) *transactionsIndex {
+	return &transactionsIndex{DB, Logger}
 }
 
 func (tiso TransactionsIndexSpentOutputs) String() string {
 	return fmt.Sprintf("OI %d used in %x II %d block %x", tiso.OutInd, tiso.TXWhereUsed, tiso.InInd, tiso.BlockHash)
 }
-func (ti *TransactionsIndex) BlocksAdded(blocks []*structures.Block) error {
+func (ti *transactionsIndex) BlocksAdded(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := ti.BlockAdded(block)
@@ -44,7 +44,7 @@ func (ti *TransactionsIndex) BlocksAdded(blocks []*structures.Block) error {
 }
 
 // Block added. We need to update index of transactions
-func (ti *TransactionsIndex) BlockAdded(block *structures.Block) error {
+func (ti *transactionsIndex) BlockAdded(block *structures.Block) error {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -123,7 +123,7 @@ func (ti *TransactionsIndex) BlockAdded(block *structures.Block) error {
 	}
 	return nil
 }
-func (ti *TransactionsIndex) BlocksRemoved(blocks []*structures.Block) error {
+func (ti *transactionsIndex) BlocksRemoved(blocks []*structures.Block) error {
 	for _, block := range blocks {
 
 		err := ti.BlockRemoved(block)
@@ -135,7 +135,7 @@ func (ti *TransactionsIndex) BlocksRemoved(blocks []*structures.Block) error {
 	}
 	return nil
 }
-func (ti *TransactionsIndex) BlockRemoved(block *structures.Block) error {
+func (ti *transactionsIndex) BlockRemoved(block *structures.Block) error {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -231,7 +231,7 @@ func (ti *TransactionsIndex) BlockRemoved(block *structures.Block) error {
 }
 
 // Reindex cach of trsnactions pointers to block
-func (ti *TransactionsIndex) Reindex() error {
+func (ti *transactionsIndex) Reindex() error {
 	ti.Logger.Trace.Println("TXCache.Reindex: Prepare to recreate bucket")
 
 	txdb, err := ti.DB.GetTransactionsObject()
@@ -280,7 +280,7 @@ func (ti *TransactionsIndex) Reindex() error {
 
 // Serialize. We need this to store data in DB in bytes
 
-func (ti *TransactionsIndex) SerializeOutputs(outs []TransactionsIndexSpentOutputs) ([]byte, error) {
+func (ti *transactionsIndex) SerializeOutputs(outs []TransactionsIndexSpentOutputs) ([]byte, error) {
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 	err := enc.Encode(outs)
@@ -293,7 +293,7 @@ func (ti *TransactionsIndex) SerializeOutputs(outs []TransactionsIndexSpentOutpu
 
 // Deserialize data from bytes loaded fom DB
 
-func (ti *TransactionsIndex) DeserializeOutputs(data []byte) ([]TransactionsIndexSpentOutputs, error) {
+func (ti *transactionsIndex) DeserializeOutputs(data []byte) ([]TransactionsIndexSpentOutputs, error) {
 	var outputs []TransactionsIndexSpentOutputs
 
 	dec := gob.NewDecoder(bytes.NewReader(data))
@@ -306,7 +306,7 @@ func (ti *TransactionsIndex) DeserializeOutputs(data []byte) ([]TransactionsInde
 }
 
 // Serialise list of hashes
-func (ti *TransactionsIndex) SerializeHashes(hashes [][]byte) ([]byte, error) {
+func (ti *transactionsIndex) SerializeHashes(hashes [][]byte) ([]byte, error) {
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 	err := enc.Encode(hashes)
@@ -319,7 +319,7 @@ func (ti *TransactionsIndex) SerializeHashes(hashes [][]byte) ([]byte, error) {
 
 // Deserialize list of hashes
 
-func (ti *TransactionsIndex) DeserializeHashes(data []byte) ([][]byte, error) {
+func (ti *transactionsIndex) DeserializeHashes(data []byte) ([][]byte, error) {
 	var hashes [][]byte
 
 	dec := gob.NewDecoder(bytes.NewReader(data))
@@ -331,7 +331,7 @@ func (ti *TransactionsIndex) DeserializeHashes(data []byte) ([][]byte, error) {
 	return hashes, nil
 }
 
-func (ti *TransactionsIndex) GetTranactionBlocks(txID []byte) ([][]byte, error) {
+func (ti *transactionsIndex) GetTranactionBlocks(txID []byte) ([][]byte, error) {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -363,7 +363,7 @@ func (ti *TransactionsIndex) GetTranactionBlocks(txID []byte) ([][]byte, error) 
 // It uses the block and top block hashes to find a range of blocks where a spending can be
 // This index can contains spending in some other parallel branches. We use top and bottom hashes
 // to set a chain where to look for spendings
-func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte, blockHash []byte, topHash []byte) ([]TransactionsIndexSpentOutputs, error) {
+func (ti *transactionsIndex) GetTranactionOutputsSpent(txID []byte, blockHash []byte, topHash []byte) ([]TransactionsIndexSpentOutputs, error) {
 	txdb, err := ti.DB.GetTransactionsObject()
 
 	if err != nil {
@@ -395,7 +395,7 @@ func (ti *TransactionsIndex) GetTranactionOutputsSpent(txID []byte, blockHash []
 	return res, nil
 }
 
-func (ti *TransactionsIndex) filterTranactionOutputsSpent(outPuts []TransactionsIndexSpentOutputs,
+func (ti *transactionsIndex) filterTranactionOutputsSpent(outPuts []TransactionsIndexSpentOutputs,
 	blockHash []byte, topHash []byte) ([]TransactionsIndexSpentOutputs, error) {
 
 	bcMan, err := blockchain.NewBlockchainManager(ti.DB, ti.Logger)
@@ -422,7 +422,7 @@ func (ti *TransactionsIndex) filterTranactionOutputsSpent(outPuts []Transactions
 }
 
 // Get full TX, spending status and block hash for TX by ID
-func (ti *TransactionsIndex) GetTransactionAllInfo(txID []byte, topHash []byte) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
+func (ti *transactionsIndex) GetTransactionAllInfo(txID []byte, topHash []byte) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
 	localError := func(err error) (*structures.Transaction, []TransactionsIndexSpentOutputs, []byte, error) {
 		return nil, nil, nil, err
 	}
