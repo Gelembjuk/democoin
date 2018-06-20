@@ -22,7 +22,7 @@ type NodeServer struct {
 
 	NodeAddress netlib.NodeAddr
 
-	Transit NodeTransit
+	Transit nodeTransit
 
 	Logger *utils.LoggerMan
 	// Channels to manipulate roitunes
@@ -36,113 +36,6 @@ type NodeServer struct {
 func (s *NodeServer) GetClient() *nodeclient.NodeClient {
 
 	return s.Node.NodeClient
-}
-
-// Reads and parses request from network data
-func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) {
-	// 1. Read command
-	commandbuffer, err := s.readFromConnection(conn, netlib.CommandLength)
-
-	if err != nil {
-		return "", nil, "", err
-	}
-
-	command := netlib.BytesToCommand(commandbuffer)
-
-	// 2. Get length of command data
-
-	lengthbuffer, err := s.readFromConnection(conn, 4)
-
-	if err != nil {
-		return "", nil, "", err
-	}
-
-	var datalength uint32
-	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &datalength)
-
-	// 3. Get length of extra data
-	lengthbuffer, err = s.readFromConnection(conn, 4)
-
-	if err != nil {
-		return "", nil, "", err
-	}
-
-	var extradatalength uint32
-	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &extradatalength)
-
-	// 4. read command data by length
-	//s.Logger.Trace.Printf("Before read data %d bytes", datalength)
-
-	databuffer := []byte{}
-
-	if datalength > 0 {
-		databuffer, err = s.readFromConnection(conn, int(datalength))
-
-		if err != nil {
-			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of request: %s", datalength, err.Error()))
-		}
-	}
-
-	// 5. read extra data by length
-
-	authstr := ""
-	//s.Logger.Trace.Printf("Before read extra data %d bytes. ", extradatalength)
-	if extradatalength > 0 {
-		extradatabuffer, err := s.readFromConnection(conn, int(extradatalength))
-
-		if err != nil {
-			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of extra data: %s", extradatalength, err.Error()))
-		}
-
-		authstr = netlib.BytesToCommand(extradatabuffer)
-	}
-	//s.Logger.Trace.Printf("All read")
-	return command, databuffer, authstr, nil
-}
-
-func (s *NodeServer) readFromConnection(conn net.Conn, countofbytes int) ([]byte, error) {
-	buff := new(bytes.Buffer)
-
-	pauses := 0
-
-	for {
-
-		tmpbuffer := make([]byte, countofbytes-buff.Len())
-
-		read, err := conn.Read(tmpbuffer)
-
-		if read > 0 {
-			buff.Write(tmpbuffer[:read])
-
-			if buff.Len() == countofbytes {
-				break
-			}
-			pauses = 0
-		}
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		if read == 0 {
-			if pauses > 30 {
-				break
-			}
-			time.Sleep(1 * time.Second)
-			pauses++
-		}
-	}
-
-	if buff.Len() < countofbytes {
-		return nil,
-			errors.New(fmt.Sprintf("Wrong number of bytes received for a request. Expected - %d, read - %d", countofbytes, buff.Len()))
-	}
-
-	return buff.Bytes(), nil
 }
 
 // handle received data. It can be one way command or a request for some data
@@ -281,8 +174,11 @@ func (s *NodeServer) handleConnection(conn net.Conn) {
 	duration := time.Since(time.Unix(0, starttime))
 	ms := duration.Nanoseconds() / int64(time.Millisecond)
 	s.Logger.Trace.Printf("Complete processing %s command. Time: %d ms, sess %s", command, ms, sessid)
+
 	conn.Close()
 }
+
+// response error to a client
 func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
 	s.Logger.Error.Println("Sending back error message: ", err.Error())
 	s.Logger.Trace.Println("Sending back error message: ", err.Error())
@@ -302,9 +198,8 @@ func (s *NodeServer) sendErrorBack(conn net.Conn, err error) {
 	}
 }
 
-/*
-* Starts a server for node. It listens TPC port and communicates with other nodes and lite clients
- */
+// Starts a server for node. It listens TPC port and communicates with other nodes and lite clients
+
 func (s *NodeServer) StartServer(serverStartResult chan string) error {
 	s.Logger.Trace.Println("Prepare server to start ", s.NodeAddress.NodeAddrToString())
 
@@ -414,33 +309,13 @@ func (s *NodeServer) BlockBuilder() {
 		// pointers are used everywhere. so, it can be some sort of conflict with main thread
 		NodeClone := s.CloneNode()
 		// try to buid new block
-		newBlockHash, err := NodeClone.TryToMakeBlock()
+		_, err := NodeClone.TryToMakeBlock(txID)
 
 		if err != nil {
 			s.Logger.Trace.Printf("Block building error %s\n", err.Error())
 		}
 
 		s.Logger.Trace.Printf("Attempt finished")
-
-		if newBlockHash == nil && len(txID) > 1 {
-			s.Logger.Trace.Printf("Send this new transaction to all other")
-			// block was not created and txID is real transaction ID
-			// send this transaction to all other nodes.
-			// blockchain should be closed in this place
-
-			tx, err := NodeClone.GetTransactionsManager().GetIfUnapprovedExists(txID)
-
-			if err == nil && tx != nil {
-				// we send from main node object, not from a clone. because nodes list
-				// can be updated
-				s.Node.SendTransactionToAll(tx)
-			} else if err != nil {
-				s.Logger.Trace.Printf("Error: %s", err.Error())
-			} else if tx == nil {
-				s.Logger.Trace.Printf("Error: TX %x is not found", txID)
-			}
-		}
-		NodeClone.DBConn.CloseConnection()
 	}
 }
 
@@ -467,4 +342,112 @@ func (s *NodeServer) CloneNode() *nodemanager.Node {
 	node.InitNodes(orignode.NodeNet.Nodes, true) // set list of nodes and skip loading default if this is empty list
 
 	return &node
+}
+
+// Reads and parses request from network data
+func (s *NodeServer) readRequest(conn net.Conn) (string, []byte, string, error) {
+	// 1. Read command
+	commandbuffer, err := s.readFromConnection(conn, netlib.CommandLength)
+
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	command := netlib.BytesToCommand(commandbuffer)
+
+	// 2. Get length of command data
+
+	lengthbuffer, err := s.readFromConnection(conn, 4)
+
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	var datalength uint32
+	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &datalength)
+
+	// 3. Get length of extra data
+	lengthbuffer, err = s.readFromConnection(conn, 4)
+
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	var extradatalength uint32
+	binary.Read(bytes.NewReader(lengthbuffer), binary.LittleEndian, &extradatalength)
+
+	// 4. read command data by length
+	//s.Logger.Trace.Printf("Before read data %d bytes", datalength)
+
+	databuffer := []byte{}
+
+	if datalength > 0 {
+		databuffer, err = s.readFromConnection(conn, int(datalength))
+
+		if err != nil {
+			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of request: %s", datalength, err.Error()))
+		}
+	}
+
+	// 5. read extra data by length
+
+	authstr := ""
+
+	if extradatalength > 0 {
+		extradatabuffer, err := s.readFromConnection(conn, int(extradatalength))
+
+		if err != nil {
+			return "", nil, "", errors.New(fmt.Sprintf("Error reading %d bytes of extra data: %s", extradatalength, err.Error()))
+		}
+
+		authstr = netlib.BytesToCommand(extradatabuffer)
+	}
+
+	return command, databuffer, authstr, nil
+}
+
+// Read given amount of bytes from connection
+func (s *NodeServer) readFromConnection(conn net.Conn, countofbytes int) ([]byte, error) {
+	buff := new(bytes.Buffer)
+
+	pauses := 0
+
+	for {
+
+		tmpbuffer := make([]byte, countofbytes-buff.Len())
+
+		read, err := conn.Read(tmpbuffer)
+
+		if read > 0 {
+			buff.Write(tmpbuffer[:read])
+
+			if buff.Len() == countofbytes {
+				break
+			}
+			pauses = 0
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if read == 0 {
+			if pauses > 30 {
+				break
+			}
+			time.Sleep(1 * time.Second)
+			pauses++
+		}
+	}
+
+	if buff.Len() < countofbytes {
+		return nil,
+			errors.New(fmt.Sprintf("Wrong number of bytes received for a request. Expected - %d, read - %d", countofbytes, buff.Len()))
+	}
+
+	return buff.Bytes(), nil
 }

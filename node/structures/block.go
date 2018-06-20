@@ -25,6 +25,16 @@ type BlockShort struct {
 	Height        int
 }
 
+// simpler representation of a block. transactions are presented as strings
+type BlockSimpler struct {
+	Timestamp     int64
+	Transactions  []string
+	PrevBlockHash []byte
+	Hash          []byte
+	Nonce         int
+	Height        int
+}
+
 // Reverce list of blocks
 func ReverseBlocksSlice(ss []*Block) {
 	last := len(ss) - 1
@@ -86,6 +96,22 @@ func (b *Block) GetShortCopy() *BlockShort {
 	bs.Height = b.Height
 
 	return &bs
+}
+
+// Returns simpler copy of a block. This is the version for easy print
+// TODO . not sure we really need this
+func (b *Block) GetSimpler() *BlockSimpler {
+	Block := BlockSimpler{}
+	Block.Hash = b.Hash[:]
+	Block.Height = b.Height
+	Block.PrevBlockHash = b.PrevBlockHash[:]
+
+	Block.Transactions = []string{}
+
+	for _, tx := range b.Transactions {
+		Block.Transactions = append(Block.Transactions, tx.String())
+	}
+	return &Block
 }
 
 // Creates copy of a block

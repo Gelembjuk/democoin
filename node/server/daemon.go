@@ -34,16 +34,14 @@ func (n *NodeDaemon) Init() error {
 	return nil
 }
 
-/*
-* BUild a pid file path
- */
+// Build a pid file path
+
 func (n *NodeDaemon) getServerPidFile() string {
 	return n.DataDir + config.PidFileName
 }
 
-/*
-* Create node server object. It will set tcp port and handle requests from other nodes
- */
+// Create node server object. It will set tcp port and handle requests from other nodes
+
 func (n *NodeDaemon) createServer() error {
 	if n.Server != nil {
 		return nil
@@ -70,9 +68,8 @@ func (n *NodeDaemon) createServer() error {
 	return nil
 }
 
-/*
-* Check state of pid file. To know if a node server is running or not
- */
+// Check state of pid file. To know if a node server is running or not
+
 func (n *NodeDaemon) checkPIDFile() error {
 	// check if daemon already running.
 	if _, err := os.Stat(n.getServerPidFile()); err == nil {
@@ -104,9 +101,8 @@ func (n *NodeDaemon) checkPIDFile() error {
 	return nil
 }
 
-/*
-* Help function to ferify input arguments on start
- */
+// Help function to ferify input arguments on start
+
 func (n *NodeDaemon) checkArgumentsAreFine() error {
 
 	if n.Port < 1 {
@@ -137,9 +133,8 @@ func (n *NodeDaemon) checkArgumentsAreFine() error {
 	return nil
 }
 
-/*
-* Starts a node in daemon mode. Creates new process and this process exists
- */
+// Starts a node in daemon mode. Creates new process and this process exists
+
 func (n *NodeDaemon) StartServer() error {
 	// check if daemon already running.
 	err := n.checkPIDFile()
@@ -200,9 +195,8 @@ func (n *NodeDaemon) StartServer() error {
 	return nil
 }
 
-/*
-* Runs a node server without a daemon. This can help to debug a node
- */
+// Runs a node server without a daemon. This can help to debug a node
+
 func (n *NodeDaemon) StartServerInteractive() error {
 	// check if daemon already running.
 	err := n.checkPIDFile()
@@ -240,9 +234,8 @@ func (n *NodeDaemon) StartServerInteractive() error {
 	return nil
 }
 
-/*
-* Stops a node daemon. Finds a process and kills it.
- */
+// Stops a node daemon. Finds a process and kills it.
+
 func (n *NodeDaemon) StopServer() error {
 	ProcessID, _, _, _, err := n.loadPIDFile()
 
@@ -279,9 +272,7 @@ func (n *NodeDaemon) StopServer() error {
 	return nil
 }
 
-/*
-* Makes a daemon process. It starts node server and waits for interrupt signal when to exit.
- */
+// Makes a daemon process. It starts node server and waits for interrupt signal when to exit.
 func (n *NodeDaemon) DaemonizeServer() error {
 	n.Logger.Trace.Println("Daemon process runs")
 
@@ -357,6 +348,8 @@ func (n *NodeDaemon) DaemonizeServer() error {
 
 	return nil
 }
+
+// check while sever started
 func (n *NodeDaemon) waitServerStarted(serverStartResult chan string) {
 
 	result := <-serverStartResult
@@ -375,9 +368,8 @@ func (n *NodeDaemon) waitServerStarted(serverStartResult chan string) {
 	close(serverStartResult)
 }
 
-/*
-* Save PID file for a process
- */
+// Save PID file for a process
+
 func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, startresult string) (string, error) {
 
 	file, err := os.Create(n.getServerPidFile())
@@ -410,9 +402,7 @@ func (n *NodeDaemon) savePIDFile(pid int, port int, authstr string, startresult 
 	return authstr, nil
 }
 
-/*
-* Laads PID file.
- */
+// Laads PID file.
 func (n *NodeDaemon) loadPIDFile() (int, int, string, string, error) {
 
 	if _, err := os.Stat(n.getServerPidFile()); err == nil {

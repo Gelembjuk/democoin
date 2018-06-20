@@ -344,9 +344,7 @@ func (s *NodeServerRequest) handleAddr() error {
 	return nil
 }
 
-/*
-* Block received from other node
- */
+// Block received from other node
 func (s *NodeServerRequest) handleBlock() error {
 	var payload nodeclient.ComBlock
 	err := s.parseRequestData(&payload)

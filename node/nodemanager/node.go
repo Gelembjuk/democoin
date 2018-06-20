@@ -3,7 +3,6 @@ package nodemanager
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -62,6 +61,21 @@ func (n *Node) GetBCManager() (*blockchain.Blockchain, error) {
 	return blockchain.NewBlockchainManager(n.DBConn.DB(), n.Logger)
 }
 
+// Creates iterator to go over blockchain
+func (n *Node) GetBlockChainIterator() (*blockchain.BlockchainIterator, error) {
+	return blockchain.NewBlockchainIterator(n.DBConn.DB())
+}
+
+// Init block maker object. It is used to make new blocks
+func (n *Node) getBlockMakeManager() (consensus.ConsensusInterface, error) {
+	return consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB(), n.Logger)
+}
+
+// Init block maker object. It is used to make new blocks
+func (n *Node) getCreateManager() *makeBlockchain {
+	return &makeBlockchain{n.Logger, n.MinterAddress, n.DBConn}
+}
+
 // Init network client object. It is used to communicate with other nodes
 func (n *Node) InitClient() error {
 	if n.NodeClient != nil {
@@ -94,11 +108,11 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 
 			bcm := n.NodeBC.GetBCManager()
 
-			geenesisHash, err := bcm.GetGenesisBlockHash()
+			genesisHash, err := bcm.GetGenesisBlockHash()
 
 			if err == nil {
 				// load them from some external resource
-				n.NodeNet.LoadInitialNodes(geenesisHash)
+				n.NodeNet.LoadInitialNodes(genesisHash)
 			}
 
 		}
@@ -106,11 +120,6 @@ func (n *Node) InitNodes(list []net.NodeAddr, force bool) error {
 		n.NodeNet.SetNodes(list, true)
 	}
 	return nil
-}
-
-// Init block maker object. It is used to make new blocks
-func (n *Node) initBlockMaker() (consensus.ConsensusInterface, error) {
-	return consensus.NewConsensusManager(n.MinterAddress, n.DBConn.DB(), n.Logger)
 }
 
 // Check if blockchain already exists. If no, we will not allow most of operations
@@ -129,42 +138,10 @@ func (n *Node) BlockchainExist() bool {
 
 // Create new blockchain, add genesis block witha given text
 func (n *Node) CreateBlockchain(address, genesisCoinbaseData string) error {
-	genesisBlock, err := n.NodeBC.PrepareGenesisBlock(address, genesisCoinbaseData)
+	bccreator := n.getCreateManager()
+	bccreator.MinterAddress = address
 
-	if err != nil {
-		return err
-	}
-
-	Minter, _ := n.initBlockMaker()
-
-	n.Logger.Trace.Printf("Complete genesis block proof of work\n")
-
-	Minter.SetPreparedBlock(genesisBlock)
-
-	genesisBlock, err = Minter.CompleteBlock()
-
-	if err != nil {
-		return err
-	}
-
-	n.Logger.Trace.Printf("Block ready. Init block chain file\n")
-
-	err = n.NodeBC.CreateBlockchain(genesisBlock)
-
-	if err != nil {
-		return err
-	}
-	n.Logger.Trace.Printf("Prepare TX caches\n")
-
-	n.DBConn.OpenConnection("InitAfterCreate", "")
-
-	n.GetTransactionsManager().BlockAdded(genesisBlock, true)
-
-	n.DBConn.CloseConnection()
-
-	n.Logger.Trace.Printf("Blockchain ready!\n")
-
-	return nil
+	return bccreator.CreateBlockchain(genesisCoinbaseData)
 }
 
 // Creates new blockchain DB from given list of blocks
@@ -185,73 +162,16 @@ func (n *Node) InitBlockchainFromOther(host string, port int) (bool, error) {
 		port = nd.Port
 	}
 	addr := net.NodeAddr{host, port}
-	n.Logger.Trace.Printf("Try to init blockchain from %s:%d", addr.Host, addr.Port)
 
-	result, err := n.NodeClient.SendGetFirstBlocks(addr)
-
-	if err != nil {
-		return false, err
-	}
-
-	if len(result.Blocks) == 0 {
-		return false, errors.New("No blocks found on taht node")
-	}
-
-	firstblockbytes := result.Blocks[0]
-
-	block := &structures.Block{}
-	err = block.DeserializeBlock(firstblockbytes)
+	complete, err := n.getCreateManager().InitBlockchainFromOther(addr, n.NodeClient, &n.NodeBC)
 
 	if err != nil {
 		return false, err
 	}
-	n.Logger.Trace.Printf("Importing first block hash %x", block.Hash)
-	// make blockchain with single block
-	err = n.NodeBC.CreateBlockchain(block)
-
-	if err != nil {
-		return false, errors.New(fmt.Sprintf("Create DB abd add first block: %", err.Error()))
-	}
-
-	defer n.DBConn.CloseConnection()
-
-	n.GetTransactionsManager().BlockAdded(block, true)
-
-	MH := block.Height
-
-	if len(result.Blocks) > 1 {
-		// add all blocks
-
-		skip := true
-		for _, blockdata := range result.Blocks {
-			if skip {
-				skip = false
-				continue
-			}
-			// add this block
-			block := &structures.Block{}
-			err := block.DeserializeBlock(blockdata)
-
-			if err != nil {
-				return false, err
-			}
-
-			_, err = n.NodeBC.AddBlock(block)
-
-			if err != nil {
-				return false, err
-			}
-
-			n.GetTransactionsManager().BlockAdded(block, true)
-
-			MH = block.Height
-		}
-	}
-
 	// add that node to list of known nodes.
 	n.NodeNet.AddNodeToKnown(addr)
 
-	return MH == result.Height, nil
+	return complete, nil
 }
 
 /*
@@ -371,10 +291,8 @@ func (n *Node) Send(PubKey []byte, privKey ecdsa.PrivateKey, to string, amount f
 	return tx.ID, nil
 }
 
-/*
-* Try to make a block. Check if there are enough transactions in list of unapproved
- */
-func (n *Node) TryToMakeBlock() ([]byte, error) {
+// Try to make a block. If no enough transactions, send new transaction to all other nodes
+func (n *Node) TryToMakeBlock(newTransactionID []byte) ([]byte, error) {
 	n.Logger.Trace.Println("Try to make new block")
 
 	w := wallet.Wallet{}
@@ -385,7 +303,7 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 
 	n.Logger.Trace.Println("Create block maker")
 	// check how many transactions are ready to be added to a block
-	Minter, _ := n.initBlockMaker()
+	Minter, _ := n.getBlockMakeManager()
 
 	prepres, err := Minter.PrepareNewBlock()
 
@@ -393,13 +311,33 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 		return nil, err
 	}
 
-	if prepres != consensus.BlockPrepare_Done {
-		n.Logger.Trace.Println("No anough transactions to make a block")
-		return nil, nil
-	}
-
 	// close it while doing the proof of work
 	n.DBConn.CloseConnection()
+	// and close it again in the end of function
+	defer n.DBConn.CloseConnection()
+
+	if prepres != consensus.BlockPrepare_Done {
+		n.Logger.Trace.Println("No anough transactions to make a block")
+
+		if len(newTransactionID) > 1 {
+			n.Logger.Trace.Printf("Send this new transaction to all other")
+			// block was not created and txID is real transaction ID
+			// send this transaction to all other nodes.
+
+			tx, err := n.GetTransactionsManager().GetIfUnapprovedExists(newTransactionID)
+
+			if err == nil && tx != nil {
+				// send TX to all other nodes
+				n.SendTransactionToAll(tx)
+			} else if err != nil {
+				n.Logger.Trace.Printf("Error: %s", err.Error())
+			} else if tx == nil {
+				n.Logger.Trace.Printf("Error: TX %x is not found", newTransactionID)
+			}
+		}
+
+		return nil, nil
+	}
 
 	block, err := Minter.CompleteBlock()
 
@@ -422,8 +360,6 @@ func (n *Node) TryToMakeBlock() ([]byte, error) {
 	}
 	// send new block to all known nodes
 	n.SendBlockToAll(block, net.NodeAddr{} /*nothing to skip*/)
-
-	n.DBConn.CloseConnection()
 
 	n.Logger.Trace.Println("Block done. Sent to all")
 

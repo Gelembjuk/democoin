@@ -354,21 +354,26 @@ func (c *NodeCLI) commandInitBlockchain() error {
 // Print full blockchain
 
 func (c *NodeCLI) commandPrintChain() error {
-	bci, err := c.Node.NodeBC.GetBlockChainIterator()
+	bci, err := c.Node.GetBlockChainIterator()
 
 	if err != nil {
 		return err
 	}
 
-	blocks := []*nodemanager.BlockInfo{}
+	blocks := []string{}
 
 	for {
-		block := bci.Next()
+		blockfull, err := bci.Next()
 
-		if block == nil {
+		if err != nil {
+			return err
+		}
+
+		if blockfull == nil {
 			fmt.Printf("Somethign went wrong. Next block can not be loaded\n")
 			break
 		}
+		block := blockfull.GetSimpler()
 
 		if c.Input.Args.View == "short" {
 
@@ -379,7 +384,10 @@ func (c *NodeCLI) commandPrintChain() error {
 
 			fmt.Printf("\n")
 		} else if c.Input.Args.View == "shortr" {
-			blocks = append(blocks, block)
+			b := fmt.Sprintf("Hash: %x\n", block.Hash)
+			b = b + fmt.Sprintf("Height: %d, Transactions: %d\n", block.Height, len(block.Transactions)-1)
+			b = b + fmt.Sprintf("Prev: %x\n", block.PrevBlockHash)
+			blocks = append(blocks, b)
 		} else {
 			fmt.Printf("============ Block %x ============\n", block.Hash)
 			fmt.Printf("Height: %d\n", block.Height)
@@ -390,16 +398,7 @@ func (c *NodeCLI) commandPrintChain() error {
 			}
 			fmt.Printf("\n\n")
 		}
-		/*
-			c.Logger.Trace.Printf("============ Block %x ============\n", block.Hash)
-			c.Logger.Trace.Printf("Height: %d\n", block.Height)
-			c.Logger.Trace.Printf("Prev. block: %x\n", block.PrevBlockHash)
 
-			for _, tx := range block.Transactions {
-				c.Logger.Trace.Println(tx)
-			}
-			c.Logger.Trace.Printf("\n\n")
-		*/
 		if len(block.PrevBlockHash) == 0 {
 			break
 		}
@@ -409,10 +408,7 @@ func (c *NodeCLI) commandPrintChain() error {
 		for i := len(blocks) - 1; i >= 0; i-- {
 			block := blocks[i]
 			fmt.Printf("===============\n")
-			fmt.Printf("Hash: %x\n", block.Hash)
-			fmt.Printf("Height: %d, TX count: %d\n", block.Height, len(block.Transactions))
-			fmt.Printf("Prev: %x\n", block.PrevBlockHash)
-
+			fmt.Print(block)
 			fmt.Printf("\n")
 		}
 	}
@@ -594,7 +590,7 @@ func (c *NodeCLI) commandReindexCache() error {
 
 // Try to mine a block if there is anough unapproved transactions
 func (c *NodeCLI) commandMakeBlock() error {
-	block, err := c.Node.TryToMakeBlock()
+	block, err := c.Node.TryToMakeBlock([]byte{})
 
 	if err != nil {
 		return err
@@ -637,13 +633,18 @@ func (c *NodeCLI) commandDropBlock() error {
 		return err
 	}
 
-	bci, err := c.Node.NodeBC.GetBlockChainIterator()
+	bci, err := c.Node.GetBlockChainIterator()
 
 	if err != nil {
 		return err
 	}
 
-	block := bci.Next()
+	blockFull, _ := bci.Next()
+
+	if blockFull == nil {
+		return errors.New("This was last block!")
+	}
+	block := blockFull.GetSimpler()
 
 	fmt.Printf("Done!\n")
 	fmt.Printf("============ Last Block %x ============\n", block.Hash)

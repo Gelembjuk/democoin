@@ -754,6 +754,7 @@ func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) 
 }
 
 // Check block is in the chain
+// TODO this can be optimizad to work faster using the index
 func (bc *Blockchain) GetBlockInTheChain(blockHash []byte, tip []byte) (int, error) {
 	itertorstart := []byte{}
 
@@ -806,6 +807,7 @@ func (bc *Blockchain) GetBlockInTheChain(blockHash []byte, tip []byte) (int, err
 }
 
 // Returns geneesis block hash
+// First block is saved in sperate record in DB
 func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 	bcdb, err := bc.DB.GetBlockchainObject()
 
@@ -823,6 +825,8 @@ func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 }
 
 // Receive ist of hashes and return a hash that is in the chain defined by top hash
+// This function is used for transactions. to understand if a transaction exists in current chain branch or in some parallel
+// and where a transaction is spent
 func (bc *Blockchain) ChooseHashUnderTip(blockHashes [][]byte, topHash []byte) ([]byte, error) {
 	bc.Logger.Trace.Printf("choose block hash %x for top  %x", blockHashes, topHash)
 	if len(blockHashes) == 0 {

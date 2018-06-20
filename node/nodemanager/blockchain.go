@@ -17,48 +17,11 @@ type NodeBlockchain struct {
 	DBConn        *Database
 }
 
-// this are structures with methods to organize blockchain iterator
-// ad use it outside
-type BlockInfo struct {
-	Timestamp     int64
-	Transactions  []string
-	PrevBlockHash []byte
-	Hash          []byte
-	Nonce         int
-	Height        int
-}
-
 type TransactionsHistory struct {
 	IOType  bool
 	TXID    []byte
 	Address string
 	Value   float64
-}
-
-// iterator for blockchain. can be used to iterate over BC from outside
-type BlocksIterator struct {
-	BCI *blockchain.BlockchainIterator
-}
-
-// Returns next block in iterator. First will be the top block
-func (bci *BlocksIterator) Next() *BlockInfo {
-	block, err := bci.BCI.Next()
-
-	if err != nil || block == nil {
-		return nil
-	}
-
-	Block := BlockInfo{}
-	Block.Hash = block.Hash
-	Block.Height = block.Height
-	Block.PrevBlockHash = block.PrevBlockHash
-
-	Block.Transactions = []string{}
-
-	for _, tx := range block.Transactions {
-		Block.Transactions = append(Block.Transactions, tx.String())
-	}
-	return &Block
 }
 
 func (n *NodeBlockchain) GetBCManager() *blockchain.Blockchain {
@@ -106,91 +69,6 @@ func (n *NodeBlockchain) GetTopBlockHash() ([]byte, error) {
 	}
 
 	return topHash, nil
-}
-
-// BUilds a genesis block. It is used only to start new blockchain
-func (n *NodeBlockchain) PrepareGenesisBlock(address, genesisCoinbaseData string) (*structures.Block, error) {
-	if address == "" {
-		return nil, errors.New("Geneisis block wallet address missed")
-	}
-
-	w := wallet.Wallet{}
-
-	if !w.ValidateAddress(address) {
-		return nil, errors.New("Address is not valid")
-	}
-
-	if genesisCoinbaseData == "" {
-		return nil, errors.New("Geneisis block text missed")
-	}
-
-	cbtx := &structures.Transaction{}
-
-	errc := cbtx.MakeCoinbaseTX(address, genesisCoinbaseData)
-
-	if errc != nil {
-		return nil, errc
-	}
-
-	genesis := &structures.Block{}
-	genesis.PrepareNewBlock([]*structures.Transaction{cbtx}, []byte{}, 0)
-
-	return genesis, nil
-}
-
-// Create new blockchain from given genesis block
-func (n *NodeBlockchain) CreateBlockchain(genesis *structures.Block) error {
-	n.Logger.Trace.Println("Init DB")
-
-	n.DBConn.CloseConnection() // close in case if it was opened before
-
-	err := n.DBConn.InitDatabase()
-
-	if err != nil {
-		n.Logger.Error.Printf("Can not init DB: %s", err.Error())
-		return err
-	}
-
-	bcdb, err := n.DBConn.DB().GetBlockchainObject()
-
-	if err != nil {
-		n.Logger.Error.Printf("Can not create conn object: %s", err.Error())
-		return err
-	}
-
-	blockdata, err := genesis.Serialize()
-
-	if err != nil {
-		return err
-	}
-
-	err = bcdb.PutBlockOnTop(genesis.Hash, blockdata)
-
-	if err != nil {
-		return err
-	}
-
-	err = bcdb.SaveFirstHash(genesis.Hash)
-
-	if err != nil {
-		return err
-	}
-
-	// add first rec to chain list
-	bcdb.AddToChain(genesis.Hash, []byte{})
-
-	return err
-}
-
-// Creates iterator to go over blockchain
-func (n *NodeBlockchain) GetBlockChainIterator() (*BlocksIterator, error) {
-	bcicore, err := blockchain.NewBlockchainIterator(n.DBConn.DB())
-
-	if err != nil {
-		return nil, err
-	}
-	bci := BlocksIterator{bcicore}
-	return &bci, nil
 }
 
 // Returns history of transactions for given address

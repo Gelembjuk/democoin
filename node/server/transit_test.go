@@ -7,7 +7,7 @@ import (
 )
 
 func TestAddBlockSimple(t *testing.T) {
-	tr := NodeTransit{}
+	tr := nodeTransit{}
 	tr.Init(nil)
 
 	addr := lib.NodeAddr{"localhost", 20000}
