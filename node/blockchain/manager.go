@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 
 	"github.com/gelembjuk/democoin/lib/utils"
@@ -315,9 +314,8 @@ func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*stru
 	return nil, errors.New("Transaction is not found")
 }
 
-/*
-* Returns a block with specified height in current blockchain
- */
+// Returns a block with specified height in current blockchain
+// TODO can be optimized using blocks index
 func (bc *Blockchain) GetBlockAtHeight(height int) (*structures.Block, error) {
 	// finds a block with this height
 
@@ -440,35 +438,8 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (structures.Block, error) {
 	return block, nil
 }
 
-// GetBlockHashes returns a list of hashes of all the blocks in the chain
-// TODO
-// This can use too much memory. Improve in the future. Add some paging
-
-func (bc *Blockchain) GetBlockHashes() [][]byte {
-	var blocks [][]byte
-
-	bci, err := NewBlockchainIterator(bc.DB)
-
-	if err != nil {
-		return nil
-	}
-
-	for {
-		block, _ := bci.Next()
-
-		blocks = append(blocks, block.Hash)
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-
-	return blocks
-}
-
-/*
-* Returns a list of blocks short info stating from given block or from a top
- */
+// Returns a list of blocks short info stating from given block or from a top
+// TODO replace with iterator
 func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*structures.BlockShort {
 	var blocks []*structures.BlockShort
 	var bci *BlockchainIterator
@@ -554,7 +525,7 @@ func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*structures.BlockShort {
 }
 
 // Returns first blocks in block chain
-
+// TODO We need to use index of blocks
 func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, error) {
 	localError := func(err error) ([]*structures.Block, int, error) {
 		return nil, 0, err
@@ -562,7 +533,6 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, er
 	_, height, err := bc.GetState()
 
 	if err != nil {
-		bc.Logger.Trace.Println("err 1")
 		return localError(err)
 	}
 
@@ -576,7 +546,6 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, er
 	bcdb, err := bc.DB.GetBlockchainObject()
 
 	if err != nil {
-		bc.Logger.Trace.Println("err 3")
 		return localError(err)
 	}
 
@@ -588,14 +557,12 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, er
 		_, _, nextHash, err := bcdb.GetLocationInChain(hash)
 
 		if err != nil {
-			bc.Logger.Trace.Println("err 4")
 			return localError(err)
 		}
 
 		block, err := bc.GetBlock(hash)
 
 		if err != nil {
-			bc.Logger.Trace.Println("err 5")
 			return localError(err)
 		}
 
@@ -618,6 +585,7 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, er
 // Returns also a block from main chain which is the base of the side branch
 //
 // The function load all hashes to the memory from "main" chain
+// TODO We need to use index of blocks
 
 func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structures.Block, []*structures.Block, *structures.Block, error) {
 	// get 2 blocks with hashes from arguments
@@ -720,11 +688,12 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 }
 
 /*
-* Returns a chain of blocks starting fron a hash and till
+* Returns a chain of blocks starting from a hash and till
 * end of blockchain or block from main chain found
 * if already in main chain then returns empty list
 *
 * The function load all hashes to the memory from "main" chain
+* TODO We need to use index of blocks
  */
 func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) ([]*structures.Block, []*structures.Block, error) {
 	bc.Logger.Trace.Printf("Go to get branch %x %x", sideBranchHash, tip)
@@ -753,60 +722,7 @@ func (bc *Blockchain) GetBranchesReplacement(sideBranchHash []byte, tip []byte) 
 	return mainBlocks, sideBlocks, nil
 }
 
-// Check block is in the chain
-// TODO this can be optimizad to work faster using the index
-func (bc *Blockchain) GetBlockInTheChain(blockHash []byte, tip []byte) (int, error) {
-	itertorstart := []byte{}
-
-	if len(tip) == 0 {
-		if val, ok := bc.HashCache[hex.EncodeToString(blockHash)]; ok {
-			return val, nil
-		}
-
-		if len(bc.HashCache) > 0 && len(bc.LastHashInCache) == 0 {
-			return -1, nil
-		}
-		if len(bc.HashCache) > 0 && len(bc.LastHashInCache) > 0 {
-			itertorstart = bc.LastHashInCache[:]
-		}
-	} else {
-		itertorstart = tip[:]
-	}
-
-	var bci *BlockchainIterator
-	var err error
-
-	if len(itertorstart) > 0 {
-		bci, err = NewBlockchainIteratorFrom(bc.DB, itertorstart)
-	} else {
-		bci, err = NewBlockchainIterator(bc.DB)
-	}
-
-	if err != nil {
-		return -1, err
-	}
-
-	for {
-		block, _ := bci.Next()
-
-		if len(tip) == 0 {
-			bc.HashCache[hex.EncodeToString(block.Hash)] = block.Height
-
-			bc.LastHashInCache = block.PrevBlockHash[:]
-		}
-
-		if bytes.Compare(block.Hash, blockHash) == 0 {
-			return block.Height, nil
-		}
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-	return -1, nil
-}
-
-// Returns geneesis block hash
+// Returns genesis block hash
 // First block is saved in sperate record in DB
 func (bc *Blockchain) GetGenesisBlockHash() ([]byte, error) {
 	bcdb, err := bc.DB.GetBlockchainObject()

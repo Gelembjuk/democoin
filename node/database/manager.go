@@ -369,8 +369,9 @@ func (bdm *BoltDBManager) lockDB(name string, locksess string) error {
 		time.Sleep(50 * time.Millisecond)
 		i++
 
-		if i > 2000 {
+		if i > 10000 {
 			locker.Unlock()
+			bdm.Logger.Trace.Println("too long lock. return with error")
 			return errors.New("Can not open DB. Lock failed after many attempts")
 		}
 	}

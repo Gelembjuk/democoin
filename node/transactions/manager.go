@@ -577,28 +577,14 @@ func (n *txManager) getInputTransactionsState(tx *structures.Transaction,
 			prevTX = nil
 		} else {
 
-			//n.Logger.Trace.Printf("tx block hash %x %x", vin.Txid, txBockHash)
-			// check this block is part of chain
-			heigh, err := bcMan.GetBlockInTheChain(txBockHash, tip)
+			// if block is in this chain
+			//n.Logger.Trace.Printf("block height %d", heigh)
+			prevTX, err = bcMan.FindTransactionByBlock(vin.Txid, txBockHash)
 
 			if err != nil {
 				return nil, nil, err
 			}
 
-			if heigh >= 0 {
-				// if block is in this chain
-				//n.Logger.Trace.Printf("block height %d", heigh)
-				prevTX, err = bcMan.FindTransactionByBlock(vin.Txid, txBockHash)
-
-				if err != nil {
-					return nil, nil, err
-				}
-			} else {
-				// TX is in some other block that is in other chain. we want to include it in new block
-				// so, we consider this TX as missed from blocks (unapproved)
-				//n.Logger.Trace.Printf("Not found TX . type 2")
-				prevTX = nil
-			}
 		}
 
 		if prevTX == nil {
@@ -619,17 +605,7 @@ func (n *txManager) getInputTransactionsState(tx *structures.Transaction,
 
 				for _, o := range spentouts {
 					if o.OutInd == vin.Vout {
-						heigh, err := bcMan.GetBlockInTheChain(o.BlockHash, tip)
 
-						if err != nil {
-							return nil, nil, err
-						}
-
-						if heigh < 0 {
-							// this block is not found in current tip chain
-							// so, this spending can be ignored
-							continue
-						}
 						return nil, nil, errors.New("Transaction input was already spent before")
 					}
 				}
