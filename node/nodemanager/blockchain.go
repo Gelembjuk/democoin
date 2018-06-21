@@ -17,13 +17,6 @@ type NodeBlockchain struct {
 	DBConn        *Database
 }
 
-type TransactionsHistory struct {
-	IOType  bool
-	TXID    []byte
-	Address string
-	Value   float64
-}
-
 func (n *NodeBlockchain) GetBCManager() *blockchain.Blockchain {
 	bcm, _ := blockchain.NewBlockchainManager(n.DBConn.DB(), n.Logger)
 	return bcm
@@ -72,16 +65,14 @@ func (n *NodeBlockchain) GetTopBlockHash() ([]byte, error) {
 }
 
 // Returns history of transactions for given address
-func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistory, error) {
-	result := []TransactionsHistory{}
-
+func (n *NodeBlockchain) GetAddressHistory(address string) ([]structures.TransactionsHistory, error) {
 	if address == "" {
-		return result, errors.New("Address is missed")
+		return nil, errors.New("Address is missed")
 	}
 	w := wallet.Wallet{}
 
 	if !w.ValidateAddress(address) {
-		return result, errors.New("Address is not valid")
+		return nil, errors.New("Address is not valid")
 	}
 	bci, err := blockchain.NewBlockchainIterator(n.DBConn.DB())
 
@@ -91,76 +82,7 @@ func (n *NodeBlockchain) GetAddressHistory(address string) ([]TransactionsHistor
 
 	pubKeyHash, _ := utils.AddresToPubKeyHash(address)
 
-	for {
-		block, _ := bci.Next()
-
-		for _, tx := range block.Transactions {
-
-			income := float64(0)
-
-			spent := false
-			spentaddress := ""
-
-			// we presume all inputs in tranaction are always from same wallet
-			for _, in := range tx.Vin {
-				spentaddress, _ = utils.PubKeyToAddres(in.PubKey)
-
-				if in.UsesKey(pubKeyHash) {
-					spent = true
-					break
-				}
-			}
-
-			if spent {
-				// find how many spent , part of out can be exchange to same address
-
-				spentvalue := float64(0)
-				totalvalue := float64(0) // we need to know total if wallet sent to himself
-
-				destaddress := ""
-
-				// we agree that there can be only one destination in transaction. we don't support scripts
-				for _, out := range tx.Vout {
-					if !out.IsLockedWithKey(pubKeyHash) {
-						spentvalue += out.Value
-						destaddress, _ = utils.PubKeyHashToAddres(out.PubKeyHash)
-					}
-				}
-
-				if spentvalue > 0 {
-					result = append(result, TransactionsHistory{false, tx.ID, destaddress, spentvalue})
-				} else {
-					// spent to himself. this should not be usual case
-					result = append(result, TransactionsHistory{false, tx.ID, address, totalvalue})
-					result = append(result, TransactionsHistory{true, tx.ID, address, totalvalue})
-				}
-			} else if tx.IsCoinbase() {
-
-				if tx.Vout[0].IsLockedWithKey(pubKeyHash) {
-					spentaddress = "Coin base"
-					income = tx.Vout[0].Value
-				}
-			} else {
-
-				for _, out := range tx.Vout {
-
-					if out.IsLockedWithKey(pubKeyHash) {
-						income += out.Value
-					}
-				}
-			}
-
-			if income > 0 {
-				result = append(result, TransactionsHistory{true, tx.ID, spentaddress, income})
-			}
-		}
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-
-	return result, nil
+	return bci.GetAddressHistory(pubKeyHash, address)
 }
 
 // Drop block from a top of blockchain
@@ -261,7 +183,5 @@ func (n *NodeBlockchain) GetBlocksAfter(hash []byte) ([]*structures.BlockShort, 
 	// there are 2 cases: block is in main branch , and it is not in main branch
 	// this will be nil if a hash is not in a chain
 
-	blocks := n.GetBCManager().GetNextBlocks(hash)
-
-	return blocks, nil
+	return n.GetBCManager().GetNextBlocks(hash)
 }

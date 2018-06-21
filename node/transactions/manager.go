@@ -579,7 +579,7 @@ func (n *txManager) getInputTransactionsState(tx *structures.Transaction,
 
 			// if block is in this chain
 			//n.Logger.Trace.Printf("block height %d", heigh)
-			prevTX, err = bcMan.FindTransactionByBlock(vin.Txid, txBockHash)
+			prevTX, err = bcMan.GetTransactionFromBlock(vin.Txid, txBockHash)
 
 			if err != nil {
 				return nil, nil, err

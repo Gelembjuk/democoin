@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"github.com/gelembjuk/democoin/lib/utils"
 	"github.com/gelembjuk/democoin/node/database"
 	"github.com/gelembjuk/democoin/node/structures"
 )
@@ -9,6 +10,31 @@ import (
 type BlockchainIterator struct {
 	currentHash []byte
 	DB          database.DBManager
+}
+
+// Creates new Blockchain Iterator . Can be used to do something with blockchain from outside
+
+func NewBlockchainIterator(DB database.DBManager) (*BlockchainIterator, error) {
+
+	bcdb, err := DB.GetBlockchainObject()
+
+	if err != nil {
+		return nil, err
+	}
+
+	starttip, err := bcdb.GetTopHash()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &BlockchainIterator{starttip, DB}, nil
+}
+
+// Creates new Blockchain Iterator from given block hash. Can be used to do something with blockchain from outside
+//
+func NewBlockchainIteratorFrom(DB database.DBManager, startHash []byte) (*BlockchainIterator, error) {
+	return &BlockchainIterator{startHash, DB}, nil
 }
 
 // Next returns next block starting from the tip
@@ -39,27 +65,78 @@ func (i *BlockchainIterator) Next() (*structures.Block, error) {
 	return block, nil
 }
 
-// Creates new Blockchain Iterator . Can be used to do something with blockchain from outside
+// Returns history of transactions for given address
+func (i *BlockchainIterator) GetAddressHistory(pubKeyHash []byte, address string) ([]structures.TransactionsHistory, error) {
+	result := []structures.TransactionsHistory{}
 
-func NewBlockchainIterator(DB database.DBManager) (*BlockchainIterator, error) {
+	for {
+		block, _ := i.Next()
 
-	bcdb, err := DB.GetBlockchainObject()
+		for _, tx := range block.Transactions {
 
-	if err != nil {
-		return nil, err
+			income := float64(0)
+
+			spent := false
+			spentaddress := ""
+
+			// we presume all inputs in tranaction are always from same wallet
+			for _, in := range tx.Vin {
+				spentaddress, _ = utils.PubKeyToAddres(in.PubKey)
+
+				if in.UsesKey(pubKeyHash) {
+					spent = true
+					break
+				}
+			}
+
+			if spent {
+				// find how many spent , part of out can be exchange to same address
+
+				spentvalue := float64(0)
+				totalvalue := float64(0) // we need to know total if wallet sent to himself
+
+				destaddress := ""
+
+				// we agree that there can be only one destination in transaction. we don't support scripts
+				for _, out := range tx.Vout {
+					if !out.IsLockedWithKey(pubKeyHash) {
+						spentvalue += out.Value
+						destaddress, _ = utils.PubKeyHashToAddres(out.PubKeyHash)
+					}
+				}
+
+				if spentvalue > 0 {
+					result = append(result, structures.TransactionsHistory{false, tx.ID, destaddress, spentvalue})
+				} else {
+					// spent to himself. this should not be usual case
+					result = append(result, structures.TransactionsHistory{false, tx.ID, address, totalvalue})
+					result = append(result, structures.TransactionsHistory{true, tx.ID, address, totalvalue})
+				}
+			} else if tx.IsCoinbase() {
+
+				if tx.Vout[0].IsLockedWithKey(pubKeyHash) {
+					spentaddress = "Coin base"
+					income = tx.Vout[0].Value
+				}
+			} else {
+
+				for _, out := range tx.Vout {
+
+					if out.IsLockedWithKey(pubKeyHash) {
+						income += out.Value
+					}
+				}
+			}
+
+			if income > 0 {
+				result = append(result, structures.TransactionsHistory{true, tx.ID, spentaddress, income})
+			}
+		}
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
 	}
 
-	starttip, err := bcdb.GetTopHash()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &BlockchainIterator{starttip, DB}, nil
-}
-
-// Creates new Blockchain Iterator from given block hash. Can be used to do something with blockchain from outside
-//
-func NewBlockchainIteratorFrom(DB database.DBManager, startHash []byte) (*BlockchainIterator, error) {
-	return &BlockchainIterator{startHash, DB}, nil
+	return result, nil
 }

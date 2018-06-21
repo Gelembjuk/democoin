@@ -34,6 +34,7 @@ type Node struct {
 // Init interfaces of all DBs, blockchain, unspent transactions, unapproved transactions
 func (n *Node) Init() {
 	n.NodeNet.Init()
+
 	n.NodeNet.Logger = n.Logger
 	n.NodeBC.Logger = n.Logger
 

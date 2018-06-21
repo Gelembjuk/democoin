@@ -295,9 +295,9 @@ func (bc *Blockchain) DeleteBlock() (*structures.Block, error) {
 	return block, nil
 }
 
-// FindTransactionByBlock finds a transaction by its ID in given block
+// GetTransactionFromBlock finds a transaction by its ID in given block
 // If block is known . It worsk much faster then FindTransaction
-func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*structures.Transaction, error) {
+func (bc *Blockchain) GetTransactionFromBlock(txID []byte, blockHash []byte) (*structures.Transaction, error) {
 	block, err := bc.GetBlock(blockHash)
 
 	if err != nil {
@@ -306,7 +306,7 @@ func (bc *Blockchain) FindTransactionByBlock(ID []byte, blockHash []byte) (*stru
 
 	// get transaction from a block
 	for _, tx := range block.Transactions {
-		if bytes.Compare(tx.ID, ID) == 0 {
+		if bytes.Compare(tx.ID, txID) == 0 {
 			return tx, nil
 		}
 	}
@@ -393,9 +393,8 @@ func (bc *Blockchain) GetState() ([]byte, int, error) {
 	return lastBlock.Hash, lastBlock.Height, nil
 }
 
-/*
-* Check block exists
- */
+// Check block exists
+
 func (bc *Blockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 	bcdb, err := bc.DB.GetBlockchainObject()
 
@@ -406,8 +405,7 @@ func (bc *Blockchain) CheckBlockExists(blockHash []byte) (bool, error) {
 	return bcdb.CheckBlockExists(blockHash)
 }
 
-// GetBlock finds a block by its hash and returns it
-
+// GetBlock finds a block by its hash and returns i
 func (bc *Blockchain) GetBlock(blockHash []byte) (structures.Block, error) {
 	var block structures.Block
 
@@ -439,7 +437,6 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (structures.Block, error) {
 }
 
 // Returns a list of blocks short info stating from given block or from a top
-// TODO replace with iterator
 func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*structures.BlockShort {
 	var blocks []*structures.BlockShort
 	var bci *BlockchainIterator
@@ -476,56 +473,55 @@ func (bc *Blockchain) GetBlocksShortInfo(startfrom []byte, maxcount int) []*stru
 }
 
 // returns a list of hashes of all the blocks in the chain
-// TODO We need to use index of blocks
-func (bc *Blockchain) GetNextBlocks(startfrom []byte) []*structures.BlockShort {
+func (bc *Blockchain) GetNextBlocks(startfrom []byte) ([]*structures.BlockShort, error) {
+	localError := func(err error) ([]*structures.BlockShort, error) {
+		return nil, err
+	}
+
 	maxcount := 1000
 
 	blocks := []*structures.BlockShort{}
 
-	bci, err := NewBlockchainIterator(bc.DB)
+	bcdb, err := bc.DB.GetBlockchainObject()
 
 	if err != nil {
-		return blocks
+		return localError(err)
 	}
 
-	found := false
+	hash := startfrom[:]
 
 	for {
-		block, _ := bci.Next()
+		_, _, nextHash, err := bcdb.GetLocationInChain(hash)
 
-		if bytes.Compare(block.Hash, startfrom) == 0 {
-			found = true
+		if err != nil {
+			return localError(err)
+		}
+
+		block, err := bc.GetBlock(hash)
+
+		if err != nil {
+			return localError(err)
+		}
+
+		blocks = append(blocks, block.GetShortCopy())
+
+		if len(blocks) >= maxcount {
 			break
 		}
-
-		bs := block.GetShortCopy()
-
-		blocks = append(blocks, bs)
-
-		if len(blocks) > maxcount+100 {
-			// we don't want to truncate after every append
-			blocks = blocks[:maxcount]
-		}
-
-		if len(block.PrevBlockHash) == 0 {
+		if len(nextHash) == 0 {
 			break
 		}
+		hash = nextHash[:]
 	}
 
-	if !found {
-		return nil
+	if len(blocks) == 0 {
+		return nil, nil
 	}
 
-	if len(blocks) > maxcount {
-		// final truncate
-		blocks = blocks[:maxcount]
-	}
-
-	return blocks
+	return blocks, nil
 }
 
 // Returns first blocks in block chain
-// TODO We need to use index of blocks
 func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, error) {
 	localError := func(err error) ([]*structures.Block, int, error) {
 		return nil, 0, err
@@ -585,20 +581,22 @@ func (bc *Blockchain) GetFirstBlocks(maxcount int) ([]*structures.Block, int, er
 // Returns also a block from main chain which is the base of the side branch
 //
 // The function load all hashes to the memory from "main" chain
-// TODO We need to use index of blocks
 
 func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structures.Block, []*structures.Block, *structures.Block, error) {
+	localError := func(err error) ([]*structures.Block, []*structures.Block, *structures.Block, error) {
+		return nil, nil, nil, err
+	}
 	// get 2 blocks with hashes from arguments
 	sideblock_o, err := bc.GetBlock(hash)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return localError(err)
 	}
 
 	topblock_o, err := bc.GetBlock(currentTip)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return localError(err)
 	}
 
 	sideblock := &sideblock_o
@@ -607,7 +605,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 	bc.Logger.Trace.Printf("States: top %d, side %d", topblock.Height, sideblock.Height)
 
 	if sideblock.Height < 1 || topblock.Height < 1 {
-		return nil, nil, nil, errors.New("Can not do this for genesis block")
+		return localError(errors.New("Can not do this for genesis block"))
 	}
 
 	sideBlocks := []*structures.Block{}
@@ -618,7 +616,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 		bci, err := NewBlockchainIteratorFrom(bc.DB, sideblock.Hash)
 
 		if err != nil {
-			return nil, nil, nil, err
+			return localError(err)
 		}
 
 		for {
@@ -635,7 +633,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 		bci, err := NewBlockchainIteratorFrom(bc.DB, topblock.Hash)
 
 		if err != nil {
-			return nil, nil, nil, err
+			return localError(err)
 		}
 
 		for {
@@ -653,12 +651,12 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 	bcis, err := NewBlockchainIteratorFrom(bc.DB, sideblock.Hash)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return localError(err)
 	}
 	bcit, err := NewBlockchainIteratorFrom(bc.DB, topblock.Hash)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return localError(err)
 	}
 
 	for {
@@ -679,7 +677,7 @@ func (bc *Blockchain) GetSideBranch(hash []byte, currentTip []byte) ([]*structur
 		sideBlocks = append(sideBlocks, sideblock)
 
 		if len(sideblock.PrevBlockHash) == 0 || len(topblock.PrevBlockHash) == 0 {
-			return nil, nil, nil, errors.New("No connect with main blockchain")
+			return localError(errors.New("No connect with main blockchain"))
 		}
 
 	}

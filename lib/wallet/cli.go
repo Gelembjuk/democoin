@@ -78,6 +78,7 @@ func (wc *WalletCLI) initNodeClient() {
 
 	client.Logger = wc.Logger
 	nt := net.NodeNetwork{}
+	nt.Init()
 	client.NodeNet = &nt
 
 	wc.NodeCLI = &client

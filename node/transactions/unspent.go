@@ -183,6 +183,7 @@ func (u unspentTransactions) ChooseSpendableOutputs(pubKeyHash []byte, amount fl
 	return accumulated, unspentOutputs, nil
 }
 
+// execute callback function for every record in unspent outputs
 func (u unspentTransactions) forEachUnspentOutput(address string, callback UnspentTransactionOutputCallbackInterface) error {
 	pubKeyHash, err := utils.AddresToPubKeyHash(address)
 
@@ -311,9 +312,9 @@ func (u unspentTransactions) CountUnspentOutputs() (int, error) {
 	return counter, nil
 }
 
-/*
-* Rebuilds the DB of unspent transactions
- */
+// Rebuilds the DB of unspent transactions
+// NOTE . We don't really need this. Normal code should work without reindexing.
+// TODO to remove this function in future
 func (u unspentTransactions) Reindex() (int, error) {
 	u.Logger.Trace.Println("Reindex UTXO: Prepare")
 
@@ -668,7 +669,7 @@ func (u unspentTransactions) GetNewTransactionInputs(PubKey []byte, to string, a
 		input := structures.TXInput{out.TXID, out.OIndex, nil, PubKey}
 		inputs = append(inputs, input)
 
-		prevTX, err := bcMan.FindTransactionByBlock(out.TXID, out.BlockHash)
+		prevTX, err := bcMan.GetTransactionFromBlock(out.TXID, out.BlockHash)
 
 		if err != nil {
 			return localError(err)
@@ -766,7 +767,7 @@ func (u unspentTransactions) VerifyTransactionsOutputsAreNotSpent(txilist []stru
 			inputTX[txiInd] = nil
 		} else {
 			// find this TX and get full info about it
-			prevTX, err := bcMan.FindTransactionByBlock(txi.Txid, blockHash)
+			prevTX, err := bcMan.GetTransactionFromBlock(txi.Txid, blockHash)
 
 			if err != nil {
 				return localError(err)

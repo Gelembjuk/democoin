@@ -366,7 +366,12 @@ func (bdm *BoltDBManager) lockDB(name string, locksess string) error {
 
 	for bdm.dbExists(lockfile) != false {
 
-		time.Sleep(50 * time.Millisecond)
+		if i > 5000 {
+			time.Sleep(1 * time.Second)
+		} else {
+			time.Sleep(50 * time.Millisecond)
+		}
+
 		i++
 
 		if i > 10000 {

@@ -6,6 +6,7 @@ package nodeclient
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 
 	"encoding/gob"
 	"errors"
@@ -563,7 +564,7 @@ func (c *NodeClient) SendData(addr netlib.NodeAddr, data []byte) error {
 	}
 
 	c.Logger.Trace.Printf("Sending %d bytes to %s", len(data), addr.NodeAddrToString())
-	conn, err := net.Dial(netlib.Protocol, addr.NodeAddrToString())
+	conn, err := net.DialTimeout(netlib.Protocol, addr.NodeAddrToString(), 1*time.Second)
 
 	if err != nil {
 		c.Logger.Error.Println(err.Error())

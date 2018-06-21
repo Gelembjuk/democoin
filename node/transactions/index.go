@@ -456,7 +456,7 @@ func (ti *transactionsIndex) GetTransactionAllInfo(txID []byte, topHash []byte) 
 		return localError(err)
 	}
 
-	tx, err := bcMan.FindTransactionByBlock(txID, blockHash)
+	tx, err := bcMan.GetTransactionFromBlock(txID, blockHash)
 
 	if err != nil {
 		return localError(err)
